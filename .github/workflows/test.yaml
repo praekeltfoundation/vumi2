@@ -1,0 +1,24 @@
+name: Run tests
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10"]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: abatilo/actions-poetry@v2.0.0 
+        with:
+          poetry-version: "1.1.12"
+      - name: Install dependancies
+        run: poetry install
+      - name: Lint
+        run:
+          poetry run black --check .
+          poetry run isort -c .
+          poetry run mypy .
+          poetry run flake8
