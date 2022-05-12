@@ -17,7 +17,7 @@ jobs:
       - name: Install dependancies
         run: poetry install
       - name: Lint
-        run:
+        run: |
           poetry run black --check .
           poetry run isort -c .
           poetry run mypy .
