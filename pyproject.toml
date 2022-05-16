@@ -4,6 +4,13 @@ version = "0.0.1"
 description = "Vumi, but with Python3 and Trio async"
 authors = ["Praekelt.org <dev@praekelt.org>"]
 license = "BSD 3-Clause"
+readme = "README.md"
+packages = [
+    { include = "vumi2", from = "src" }
+]
+include = [
+    { path = "tests", format = "sdist" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.7"
