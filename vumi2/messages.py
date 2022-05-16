@@ -1,9 +1,10 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Dict, Optional, Type
 from uuid import uuid4
 
 import cattrs
+from attr import field
 from attrs import Factory, define
 
 VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
@@ -58,6 +59,18 @@ class AddressType(Enum):
     WECHAT_ID = "wechat_id"
 
 
+class EventType(Enum):
+    ACK = "ack"
+    NACK = "nack"
+    DELIVERY_REPORT = "delivery_report"
+
+
+class DeliveryStatus(Enum):
+    PENDING = "pending"
+    FAILED = "failed"
+    DELIVERED = "delivered"
+
+
 @define
 class Message:
     to_addr: str
@@ -79,9 +92,45 @@ class Message:
     to_addr_type: Optional[AddressType] = None
     from_addr_type: Optional[AddressType] = None
 
-    def serialise(self):
+    def serialise(self) -> Dict[str, Any]:
         return cattrs.unstructure(self)
 
     @classmethod
-    def deserialise(cls, data):
+    def deserialise(cls: "Type[Message]", data: Dict[str, Any]) -> "Message":
+        return cattrs.structure(data, cls)
+
+
+@define
+class Event:
+    user_message_id: str
+    event_type: EventType = field()
+    message_version: str = "20110921"
+    message_type: str = "event"
+    timestamp: datetime = Factory(datetime.utcnow)
+    routing_metadata: dict = Factory(dict)
+    helper_metadata: dict = Factory(dict)
+    event_id: str = Factory(generate_message_id)
+    sent_message_id: Optional[str] = None
+    nack_reason: Optional[str] = None
+    delivery_status: Optional[DeliveryStatus] = None
+
+    @event_type.validator
+    def _check_event_type(self, _, value: EventType) -> None:
+        if value == EventType.ACK:
+            if self.sent_message_id is None:
+                raise ValueError("sent_message_id cannot be null for ack event type")
+        elif value == EventType.NACK:
+            if self.nack_reason is None:
+                raise ValueError("nack_reason cannot be null for nack event type")
+        elif value == EventType.DELIVERY_REPORT:
+            if self.delivery_status is None:
+                raise ValueError(
+                    "delivery_status cannot be null for delivery_report event type"
+                )
+
+    def serialise(self) -> Dict[str, Any]:
+        return cattrs.unstructure(self)
+
+    @classmethod
+    def deserialise(cls: "Type[Event]", data: Dict[str, Any]) -> "Event":
         return cattrs.structure(data, cls)

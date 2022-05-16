@@ -5,6 +5,9 @@ import pytest
 
 from vumi2.messages import (
     AddressType,
+    DeliveryStatus,
+    Event,
+    EventType,
     Message,
     Session,
     TransportType,
@@ -177,3 +180,117 @@ def test_generate_message_id():
     uuid = UUID(result)
     assert uuid.hex == result
     assert uuid.version == 4
+
+
+def test_event_deserialise_all_fields():
+    """
+    Test that deserialisation works when all fields are specified
+    """
+    data = {
+        "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
+        "event_type": "ack",
+        "message_version": "20110921",
+        "message_type": "event",
+        "timestamp": "2022-05-16 13:14:15.123456",
+        "routing_metadata": {"test": "routing"},
+        "helper_metadata": {"test": "helper"},
+        "event_id": "ef615b6bdf2741eba969f3f468b32da8",
+        "sent_message_id": "54e62db4ccc84faaa0afee46d13821d7",
+        "nack_reason": "test",
+        "delivery_status": "pending",
+    }
+    assert Event.deserialise(data) == Event(
+        user_message_id="23fdc3d6768443dd9b16455e556243a9",
+        event_type=EventType.ACK,
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        routing_metadata={"test": "routing"},
+        helper_metadata={"test": "helper"},
+        event_id="ef615b6bdf2741eba969f3f468b32da8",
+        sent_message_id="54e62db4ccc84faaa0afee46d13821d7",
+        nack_reason="test",
+        delivery_status=DeliveryStatus.PENDING,
+    )
+
+
+def test_event_serialise_all_fields():
+    """
+    Serialisation with all fields filled
+    """
+    event = Event(
+        user_message_id="23fdc3d6768443dd9b16455e556243a9",
+        event_type=EventType.ACK,
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        routing_metadata={"test": "routing"},
+        helper_metadata={"test": "helper"},
+        event_id="ef615b6bdf2741eba969f3f468b32da8",
+        sent_message_id="54e62db4ccc84faaa0afee46d13821d7",
+        nack_reason="test",
+        delivery_status=DeliveryStatus.PENDING,
+    )
+    assert event.serialise() == {
+        "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
+        "event_type": "ack",
+        "message_version": "20110921",
+        "message_type": "event",
+        "timestamp": "2022-05-16 13:14:15.123456",
+        "routing_metadata": {"test": "routing"},
+        "helper_metadata": {"test": "helper"},
+        "event_id": "ef615b6bdf2741eba969f3f468b32da8",
+        "sent_message_id": "54e62db4ccc84faaa0afee46d13821d7",
+        "nack_reason": "test",
+        "delivery_status": "pending",
+    }
+
+
+def test_event_deserialise_missing_fields():
+    """
+    Missing fields should raise an exception
+    """
+    with pytest.raises(Exception) as e_info:
+        Event.deserialise({})
+    exceptions = e_info.value.exceptions
+    missing_fields = ("user_message_id", "event_type")
+    for exception in exceptions:
+        assert isinstance(exception, KeyError)
+        assert exception.args[0] in missing_fields
+
+
+def test_event_validate_event_type():
+    """
+    For each event type, the correct validation should run
+    """
+    with pytest.raises(Exception) as e_info:
+        Event.deserialise(
+            {
+                "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
+                "event_type": "ack",
+            }
+        )
+    [exception] = e_info.value.exceptions
+    assert isinstance(exception, ValueError)
+    assert exception.args[0] == "sent_message_id cannot be null for ack event type"
+
+    with pytest.raises(Exception) as e_info:
+        Event.deserialise(
+            {
+                "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
+                "event_type": "nack",
+            }
+        )
+    [exception] = e_info.value.exceptions
+    assert isinstance(exception, ValueError)
+    assert exception.args[0] == "nack_reason cannot be null for nack event type"
+
+    with pytest.raises(Exception) as e_info:
+        Event.deserialise(
+            {
+                "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
+                "event_type": "delivery_report",
+            }
+        )
+    [exception] = e_info.value.exceptions
+    assert isinstance(exception, ValueError)
+    assert (
+        exception.args[0]
+        == "delivery_status cannot be null for delivery_report event type"
+    )
