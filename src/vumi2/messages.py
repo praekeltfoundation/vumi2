@@ -7,14 +7,12 @@ import cattrs
 from attrs import Factory, define, field
 
 VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
-_VUMI_DATE_FORMAT_NO_MICROSECONDS = "%Y-%m-%d %H:%M:%S"
 
 
 def deserialise_vumi_timestamp(value: str, _: Any) -> datetime:
-    date_format = VUMI_DATE_FORMAT
     if "." not in value[-10:]:
-        date_format = _VUMI_DATE_FORMAT_NO_MICROSECONDS
-    return datetime.strptime(value, date_format)
+        value = f"{value}.0"
+    return datetime.strptime(value, VUMI_DATE_FORMAT)
 
 
 def serialise_vumi_timestamp(value: datetime) -> str:
