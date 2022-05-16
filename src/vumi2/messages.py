@@ -4,8 +4,7 @@ from typing import Any, Dict, Optional, Type
 from uuid import uuid4
 
 import cattrs
-from attr import field
-from attrs import Factory, define
+from attrs import Factory, define, field
 
 VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 _VUMI_DATE_FORMAT_NO_MICROSECONDS = "%Y-%m-%d %H:%M:%S"
