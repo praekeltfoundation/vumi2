@@ -159,16 +159,11 @@ def test_vumi_timestamp():
     """
     Serialising and deserialising of a vumi timestamp should work as expected
     """
-    assert (
-        serialise_vumi_timestamp(datetime(2022, 5, 16, 12, 13, 14, 123456))
-        == "2022-05-16 12:13:14.123456"
-    )
-    assert deserialise_vumi_timestamp("2022-05-06 12:13:14", None) == datetime(
-        2022, 5, 6, 12, 13, 14
-    )
-    assert deserialise_vumi_timestamp("2022-05-06 12:13:14.123456", None) == datetime(
-        2022, 5, 6, 12, 13, 14, 123456
-    )
+    ts = datetime(2022, 5, 16, 12, 13, 14, 123456)
+    assert serialise_vumi_timestamp(ts) == "2022-05-16 12:13:14.123456"
+    assert deserialise_vumi_timestamp("2022-05-16 12:13:14.123456", None) == ts
+    ts = datetime(2022, 5, 16, 12, 13, 14)
+    assert deserialise_vumi_timestamp("2022-05-16 12:13:14", None) == ts
 
 
 def test_generate_message_id():
