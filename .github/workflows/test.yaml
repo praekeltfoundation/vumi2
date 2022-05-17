@@ -22,3 +22,5 @@ jobs:
           poetry run isort -c .
           poetry run mypy .
           poetry run flake8
+      - name: Test
+        run: poetry run pytest
