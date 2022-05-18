@@ -1,6 +1,6 @@
 from asyncio import Future
 
-from vumi2.utils import maybe_awaitable
+from vumi2.async_helpers import maybe_awaitable
 
 
 async def test_maybe_awaitable():

@@ -7,8 +7,8 @@ from async_amqp.channel import Channel
 from async_amqp.envelope import Envelope
 from async_amqp.properties import Properties
 
+from vumi2.async_helpers import maybe_awaitable
 from vumi2.messages import MessageType
-from vumi2.utils import maybe_awaitable
 
 logger = getLogger(__name__)
 
