@@ -2,8 +2,8 @@ import async_amqp
 import pytest
 from trio import open_memory_channel
 
-from vumi2.dispatchers import ToAddressRouter
 from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.routers import ToAddressRouter
 
 
 @pytest.fixture
