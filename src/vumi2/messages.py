@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, Union
 from uuid import uuid4
 
 import cattrs
@@ -131,3 +131,6 @@ class Event:
     @classmethod
     def deserialise(cls: "Type[Event]", data: Dict[str, Any]) -> "Event":
         return cattrs.structure(data, cls)
+
+
+MessageType = Union[Message, Event]
