@@ -2,9 +2,12 @@ from typing import Dict, TypeVar
 
 from async_amqp import AmqpProtocol
 
-from vumi2.connectors import ReceiveInboundConnector, ReceiveOutboundConnector
+from vumi2.connectors import (
+    CallbackType,
+    ReceiveInboundConnector,
+    ReceiveOutboundConnector,
+)
 from vumi2.errors import DuplicateConnectorError
-from vumi2.services import CallbackType
 
 ConnectorsType = TypeVar(
     "ConnectorsType",
