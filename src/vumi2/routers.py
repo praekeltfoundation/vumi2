@@ -21,13 +21,16 @@ class ToAddressRouter(BaseWorker):
 
         for name, pattern in self.config["to_address_mappings"].items():
             self.mappings.append((name, re.compile(pattern)))
-            connector = await self.setup_receive_outbound_connector(name)
-            connector.set_outbound_handler(self.handle_outbound_message)
+            await self.setup_receive_outbound_connector(
+                connector_name=name, outbound_handler=self.handle_outbound_message
+            )
 
         for name in self.config["transport_names"]:
-            connector = await self.setup_receive_inbound_connector(name)
-            connector.set_inbound_handler(self.handle_inbound_message)
-            connector.set_event_handler(self.handle_event)
+            await self.setup_receive_inbound_connector(
+                connector_name=name,
+                inbound_handler=self.handle_inbound_message,
+                event_handler=self.handle_event,
+            )
 
     # TODO: Teardown
 

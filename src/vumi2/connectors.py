@@ -21,9 +21,6 @@ class BaseConnector:
         self._consumers: Dict[str, Consumer] = {}
         self._publishers: Dict[str, Publisher] = {}
 
-    async def setup(self) -> None:
-        return
-
     def routing_key(self, message_type: str):
         return f"{self.name}.{message_type}"
 
@@ -55,38 +52,20 @@ class BaseConnector:
 
 
 class ReceiveInboundConnector(BaseConnector):
-    async def setup(self):
+    async def setup(self, inbound_handler: CallbackType, event_handler: CallbackType):
         await self._setup_publisher("outbound")
-        await self._setup_consumer("inbound", self._default_inbound_handler, Message)
-        await self._setup_consumer("event", self._default_event_handler, Event)
-
-    async def _default_inbound_handler(self, msg: Message):
-        logger.warning(f"No inbound handler for {self.name}: {msg}")
-
-    async def _default_event_handler(self, event: Event):
-        logger.warning(f"No event handler for {self.name}: {event}")
-
-    def set_inbound_handler(self, handler: CallbackType):
-        self._consumers["inbound"].callback = handler
-
-    def set_event_handler(self, handler: CallbackType):
-        self._consumers["event"].callback = handler
+        await self._setup_consumer("inbound", inbound_handler, Message)
+        await self._setup_consumer("event", event_handler, Event)
 
     async def publish_outbound(self, message: Message):
         await self._publish_message("outbound", message)
 
 
 class ReceiveOutboundConnector(BaseConnector):
-    async def setup(self):
+    async def setup(self, outbound_handler: CallbackType):
         await self._setup_publisher("inbound")
         await self._setup_publisher("event")
-        await self._setup_consumer("outbound", self._default_outbound_handler, Message)
-
-    async def _default_outbound_handler(self, msg: Message):
-        logger.warning(f"No outbound handler for {self.name}: {msg}")
-
-    def set_outbound_handler(self, handler: CallbackType):
-        self._consumers["outbound"].callback = handler
+        await self._setup_consumer("outbound", outbound_handler, Message)
 
     async def publish_inbound(self, message: Message):
         await self._publish_message("inbound", message)

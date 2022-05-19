@@ -75,11 +75,22 @@ async def test_to_addr_router_inbound(amqp_connection):
         with send_channel2:
             await send_channel2.send(msg)
 
-    connector1 = await router.setup_receive_inbound_connector("app1")
-    connector1.set_inbound_handler(inbound_consumer1)
-    connector2 = await router.setup_receive_inbound_connector("app2")
-    connector2.set_inbound_handler(inbound_consumer2)
-    transport_connector = await router.setup_receive_outbound_connector("test1")
+    async def ignore_message(msg):
+        return
+
+    await router.setup_receive_inbound_connector(
+        connector_name="app1",
+        inbound_handler=inbound_consumer1,
+        event_handler=ignore_message,
+    )
+    await router.setup_receive_inbound_connector(
+        connector_name="app2",
+        inbound_handler=inbound_consumer2,
+        event_handler=ignore_message,
+    )
+    transport_connector = await router.setup_receive_outbound_connector(
+        connector_name="test1", outbound_handler=ignore_message
+    )
     await transport_connector.publish_inbound(msg1)
     await transport_connector.publish_inbound(msg2)
 
@@ -121,11 +132,20 @@ async def test_to_addr_router_outbound(amqp_connection):
         with send_channel2:
             await send_channel2.send(msg)
 
-    connector1 = await router.setup_receive_outbound_connector("test1")
-    connector1.set_outbound_handler(outbound_consumer1)
-    connector2 = await router.setup_receive_outbound_connector("test2")
-    connector2.set_outbound_handler(outbound_consumer2)
-    app_connector = await router.setup_receive_inbound_connector("app1")
+    async def ignore_message(msg):
+        return
+
+    await router.setup_receive_outbound_connector(
+        connector_name="test1", outbound_handler=outbound_consumer1
+    )
+    await router.setup_receive_outbound_connector(
+        connector_name="test2", outbound_handler=outbound_consumer2
+    )
+    app_connector = await router.setup_receive_inbound_connector(
+        connector_name="app1",
+        inbound_handler=ignore_message,
+        event_handler=ignore_message,
+    )
     await app_connector.publish_outbound(msg1)
     await app_connector.publish_outbound(msg2)
 

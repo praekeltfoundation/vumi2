@@ -1,9 +1,10 @@
-from typing import Dict, Type, TypeVar
+from typing import Dict, TypeVar
 
 from async_amqp import AmqpProtocol
 
 from vumi2.connectors import ReceiveInboundConnector, ReceiveOutboundConnector
 from vumi2.errors import DuplicateConnectorError
+from vumi2.services import CallbackType
 
 ConnectorsType = TypeVar(
     "ConnectorsType",
@@ -21,28 +22,33 @@ class BaseWorker:
     async def setup(self):
         pass
 
-    async def _setup_connector(
-        self, store: dict, connector_cls: Type[ConnectorsType], connector_name: str
-    ) -> ConnectorsType:
-        if connector_name in store:
+    async def setup_receive_inbound_connector(
+        self,
+        connector_name: str,
+        inbound_handler: CallbackType,
+        event_handler: CallbackType,
+    ) -> ReceiveInboundConnector:
+        if connector_name in self.receive_inbound_connectors:
             raise DuplicateConnectorError(
-                f"Attempt to add duplicate connector with name {connector_name}"
+                "Attempt to add duplicate receive inbound connector with name"
+                f" {connector_name}"
             )
-        connector = connector_cls(self.connection, connector_name)
-        await connector.setup()
-        store[connector_name] = connector
+        connector = ReceiveInboundConnector(self.connection, connector_name)
+        await connector.setup(
+            inbound_handler=inbound_handler, event_handler=event_handler
+        )
+        self.receive_inbound_connectors[connector_name] = connector
         return connector
 
-    async def setup_receive_inbound_connector(
-        self, connector_name: str
-    ) -> ReceiveInboundConnector:
-        return await self._setup_connector(
-            self.receive_inbound_connectors, ReceiveInboundConnector, connector_name
-        )
-
     async def setup_receive_outbound_connector(
-        self, connector_name: str
+        self, connector_name: str, outbound_handler: CallbackType
     ) -> ReceiveOutboundConnector:
-        return await self._setup_connector(
-            self.receive_outbound_connectors, ReceiveOutboundConnector, connector_name
-        )
+        if connector_name in self.receive_outbound_connectors:
+            raise DuplicateConnectorError(
+                "Attempt to add duplicate receive outbound connector with name"
+                f" {connector_name}"
+            )
+        connector = ReceiveOutboundConnector(self.connection, connector_name)
+        await connector.setup(outbound_handler=outbound_handler)
+        self.receive_outbound_connectors[connector_name] = connector
+        return connector
