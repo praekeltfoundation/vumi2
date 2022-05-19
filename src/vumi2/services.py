@@ -12,6 +12,8 @@ from vumi2.messages import MessageType
 
 logger = getLogger(__name__)
 
+CallbackType = Callable[[MessageType], Optional[Awaitable[None]]]
+
 
 class Consumer:
     exchange_name = "vumi"
@@ -22,7 +24,7 @@ class Consumer:
         self,
         connection: AmqpProtocol,
         queue_name: str,
-        callback: Callable[[MessageType], Optional[Awaitable[None]]],
+        callback: CallbackType,
         message_class: Type[MessageType],
     ) -> None:
         self.connection = connection

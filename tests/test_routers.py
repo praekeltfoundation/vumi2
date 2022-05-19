@@ -19,17 +19,17 @@ async def test_to_addr_router_setup(amqp_connection):
     """
     router = ToAddressRouter(amqp_connection)
     await router.setup()
-    consumers = [
-        "app1.outbound",
-        "app2.outbound",
-        "test1.inbound",
-        "test1.event",
-        "test2.inbound",
-        "test2.event",
+    receive_inbound_connectors = [
+        "test1",
+        "test2",
     ]
-    publishers = ["app1.inbound", "app2.inbound", "test1.outbound", "test2.outbound"]
-    assert set(router._consumers.keys()) == set(consumers)
-    assert set(router._publishers.keys()) == set(publishers)
+    receive_outbound_connectors = ["app1", "app2"]
+    assert set(router.receive_inbound_connectors.keys()) == set(
+        receive_inbound_connectors
+    )
+    assert set(router.receive_outbound_connectors.keys()) == set(
+        receive_outbound_connectors
+    )
 
 
 async def test_to_addr_router_event(amqp_connection):
@@ -75,11 +75,13 @@ async def test_to_addr_router_inbound(amqp_connection):
         with send_channel2:
             await send_channel2.send(msg)
 
-    await router.setup_inbound_consumer("app1", inbound_consumer1)
-    await router.setup_inbound_consumer("app2", inbound_consumer2)
-    await router.setup_publisher("test1", "inbound")
-    await router.publish_inbound_message("test1", msg1)
-    await router.publish_inbound_message("test1", msg2)
+    connector1 = await router.setup_receive_inbound_connector("app1")
+    connector1.set_inbound_handler(inbound_consumer1)
+    connector2 = await router.setup_receive_inbound_connector("app2")
+    connector2.set_inbound_handler(inbound_consumer2)
+    transport_connector = await router.setup_receive_outbound_connector("test1")
+    await transport_connector.publish_inbound(msg1)
+    await transport_connector.publish_inbound(msg2)
 
     async with receive_channel1:
         received_msg1 = await receive_channel1.receive()
@@ -119,11 +121,13 @@ async def test_to_addr_router_outbound(amqp_connection):
         with send_channel2:
             await send_channel2.send(msg)
 
-    await router.setup_outbound_consumer("test1", outbound_consumer1)
-    await router.setup_outbound_consumer("test2", outbound_consumer2)
-    await router.setup_publisher("app1", "outbound")
-    await router.publish_outbound_message("app1", msg1)
-    await router.publish_outbound_message("app1", msg2)
+    connector1 = await router.setup_receive_outbound_connector("test1")
+    connector1.set_outbound_handler(outbound_consumer1)
+    connector2 = await router.setup_receive_outbound_connector("test2")
+    connector2.set_outbound_handler(outbound_consumer2)
+    app_connector = await router.setup_receive_inbound_connector("app1")
+    await app_connector.publish_outbound(msg1)
+    await app_connector.publish_outbound(msg2)
 
     async with receive_channel1:
         received_msg1 = await receive_channel1.receive()
