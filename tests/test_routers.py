@@ -19,10 +19,7 @@ async def test_to_addr_router_setup(amqp_connection):
     """
     router = ToAddressRouter(amqp_connection)
     await router.setup()
-    receive_inbound_connectors = [
-        "test1",
-        "test2",
-    ]
+    receive_inbound_connectors = ["test1", "test2"]
     receive_outbound_connectors = ["app1", "app2"]
     assert set(router.receive_inbound_connectors.keys()) == set(
         receive_inbound_connectors
