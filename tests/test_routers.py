@@ -2,7 +2,7 @@ import async_amqp
 import pytest
 from trio import open_memory_channel
 
-from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
 
 
@@ -11,6 +11,10 @@ async def amqp_connection():
     # TODO: config
     async with async_amqp.connect_amqp() as connection:
         yield connection
+
+
+async def ignore_message(_: MessageType) -> None:
+    return
 
 
 async def test_to_addr_router_setup(amqp_connection):
@@ -72,9 +76,6 @@ async def test_to_addr_router_inbound(amqp_connection):
         with send_channel2:
             await send_channel2.send(msg)
 
-    async def ignore_message(msg):
-        return
-
     await router.setup_receive_inbound_connector(
         connector_name="app1",
         inbound_handler=inbound_consumer1,
@@ -128,9 +129,6 @@ async def test_to_addr_router_outbound(amqp_connection):
     async def outbound_consumer2(msg):
         with send_channel2:
             await send_channel2.send(msg)
-
-    async def ignore_message(msg):
-        return
 
     await router.setup_receive_outbound_connector(
         connector_name="test1", outbound_handler=outbound_consumer1
