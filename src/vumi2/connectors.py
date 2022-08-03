@@ -1,6 +1,6 @@
 import json
 from logging import getLogger
-from typing import Awaitable, Callable, Dict, Optional, Type
+from typing import Any, Awaitable, Callable, Dict, Optional, Protocol, Type
 
 from async_amqp import AmqpProtocol
 from async_amqp.channel import Channel
@@ -18,6 +18,17 @@ MessageCallbackType = Callable[[Message], Optional[Awaitable[None]]]
 EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
 
 
+# Type[MessageType] doesn't work as expected, so we define a protocol for when we need
+# to accept either a Message or Event and only call the serialisation methods
+class Serialisable(Protocol):
+    def serialise(self) -> Dict[str, Any]:
+        ...
+
+    @classmethod
+    def deserialise(cls, data: Dict[str, Any]) -> MessageType:
+        ...
+
+
 class Consumer:
     exchange_name = "vumi"
     exchange_type = "direct"
@@ -28,7 +39,7 @@ class Consumer:
         connection: AmqpProtocol,
         queue_name: str,
         callback: CallbackType,
-        message_class: Type[MessageType],
+        message_class: Type[Serialisable],
     ) -> None:
         self.connection = connection
         self.queue_name = queue_name
@@ -124,7 +135,9 @@ class BaseConnector:
 
 
 class ReceiveInboundConnector(BaseConnector):
-    async def setup(self, inbound_handler: CallbackType, event_handler: CallbackType):
+    async def setup(
+        self, inbound_handler: MessageCallbackType, event_handler: EventCallbackType
+    ):
         await self._setup_publisher("outbound")
         await self._setup_consumer("inbound", inbound_handler, Message)
         await self._setup_consumer("event", event_handler, Event)

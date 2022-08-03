@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Dict, Optional, Type, TypeVar
 from uuid import uuid4
 
 import cattrs
@@ -133,4 +133,4 @@ class Event:
         return cattrs.structure(data, cls)
 
 
-MessageType = Union[Message, Event]
+MessageType = TypeVar("MessageType", Message, Event)
