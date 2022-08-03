@@ -21,26 +21,29 @@ class ToAddressRouter(BaseWorker):
 
         for name, pattern in self.config["to_address_mappings"].items():
             self.mappings.append((name, re.compile(pattern)))
-            await self.setup_outbound_consumer(name, self.handle_outbound_message)
-            await self.setup_inbound_publisher(name)
+            await self.setup_receive_outbound_connector(
+                connector_name=name, outbound_handler=self.handle_outbound_message
+            )
 
         for name in self.config["transport_names"]:
-            await self.setup_inbound_consumer(name, self.handle_inbound_message)
-            await self.setup_event_consumer(name, self.handle_event)
-            await self.setup_outbound_publisher(name)
+            await self.setup_receive_inbound_connector(
+                connector_name=name,
+                inbound_handler=self.handle_inbound_message,
+                event_handler=self.handle_event,
+            )
 
     # TODO: Teardown
 
     async def handle_inbound_message(self, message: Message):
         for name, pattern in self.mappings:
             if pattern.match(message.to_addr):
-                await self.publish_inbound_message(name=name, message=message)
+                await self.receive_outbound_connectors[name].publish_inbound(message)
 
     async def handle_event(self, _: Event):
         # Explicitly ignore events
         return
 
     async def handle_outbound_message(self, message: Message):
-        await self.publish_outbound_message(
-            name=message.transport_name, message=message
+        await self.receive_inbound_connectors[message.transport_name].publish_outbound(
+            message
         )
