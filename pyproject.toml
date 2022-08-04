@@ -18,6 +18,7 @@ trio = "^0.20.0"
 async-amqp = "^0.5.0"
 attrs = "^21.4.0"
 cattrs = "^22.1.0"
+PyYAML = "^6.0"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
