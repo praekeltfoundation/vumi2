@@ -2,14 +2,35 @@ import async_amqp
 import pytest
 from trio import open_memory_channel
 
+from vumi2.config import load_config
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
+
+TEST_CONFIG = ToAddressRouter.CONFIG_CLASS.deserialise(
+    {
+        "transport_names": ["test1", "test2"],
+        "to_address_mappings": {
+            "app1": r"^1",
+            "app2": r"^2",
+        },
+    }
+)
 
 
 @pytest.fixture
 async def amqp_connection():
-    # TODO: config
-    async with async_amqp.connect_amqp() as connection:
+    config = load_config()
+    if config.amqp_url:
+        client = async_amqp.connect_from_url(config.amqp_url)
+    else:
+        client = async_amqp.connect_amqp(
+            host=config.amqp.hostname,
+            port=config.amqp.port,
+            login=config.amqp.username,
+            password=config.amqp.password,
+            virtualhost=config.amqp.vhost,
+        )
+    async with client as connection:
         yield connection
 
 
@@ -21,7 +42,7 @@ async def test_to_addr_router_setup(amqp_connection):
     """
     Sets up all the consumers and publishers according to the config
     """
-    router = ToAddressRouter(amqp_connection)
+    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
     await router.setup()
     receive_inbound_connectors = ["test1", "test2"]
     receive_outbound_connectors = ["app1", "app2"]
@@ -37,7 +58,7 @@ async def test_to_addr_router_event(amqp_connection):
     """
     Events should be ignored
     """
-    router = ToAddressRouter(amqp_connection)
+    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
     await router.setup()
     event = Event(
         user_message_id="1",
@@ -51,7 +72,7 @@ async def test_to_addr_router_inbound(amqp_connection):
     """
     Should be routed according to the to address
     """
-    router = ToAddressRouter(amqp_connection)
+    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
     await router.setup()
     msg1 = Message(
         to_addr="12345",
@@ -105,7 +126,7 @@ async def test_to_addr_router_outbound(amqp_connection):
     """
     Should be routed according to the transport_name
     """
-    router = ToAddressRouter(amqp_connection)
+    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
     await router.setup()
     msg1 = Message(
         to_addr="12345",
