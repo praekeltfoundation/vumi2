@@ -2,6 +2,7 @@ import async_amqp
 import pytest
 from trio import open_memory_channel
 
+from vumi2.config import load_config
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
 
@@ -18,8 +19,18 @@ TEST_CONFIG = ToAddressRouter.CONFIG_CLASS.deserialise(
 
 @pytest.fixture
 async def amqp_connection():
-    # TODO: config
-    async with async_amqp.connect_amqp() as connection:
+    config = load_config()
+    if config.amqp_url:
+        client = async_amqp.connect_from_url(config.amqp_url)
+    else:
+        client = async_amqp.connect_amqp(
+            host=config.amqp.hostname,
+            port=config.amqp.port,
+            login=config.amqp.username,
+            password=config.amqp.password,
+            virtualhost=config.amqp.vhost,
+        )
+    async with client as connection:
         yield connection
 
 
