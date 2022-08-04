@@ -22,12 +22,11 @@ jobs:
       - name: Install dependancies
         run: |
           poetry install
-          poetry run mypy --install-types
       - name: Lint
         run: |
           poetry run black --check .
           poetry run isort -c .
-          poetry run mypy .
+          poetry run mypy --install-types --non-interactive .
           poetry run flake8
       - name: Test
         run: poetry run pytest
