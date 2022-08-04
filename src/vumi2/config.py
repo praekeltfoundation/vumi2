@@ -13,7 +13,7 @@ class AmqpConfig:
     vhost: str = "/"
 
 
-@define(slots=False)
+@define
 class BaseConfig:
     amqp: AmqpConfig = Factory(AmqpConfig)
     amqp_url: str = ""
