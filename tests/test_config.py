@@ -1,4 +1,4 @@
-from vumi2.config import BaseConfig
+from vumi2.config import BaseConfig, load_config_from_environment
 
 
 def test_default_base_config():
@@ -33,3 +33,31 @@ def test_specified_base_config():
     assert config.amqp.vhost == "/vumi"
     assert config.amqp_url == "amqp://user:pass@localhost:1234/vumi"
     assert config.worker_concurrency == 10
+
+
+def test_load_config_from_environment():
+    environment = {
+        "VUMI_AMQP_HOSTNAME": "localhost",
+        "VUMI_AMQP_PORT": "1234",
+        "VUMI_AMQP_USERNAME": "user",
+        "VUMI_AMQP_PASSWORD": "pass",
+        "VUMI_AMQP_VHOST": "/vumi",
+        "VUMI_AMQP_URL": "amqp://user:pass@localhost:1234/vumi",
+        "VUMI_WORKER_CONCURRENCY": "10",
+    }
+    config = load_config_from_environment(
+        cls=BaseConfig, source=environment, prefix="vumi"
+    )
+
+    assert config == {
+        "amqp": {
+            "hostname": "localhost",
+            "port": "1234",
+            "username": "user",
+            "password": "pass",
+            "vhost": "/vumi",
+        },
+        "amqp_url": "amqp://user:pass@localhost:1234/vumi",
+        "worker_concurrency": "10",
+    }
+    BaseConfig.deserialise(config)
