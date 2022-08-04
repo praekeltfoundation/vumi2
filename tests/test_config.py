@@ -1,7 +1,7 @@
 from vumi2.config import BaseConfig
 
 
-def test_default_config():
+def test_default_base_config():
     config = BaseConfig.deserialise({})
     assert config.amqp.hostname == "127.0.0.1"
     assert config.amqp.port == 5672
@@ -12,7 +12,7 @@ def test_default_config():
     assert config.worker_concurrency == 20
 
 
-def test_amqp_specified_config():
+def test_specified_base_config():
     config = BaseConfig.deserialise(
         {
             "amqp": {
