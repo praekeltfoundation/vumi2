@@ -105,7 +105,7 @@ def load_config(cls=BaseConfig) -> BaseConfig:
     config_filename = os.environ.get("VUMI_CONFIG_FILE", "config.yaml")
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
     config_env = load_config_from_environment(
-        cls=BaseConfig, prefix=config_prefix, source=os.environ
+        cls=cls, prefix=config_prefix, source=os.environ
     )
     config_file = load_config_from_file(filename=config_filename)
-    return BaseConfig.deserialise(_combine_nested_dictionaries(config_file, config_env))
+    return cls.deserialise(_combine_nested_dictionaries(config_file, config_env))
