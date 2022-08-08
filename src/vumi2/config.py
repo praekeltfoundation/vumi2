@@ -1,4 +1,5 @@
 import os
+from argparse import Namespace
 from typing import Any, Dict
 
 import yaml
@@ -27,7 +28,7 @@ class BaseConfig:
         return structure(config, cls)
 
 
-def _create_key(prefix: str, name: str) -> str:
+def _create_env_var_key(prefix: str, name: str) -> str:
     if prefix:
         return f"{prefix.upper()}_{name.upper()}"
     return name.upper()
@@ -54,15 +55,48 @@ def load_config_from_environment(
         # Check if nested
         if field.type and is_attrs(field.type):
             value = load_config_from_environment(
-                field.type, _create_key(prefix, field.name), source
+                field.type, _create_env_var_key(prefix, field.name), source
             )
             if value:
                 env[field.name] = value
         else:
-            key = _create_key(prefix, field.name)
+            key = _create_env_var_key(prefix, field.name)
             if key in source:
                 env[field.name] = source[key]
     return env
+
+
+def _create_cli_key(prefix: str, name: str) -> str:
+    if prefix:
+        return f"{prefix}_{name}"
+    return name
+
+
+def load_config_from_cli(source, cls=BaseConfig, prefix="") -> Dict[str, Any]:
+    """
+    Given the parsed command line arguments, the config class, and a prefix, load the
+    worker config
+
+    Returns a dictionary of the config, so that it can be merged with other config
+    sources.
+    """
+    conf: Dict[str, Any] = {}
+
+    for field in fields(cls):
+        # Check if nested
+        if field.type and is_attrs(field.type):
+            value = load_config_from_cli(
+                source,
+                field.type,
+                _create_cli_key(prefix, field.name),
+            )
+            if value:
+                conf[field.name] = value
+        else:
+            key = _create_cli_key(prefix, field.name)
+            if hasattr(source, key):
+                conf[field.name] = getattr(source, key)
+    return conf
 
 
 def _combine_nested_dictionaries(*args):
@@ -91,7 +125,7 @@ def load_config_from_file(filename: str) -> Dict[str, Any]:
     return {}
 
 
-def load_config(cls=BaseConfig) -> BaseConfig:
+def load_config(cls=BaseConfig, cli=Namespace()) -> BaseConfig:
     """
     Load the entire config from all sources.
 
@@ -100,7 +134,7 @@ def load_config(cls=BaseConfig) -> BaseConfig:
       to config.yaml
     - Environment variables, with prefix specified by VUMI_CONFIG_PREFIX, defaulting to
       no prefix
-    - TODO: Command line arguments
+    - Command line arguments
     """
     config_filename = os.environ.get("VUMI_CONFIG_FILE", "config.yaml")
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
@@ -108,4 +142,7 @@ def load_config(cls=BaseConfig) -> BaseConfig:
         cls=cls, prefix=config_prefix, source=os.environ
     )
     config_file = load_config_from_file(filename=config_filename)
-    return cls.deserialise(_combine_nested_dictionaries(config_file, config_env))
+    config_cli = load_config_from_cli(source=cli, cls=cls)
+    return cls.deserialise(
+        _combine_nested_dictionaries(config_file, config_env, config_cli)
+    )
