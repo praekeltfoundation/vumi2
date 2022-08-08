@@ -97,7 +97,7 @@ def run_worker(worker_cls: BaseWorker, args: List[str]):
     return config
 
 
-def main(args: List[str]):
+def main(args=sys.argv[1:]):
     parser = build_main_parser()
 
     # If we know the worker class, then skip directly to parsing for that class,
@@ -108,12 +108,9 @@ def main(args: List[str]):
             return run_worker(worker_cls=worker_cls, args=args)
         except ValueError:
             # If the second argument is not a valid class, then display an error
+            parser.parse_args(args=args)  # If the argument is --help
             parser.print_help()
             print(f"Invalid worker class: {args[1]}")
             exit(1)
 
     parser.parse_args(args=args)
-
-
-if __name__ == "__main__":  # pragma: no cover
-    main(sys.argv[1:])
