@@ -55,7 +55,7 @@ def _create_argument_key(prefix: str, name: str):
 
 
 def worker_config_options(
-    cls: type[BaseWorkerConfig], parser: argparse.ArgumentParser, prefix=""
+    cls: Type[BaseWorkerConfig], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
