@@ -79,8 +79,7 @@ def class_from_string(class_name: str):
     Given a string, return the class object.
     """
     parts = class_name.split(".")
-    module = ".".join(parts[:-1])
-    m = __import__(module)
+    m = __import__(parts[0])
     for comp in parts[1:]:
         m = getattr(m, comp)
     return m
@@ -106,7 +105,7 @@ def main(args=sys.argv[1:]):
         try:
             worker_cls = class_from_string(class_name=args[1])
             return run_worker(worker_cls=worker_cls, args=args)
-        except ValueError:
+        except (AttributeError, ModuleNotFoundError):
             # If the second argument is not a valid class, then display an error
             parser.parse_args(args=args)  # If the argument is --help
             parser.print_help()
