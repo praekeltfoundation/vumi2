@@ -1,5 +1,6 @@
 import argparse
 import sys
+from importlib import import_module
 from typing import List, Type
 
 from attrs import fields
@@ -74,15 +75,13 @@ def worker_config_options(
     return parser
 
 
-def class_from_string(class_name: str):
+def class_from_string(class_path: str):
     """
-    Given a string, return the class object.
+    Given a string path, return the class object.
     """
-    parts = class_name.split(".")
-    m = __import__(parts[0])
-    for comp in parts[1:]:
-        m = getattr(m, comp)
-    return m
+    module_path, class_name = class_path.rsplit(".", 1)
+    module = import_module(module_path, package=class_name)
+    return getattr(module, class_name)
 
 
 def run_worker(worker_cls: BaseWorker, args: List[str]):
@@ -103,9 +102,9 @@ def main(args=sys.argv[1:]):
     # otherwise --help doesn't show all the worker options.
     if len(args) >= 2 and args[0] == "worker":
         try:
-            worker_cls = class_from_string(class_name=args[1])
+            worker_cls = class_from_string(class_path=args[1])
             return run_worker(worker_cls=worker_cls, args=args)
-        except (AttributeError, ModuleNotFoundError):
+        except (AttributeError, ModuleNotFoundError, ValueError):
             # If the second argument is not a valid class, then display an error
             parser.parse_args(args=args)  # If the argument is --help
             parser.print_help()
