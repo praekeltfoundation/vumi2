@@ -1,9 +1,11 @@
 import os
+from argparse import Namespace
 from tempfile import NamedTemporaryFile
 
 from vumi2.config import (
     BaseConfig,
     load_config,
+    load_config_from_cli,
     load_config_from_environment,
     load_config_from_file,
 )
@@ -74,20 +76,44 @@ def test_load_config_from_nonexisting_file():
     assert load_config_from_file(filename="nonexisting") == {}
 
 
+def test_load_config_from_cli():
+    cli = Namespace()
+    cli.amqp_port = "1234"
+    cli.worker_concurrency = "5"
+
+    config = load_config_from_cli(cli)
+    assert config == {
+        "amqp": {
+            "port": "1234",
+        },
+        "worker_concurrency": "5",
+    }
+
+    config_obj = BaseConfig.deserialise(config)
+    assert config_obj.amqp.port == 1234
+    assert config_obj.worker_concurrency == 5
+
+
 def test_load_config():
+    # CLI config should override environment config
+    cli = Namespace()
+    cli.worker_concurrency = "5"
     # Environment config should override file config
     os.environ["WORKER_CONCURRENCY"] = "15"
+    os.environ["AMQP_HOSTNAME"] = "localhost"
     with NamedTemporaryFile("w") as f:
         os.environ["VUMI_CONFIG_FILE"] = f.name
         f.write(
             """
             amqp:
+                hostname: overwritten
                 port: 1234
             worker_concurrency: 10
             """
         )
         f.flush()
-        config = load_config()
+        config = load_config(cli=cli)
 
     assert config.amqp.port == 1234
-    assert config.worker_concurrency == 15
+    assert config.amqp.hostname == "localhost"
+    assert config.worker_concurrency == 5

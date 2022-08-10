@@ -5,6 +5,7 @@ description = "Vumi, but with Python3 and Trio async"
 authors = ["Praekelt.org <dev@praekelt.org>"]
 license = "BSD 3-Clause"
 readme = "README.md"
+repository = "https://github.com/praekeltfoundation/vumi2"
 packages = [
     { include = "vumi2", from = "src" }
 ]
@@ -27,6 +28,9 @@ mypy = "^0.950"
 flake8 = "^4.0.1"
 pytest-trio = "^0.7.0"
 pytest-cov = "^3.0.0"
+
+[tool.poetry.scripts]
+vumi2 = "vumi2.cli:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
