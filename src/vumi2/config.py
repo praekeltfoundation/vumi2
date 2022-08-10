@@ -94,7 +94,7 @@ def load_config_from_cli(source, cls=BaseConfig, prefix="") -> Dict[str, Any]:
                 conf[field.name] = value
         else:
             key = _create_cli_key(prefix, field.name)
-            if hasattr(source, key):
+            if hasattr(source, key) and getattr(source, key) is not None:
                 conf[field.name] = getattr(source, key)
     return conf
 
