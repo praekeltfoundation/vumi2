@@ -72,7 +72,9 @@ def _create_cli_key(prefix: str, name: str) -> str:
     return name
 
 
-def load_config_from_cli(source, cls=BaseConfig, prefix="") -> Dict[str, Any]:
+def load_config_from_cli(
+    source: Namespace, cls=BaseConfig, prefix=""
+) -> Dict[str, Any]:
     """
     Given the parsed command line arguments, the config class, and a prefix, load the
     worker config
@@ -99,12 +101,12 @@ def load_config_from_cli(source, cls=BaseConfig, prefix="") -> Dict[str, Any]:
     return conf
 
 
-def _combine_nested_dictionaries(*args):
+def _combine_nested_dictionaries(*args: Dict[Any, Any]):
     """
     Takes multiple dictionaries and combines them into a single dictionary, taking into
     account nested dictionaries.
     """
-    result = {}
+    result: Dict[Any, Any] = {}
     for d in args:
         for k, v in d.items():
             if isinstance(v, dict):

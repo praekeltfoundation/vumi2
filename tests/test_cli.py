@@ -12,7 +12,8 @@ from vumi2.cli import (
     worker_config_options,
     worker_subcommand,
 )
-from vumi2.workers import BaseWorker, BaseWorkerConfig
+from vumi2.config import BaseConfig
+from vumi2.workers import BaseWorker
 
 
 def test_root_parser():
@@ -39,7 +40,7 @@ def test_build_main_parser():
 
 def test_worker_config_options():
     parser = ArgumentParser()
-    worker_config_options(cls=BaseWorkerConfig, parser=parser)
+    worker_config_options(cls=BaseConfig, parser=parser)
     args = parser.parse_args(["--amqp-hostname", "localhost"])
     assert args.amqp_hostname == "localhost"
 
@@ -48,12 +49,18 @@ def test_class_from_string():
     assert class_from_string("vumi2.workers.BaseWorker") == BaseWorker
 
 
-def test_run_worker():
-    config = run_worker(
+async def test_run_worker():
+    worker = await run_worker(
         worker_cls=BaseWorker,
-        args=["worker", "vumi2.workers.BaseWorker", "--amqp-hostname", "localhost"],
+        args=[
+            "worker",
+            "vumi2.workers.BaseWorker",
+            "--amqp-hostname",
+            "localhost",
+        ],
+        run_forever=False,
     )
-    assert config.amqp.hostname == "localhost"
+    assert worker.config.amqp.hostname == "localhost"
 
 
 def _get_main_command_output(args: List[str]) -> str:
@@ -84,7 +91,8 @@ def test_main_invalid_worker_class():
 
 
 def test_main_valid():
-    config = main(
-        ["worker", "vumi2.workers.BaseWorker", "--amqp-hostname", "localhost"]
+    worker = main(
+        args=["worker", "vumi2.workers.BaseWorker", "--amqp-url", "amqp://localhost"],
+        run_forever=False,
     )
-    assert config.amqp.hostname == "localhost"
+    assert worker.config.amqp_url == "amqp://localhost"
