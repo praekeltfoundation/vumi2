@@ -94,8 +94,8 @@ async def run_worker(
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
     config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
-    async with trio.open_nursery() as nursery:
-        async with create_amqp_client(config) as amqp_connection:
+    async with create_amqp_client(config) as amqp_connection:
+        async with trio.open_nursery() as nursery:
             worker = worker_cls(amqp_connection=amqp_connection, config=config)
             nursery.start_soon(worker.setup)
             if run_forever:  # pragma: no cover
