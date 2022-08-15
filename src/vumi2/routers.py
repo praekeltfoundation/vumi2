@@ -2,20 +2,25 @@ import re
 from re import Pattern
 from typing import Dict, List, Tuple
 
+from async_amqp.protocol import AmqpProtocol
 from attrs import Factory, define
 
+from vumi2.config import BaseConfig
 from vumi2.messages import Event, Message
-from vumi2.workers import BaseWorker, BaseWorkerConfig
+from vumi2.workers import BaseWorker
 
 
 @define
-class ToAddressRouterConfig(BaseWorkerConfig):
+class ToAddressRouterConfig(BaseConfig):
     transport_names: List[str] = Factory(list)
     to_address_mappings: Dict[str, str] = Factory(dict)
 
 
 class ToAddressRouter(BaseWorker):
     CONFIG_CLASS = ToAddressRouterConfig
+
+    def __init__(self, amqp_connection: AmqpProtocol, config: ToAddressRouterConfig):
+        super().__init__(amqp_connection, config)
 
     async def setup(self):
         self.mappings: List[Tuple[str, Pattern]] = []

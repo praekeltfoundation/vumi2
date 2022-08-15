@@ -78,6 +78,8 @@ def test_load_config_from_nonexisting_file():
 
 def test_load_config_from_cli():
     cli = Namespace()
+    # For CLI, non-specified values are None
+    cli.amqp_host = None
     cli.amqp_port = "1234"
     cli.worker_concurrency = "5"
 

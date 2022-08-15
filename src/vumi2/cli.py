@@ -3,11 +3,13 @@ import sys
 from importlib import import_module
 from typing import List, Type
 
+import trio
 from attrs import fields
 from attrs import has as is_attrs
 
-from vumi2.config import load_config
-from vumi2.workers import BaseWorker, BaseWorkerConfig
+from vumi2.amqp import create_amqp_client
+from vumi2.config import BaseConfig, load_config
+from vumi2.workers import BaseWorker
 
 
 def root_parser() -> argparse.ArgumentParser:
@@ -56,7 +58,7 @@ def _create_argument_key(prefix: str, name: str):
 
 
 def worker_config_options(
-    cls: Type[BaseWorkerConfig], parser: argparse.ArgumentParser, prefix=""
+    cls: Type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
@@ -70,7 +72,6 @@ def worker_config_options(
         else:
             parser.add_argument(
                 f"--{_create_argument_key(prefix, field.name)}",
-                default=field.default,
             )
     return parser
 
@@ -84,18 +85,25 @@ def class_from_string(class_path: str):
     return getattr(module, class_name)
 
 
-def run_worker(worker_cls: BaseWorker, args: List[str]):
+async def run_worker(
+    worker_cls: Type[BaseWorker], args: List[str], run_forever: bool
+) -> BaseWorker:
     """
     Runs the worker specified by the worker class
     """
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
     config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
-    # TODO: Run the worker
-    return config
+    async with create_amqp_client(config) as amqp_connection:
+        async with trio.open_nursery() as nursery:
+            worker = worker_cls(amqp_connection=amqp_connection, config=config)
+            nursery.start_soon(worker.setup)
+            if run_forever:  # pragma: no cover
+                nursery.start_soon(trio.sleep_forever)
+            return worker
 
 
-def main(args=sys.argv[1:]):
+def main(args=sys.argv[1:], run_forever=True):
     parser = build_main_parser()
 
     # If we know the worker class, then skip directly to parsing for that class,
@@ -103,7 +111,7 @@ def main(args=sys.argv[1:]):
     if len(args) >= 2 and args[0] == "worker":
         try:
             worker_cls = class_from_string(class_path=args[1])
-            return run_worker(worker_cls=worker_cls, args=args)
+            return trio.run(run_worker, worker_cls, args, run_forever)
         except (AttributeError, ModuleNotFoundError, ValueError):
             # If the second argument is not a valid class, then display an error
             parser.parse_args(args=args)  # If the argument is --help

@@ -1,7 +1,6 @@
 from typing import Dict, TypeVar
 
 from async_amqp import AmqpProtocol
-from attrs import define
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
@@ -18,15 +17,10 @@ ConnectorsType = TypeVar(
 )
 
 
-@define
-class BaseWorkerConfig(BaseConfig):
-    pass
-
-
 class BaseWorker:
-    CONFIG_CLASS = BaseWorkerConfig
+    CONFIG_CLASS = BaseConfig
 
-    def __init__(self, amqp_connection: AmqpProtocol, config: BaseWorkerConfig) -> None:
+    def __init__(self, amqp_connection: AmqpProtocol, config: BaseConfig) -> None:
         self.connection = amqp_connection
         self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
         self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
