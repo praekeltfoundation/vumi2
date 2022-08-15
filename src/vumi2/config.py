@@ -1,6 +1,6 @@
 import os
 from argparse import Namespace
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import yaml
 from attrs import Factory, define, fields
@@ -22,6 +22,7 @@ class BaseConfig:
     amqp: AmqpConfig = Factory(AmqpConfig)
     amqp_url: str = ""
     worker_concurrency: int = 20
+    sentry_dsn: Optional[str] = None
 
     @classmethod
     def deserialise(cls, config: Dict[str, Any]) -> "BaseConfig":

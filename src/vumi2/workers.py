@@ -1,5 +1,7 @@
 from typing import Dict, TypeVar
 
+import pkg_resources
+import sentry_sdk
 from async_amqp import AmqpProtocol
 
 from vumi2.config import BaseConfig
@@ -25,6 +27,16 @@ class BaseWorker:
         self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
         self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
         self.config = config
+        self._setup_sentry()
+
+    def _setup_sentry(self):
+        if not self.config.sentry_dsn:
+            return
+
+        sentry_sdk.init(
+            dsn=self.config.sentry_dsn,
+            release=pkg_resources.get_distribution("vumi2").version,
+        )
 
     async def setup(self):
         pass
