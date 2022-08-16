@@ -8,6 +8,7 @@ the previous layer. These layers are, in order of highest to lowest priority:
 #. :ref:`environment-variables`
 #. :ref:`configuration-file`
 
+.. _base-worker-configuration:
 
 Base worker configuration
 -------------------------
@@ -124,8 +125,3 @@ example, configuring the AMQP host and port:
    amqp:
       host: localhost
       port: 5672
-
-
-
-
-

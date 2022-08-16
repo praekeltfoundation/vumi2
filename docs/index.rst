@@ -11,6 +11,7 @@ Welcome to vumi2's documentation!
    :caption: Contents:
 
    config
+   routers
 
 
 
