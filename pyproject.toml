@@ -26,9 +26,11 @@ sentry-sdk = "^1.9.3"
 black = "^22.3.0"
 isort = "^5.10.1"
 mypy = "^0.950"
-flake8 = "^4.0.1"
+# Pin flake8 to a lower version because it conflicts with sphinx
+flake8 = "^3.9.0"
 pytest-trio = "^0.7.0"
 pytest-cov = "^3.0.0"
+Sphinx = "^5.1.1"
 
 [tool.poetry.scripts]
 vumi2 = "vumi2.cli:main"

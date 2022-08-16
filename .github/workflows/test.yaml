@@ -30,3 +30,5 @@ jobs:
           poetry run flake8
       - name: Test
         run: poetry run pytest
+      - name: Build docs
+        run: poetry run sphinx-build -b html docs docs/_build/html
