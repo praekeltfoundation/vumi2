@@ -1,7 +1,7 @@
 from datetime import datetime
-from importlib.metadata import metadata
 from typing import List
 
+import pkg_resources
 from packaging.version import Version
 from packaging.version import parse as parse_version
 
@@ -14,9 +14,9 @@ from packaging.version import parse as parse_version
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "vumi2"
-author = metadata(project)["author"]
+author = "praekelt.org"
 copyright = f"{datetime.now().year}, {author}"
-release = metadata(project)["version"]
+release = pkg_resources.get_distribution(project).version
 parsed_version = parse_version(release)
 if isinstance(parsed_version, Version):
     version = f"{parsed_version.major}.{parsed_version.minor}"
