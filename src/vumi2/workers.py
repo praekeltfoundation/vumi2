@@ -22,7 +22,10 @@ ConnectorsType = TypeVar(
 class BaseWorker:
     CONFIG_CLASS = BaseConfig
 
-    def __init__(self, amqp_connection: AmqpProtocol, config: BaseConfig) -> None:
+    def __init__(
+        self, nursery, amqp_connection: AmqpProtocol, config: BaseConfig
+    ) -> None:
+        self.nursery = nursery
         self.connection = amqp_connection
         self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
         self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
@@ -52,7 +55,12 @@ class BaseWorker:
                 "Attempt to add duplicate receive inbound connector with name"
                 f" {connector_name}"
             )
-        connector = ReceiveInboundConnector(self.connection, connector_name)
+        connector = ReceiveInboundConnector(
+            self.nursery,
+            self.connection,
+            connector_name,
+            self.config.worker_concurrency,
+        )
         await connector.setup(
             inbound_handler=inbound_handler, event_handler=event_handler
         )
@@ -67,7 +75,12 @@ class BaseWorker:
                 "Attempt to add duplicate receive outbound connector with name"
                 f" {connector_name}"
             )
-        connector = ReceiveOutboundConnector(self.connection, connector_name)
+        connector = ReceiveOutboundConnector(
+            self.nursery,
+            self.connection,
+            connector_name,
+            self.config.worker_concurrency,
+        )
         await connector.setup(outbound_handler=outbound_handler)
         self.receive_outbound_connectors[connector_name] = connector
         return connector
