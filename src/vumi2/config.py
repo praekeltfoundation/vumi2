@@ -23,6 +23,7 @@ class BaseConfig:
     amqp_url: str = ""
     worker_concurrency: int = 20
     sentry_dsn: Optional[str] = None
+    http_bind: Optional[str] = None
 
     @classmethod
     def deserialise(cls, config: Dict[str, Any]) -> "BaseConfig":

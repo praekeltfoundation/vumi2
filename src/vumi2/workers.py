@@ -3,6 +3,9 @@ from typing import Dict, TypeVar
 import pkg_resources
 import sentry_sdk
 from async_amqp import AmqpProtocol
+from hypercorn import Config as HypercornConfig
+from hypercorn.trio import serve as hypercorn_serve
+from quart_trio import QuartTrio
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
@@ -31,6 +34,8 @@ class BaseWorker:
         self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
         self.config = config
         self._setup_sentry()
+        if config.http_bind is not None:
+            self._setup_http(config.http_bind)
 
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
@@ -40,6 +45,12 @@ class BaseWorker:
             dsn=self.config.sentry_dsn,
             release=pkg_resources.get_distribution("vumi2").version,
         )
+
+    def _setup_http(self, http_bind: str) -> None:
+        self.http_app = QuartTrio(__name__)
+        http_config = HypercornConfig()
+        http_config.bind = [http_bind]
+        self.nursery.start_soon(hypercorn_serve, self.http_app, http_config)
 
     async def setup(self):
         pass

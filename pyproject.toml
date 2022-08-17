@@ -21,6 +21,8 @@ attrs = "^21.4.0"
 cattrs = "^22.1.0"
 PyYAML = "^6.0"
 sentry-sdk = "^1.9.3"
+quart-trio = "^0.10.0"
+hypercorn = "^0.13.2"
 
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
