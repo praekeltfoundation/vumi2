@@ -2,6 +2,7 @@ import json
 from logging import getLogger
 from typing import Awaitable, Callable, Dict, Optional, Type
 
+import trio
 from async_amqp import AmqpProtocol
 from async_amqp.channel import Channel
 from async_amqp.envelope import Envelope
@@ -25,18 +26,24 @@ class Consumer:
 
     def __init__(
         self,
+        nursery: trio.Nursery,
         connection: AmqpProtocol,
         queue_name: str,
         callback: CallbackType,
         message_class: Type[MessageType],
+        concurrency: int,
     ) -> None:
+        self.nursery = nursery
         self.connection = connection
         self.queue_name = queue_name
         self.callback = callback
         self.message_class = message_class
+        self.concurrency = concurrency
+        self.send_channel, self.receive_channel = trio.open_memory_channel(concurrency)
 
     async def start(self) -> None:
         channel = await self.connection.channel()
+        await channel.basic_qos(prefetch_count=self.concurrency)
         await channel.exchange_declare(
             exchange_name=self.exchange_name,
             type_name=self.exchange_type,
@@ -44,20 +51,26 @@ class Consumer:
         )
         await channel.queue_declare(self.queue_name, durable=self.durable)
         await channel.queue_bind(self.queue_name, self.exchange_name, self.queue_name)
-        await channel.basic_consume(self.consume_message, queue_name=self.queue_name)
+        await channel.basic_consume(self.queue_message, queue_name=self.queue_name)
+        for _ in range(self.concurrency):
+            self.nursery.start_soon(self.consume_message)
 
-    async def consume_message(
-        self, channel: Channel, body: bytes, envelope: Envelope, _: Properties
+    async def queue_message(
+        self, channel: Channel, body: bytes, envelope: Envelope, properties: Properties
     ) -> None:
-        try:
-            msg = self.message_class.deserialise(json.loads(body))
-            await maybe_awaitable(self.callback(msg))
-            await channel.basic_client_ack(envelope.delivery_tag)
-        except Exception as e:
-            logger.exception(e)
-            await channel.basic_client_nack(
-                delivery_tag=envelope.delivery_tag, requeue=False
-            )
+        await self.send_channel.send((channel, body, envelope, properties))
+
+    async def consume_message(self) -> None:
+        async for channel, body, envelope, _ in self.receive_channel:
+            try:
+                msg = self.message_class.deserialise(json.loads(body))
+                await maybe_awaitable(self.callback(msg))
+                await channel.basic_client_ack(envelope.delivery_tag)
+            except Exception as e:
+                logger.exception(e)
+                await channel.basic_client_nack(
+                    delivery_tag=envelope.delivery_tag, requeue=False
+                )
 
 
 class Publisher:
@@ -87,9 +100,17 @@ class BaseConnector:
     A connector combines the publishers and consumers for various message types together
     """
 
-    def __init__(self, amqp_connection: AmqpProtocol, connector_name: str) -> None:
+    def __init__(
+        self,
+        nursery: trio.Nursery,
+        amqp_connection: AmqpProtocol,
+        connector_name: str,
+        concurrency: int,
+    ) -> None:
+        self.nursery = nursery
         self.connection = amqp_connection
         self.name = connector_name
+        self.concurrency = concurrency
         self._consumers: Dict[str, Consumer] = {}
         self._publishers: Dict[str, Publisher] = {}
 
@@ -104,10 +125,12 @@ class BaseConnector:
     ) -> None:
         routing_key = self.routing_key(message_type)
         consumer = Consumer(
+            nursery=self.nursery,
             connection=self.connection,
             queue_name=routing_key,
             callback=handler,
             message_class=message_class,
+            concurrency=self.concurrency,
         )
         await consumer.start()
         self._consumers[message_type] = consumer

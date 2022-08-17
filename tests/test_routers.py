@@ -18,11 +18,11 @@ async def ignore_message(_: MessageType) -> None:
     return
 
 
-async def test_to_addr_router_setup(amqp_connection):
+async def test_to_addr_router_setup(amqp_connection, nursery):
     """
     Sets up all the consumers and publishers according to the config
     """
-    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
     await router.setup()
     receive_inbound_connectors = ["test1", "test2"]
     receive_outbound_connectors = ["app1", "app2"]
@@ -34,11 +34,11 @@ async def test_to_addr_router_setup(amqp_connection):
     )
 
 
-async def test_to_addr_router_event(amqp_connection):
+async def test_to_addr_router_event(amqp_connection, nursery):
     """
     Events should be ignored
     """
-    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
     await router.setup()
     event = Event(
         user_message_id="1",
@@ -48,11 +48,11 @@ async def test_to_addr_router_event(amqp_connection):
     await router.handle_event(event)
 
 
-async def test_to_addr_router_inbound(amqp_connection):
+async def test_to_addr_router_inbound(amqp_connection, nursery):
     """
     Should be routed according to the to address
     """
-    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
     await router.setup()
     msg1 = Message(
         to_addr="12345",
@@ -102,11 +102,11 @@ async def test_to_addr_router_inbound(amqp_connection):
     assert msg2 == received_msg2
 
 
-async def test_to_addr_router_outbound(amqp_connection):
+async def test_to_addr_router_outbound(amqp_connection, nursery):
     """
     Should be routed according to the transport_name
     """
-    router = ToAddressRouter(amqp_connection, TEST_CONFIG)
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
     await router.setup()
     msg1 = Message(
         to_addr="12345",

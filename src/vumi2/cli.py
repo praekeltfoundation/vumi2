@@ -85,9 +85,7 @@ def class_from_string(class_path: str):
     return getattr(module, class_name)
 
 
-async def run_worker(
-    worker_cls: Type[BaseWorker], args: List[str], run_forever: bool
-) -> BaseWorker:
+async def run_worker(worker_cls: Type[BaseWorker], args: List[str]) -> BaseWorker:
     """
     Runs the worker specified by the worker class
     """
@@ -96,14 +94,14 @@ async def run_worker(
     config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:
-            worker = worker_cls(amqp_connection=amqp_connection, config=config)
+            worker = worker_cls(
+                nursery=nursery, amqp_connection=amqp_connection, config=config
+            )
             nursery.start_soon(worker.setup)
-            if run_forever:  # pragma: no cover
-                nursery.start_soon(trio.sleep_forever)
             return worker
 
 
-def main(args=sys.argv[1:], run_forever=True):
+def main(args=sys.argv[1:]):
     parser = build_main_parser()
 
     # If we know the worker class, then skip directly to parsing for that class,
@@ -111,7 +109,7 @@ def main(args=sys.argv[1:], run_forever=True):
     if len(args) >= 2 and args[0] == "worker":
         try:
             worker_cls = class_from_string(class_path=args[1])
-            return trio.run(run_worker, worker_cls, args, run_forever)
+            return trio.run(run_worker, worker_cls, args)
         except (AttributeError, ModuleNotFoundError, ValueError):
             # If the second argument is not a valid class, then display an error
             parser.parse_args(args=args)  # If the argument is --help

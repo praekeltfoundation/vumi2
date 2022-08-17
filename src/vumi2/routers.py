@@ -2,6 +2,7 @@ import re
 from re import Pattern
 from typing import Dict, List, Tuple
 
+import trio
 from async_amqp.protocol import AmqpProtocol
 from attrs import Factory, define
 
@@ -19,8 +20,13 @@ class ToAddressRouterConfig(BaseConfig):
 class ToAddressRouter(BaseWorker):
     CONFIG_CLASS = ToAddressRouterConfig
 
-    def __init__(self, amqp_connection: AmqpProtocol, config: ToAddressRouterConfig):
-        super().__init__(amqp_connection, config)
+    def __init__(
+        self,
+        nursery: trio.Nursery,
+        amqp_connection: AmqpProtocol,
+        config: ToAddressRouterConfig,
+    ):
+        super().__init__(nursery, amqp_connection, config)
 
     async def setup(self):
         self.mappings: List[Tuple[str, Pattern]] = []

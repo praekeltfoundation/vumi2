@@ -58,7 +58,6 @@ async def test_run_worker():
             "--amqp-hostname",
             "localhost",
         ],
-        run_forever=False,
     )
     assert worker.config.amqp.hostname == "localhost"
 
@@ -93,6 +92,5 @@ def test_main_invalid_worker_class():
 def test_main_valid():
     worker = main(
         args=["worker", "vumi2.workers.BaseWorker", "--amqp-url", "amqp://localhost"],
-        run_forever=False,
     )
     assert worker.config.amqp_url == "amqp://localhost"
