@@ -81,17 +81,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         assert inbound.provider == "Vodacom"
         assert inbound.session_event == Session.NEW
 
-        await ri_connector.publish_outbound(
-            Message(
-                to_addr=inbound.from_addr,
-                from_addr=inbound.to_addr,
-                transport_name=inbound.transport_name,
-                transport_type=inbound.transport_type,
-                in_reply_to=inbound.message_id,
-                content="Test response",
-                session_event=Session.RESUME,
-            )
-        )
+        await ri_connector.publish_outbound(inbound.reply("Test response"))
 
         response = await connection.receive()
         assert_outbound_message_response(
@@ -127,15 +117,7 @@ async def test_close_session(transport: AatUssdTransport):
         inbound = await receive_channel.receive()
 
         await ri_connector.publish_outbound(
-            Message(
-                to_addr=inbound.from_addr,
-                from_addr=inbound.to_addr,
-                transport_name=inbound.transport_name,
-                transport_type=inbound.transport_type,
-                in_reply_to=inbound.message_id,
-                content="Test response",
-                session_event=Session.CLOSE,
-            )
+            inbound.reply("Test response", Session.CLOSE)
         )
 
         response = await connection.receive()
@@ -187,17 +169,7 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
         assert inbound.content == "user response"
         assert inbound.session_event == Session.RESUME
 
-        await ri_connector.publish_outbound(
-            Message(
-                to_addr=inbound.from_addr,
-                from_addr=inbound.to_addr,
-                transport_name=inbound.transport_name,
-                transport_type=inbound.transport_type,
-                in_reply_to=inbound.message_id,
-                content="Test response",
-                session_event=Session.CLOSE,
-            )
-        )
+        await ri_connector.publish_outbound(inbound.reply("Test response"))
 
 
 async def test_outbound_not_reply(transport: AatUssdTransport):

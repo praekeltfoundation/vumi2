@@ -96,6 +96,38 @@ class Message:
     def deserialise(cls: "Type[Message]", data: Dict[str, Any]) -> "Message":
         return cattrs.structure(data, cls)
 
+    def reply(
+        self, content: Optional[str] = None, session_event=Session.RESUME, **kwargs
+    ) -> "Message":
+        for f in [
+            "to_addr",
+            "from_addr",
+            "group",
+            "in_reply_to",
+            "providertransport_name",
+            "transport_type",
+            "transport_metadata",
+        ]:
+            if f in kwargs:
+                # Other "bad keyword argument" conditions cause TypeErrors.
+                raise TypeError(f"'{f}' may not be overridden.")
+
+        fields = {
+            "content": content,
+            "session_event": session_event,
+            "to_addr": self.from_addr,
+            "from_addr": self.to_addr,
+            "group": self.group,
+            "in_reply_to": self.message_id,
+            "provider": self.provider,
+            "transport_name": self.transport_name,
+            "transport_type": self.transport_type,
+            "transport_metadata": self.transport_metadata,
+        }
+        fields.update(kwargs)
+
+        return Message(**fields)
+
 
 @define
 class Event:
