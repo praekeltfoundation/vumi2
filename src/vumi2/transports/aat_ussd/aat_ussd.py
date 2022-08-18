@@ -17,7 +17,6 @@ class AatUssdTransportConfig(HttpRpcConfig):
 class AatUssdTransport(HttpRpcTransport):
     CONFIG_CLASS = AatUssdTransportConfig
     EXPECTED_FIELDS = {"msisdn", "provider"}
-    OPTIONAL_FIELDS = {"request", "ussdSessionId", "to_addr"}
 
     # So that the type checker knows the type of self.config
     def __init__(
@@ -32,6 +31,7 @@ class AatUssdTransport(HttpRpcTransport):
     async def handle_raw_inbound_message(self, message_id: str, r: Request) -> None:
         values = r.args
         missing_fields = self.EXPECTED_FIELDS - set(values.keys())
+        # One of to_addr or request is required
         if values.get("to_addr") is None and values.get("request") is None:
             missing_fields.add("request")
         if missing_fields:
