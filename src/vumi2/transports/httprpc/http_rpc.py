@@ -10,6 +10,7 @@ from vumi2.messages import Event, EventType, Message, generate_message_id
 from vumi2.workers import BaseConfig, BaseWorker
 
 
+@define
 class HttpRpcConfig(BaseConfig):
     transport_name: str = "http_rpc"
     web_path: str = "/http_rpc"
@@ -71,39 +72,41 @@ class HttpRpcTransport(BaseWorker):
                 missing_fields.append(field)
         return missing_fields
 
+    async def publish_nack(self, message_id: str, reason: str):
+        await self.connector.publish_event(
+            Event(
+                user_message_id=message_id,
+                sent_message_id=message_id,
+                event_type=EventType.NACK,
+                nack_reason=reason,
+            )
+        )
+
+    async def publish_ack(self, message_id: str):
+        await self.connector.publish_event(
+            Event(
+                user_message_id=message_id,
+                sent_message_id=message_id,
+                event_type=EventType.ACK,
+            )
+        )
+
     async def handle_outbound_message(self, message: Message):
         # Need to do this double check for the type checker
         if not message.in_reply_to or not message.content:
             missing_fields = self.ensure_message_fields(
                 message, ["in_reply_to", "content"]
             )
-            await self.connector.publish_event(
-                Event(
-                    user_message_id=message.message_id,
-                    event_type=EventType.NACK,
-                    sent_message_id=message.message_id,
-                    nack_reason=f"Missing fields: {', '.join(missing_fields)}",
-                )
+            await self.publish_nack(
+                message.message_id,
+                f"Missing fields: {', '.join(missing_fields)}",
             )
             return
         if message.in_reply_to not in self.requests:
-            await self.connector.publish_event(
-                Event(
-                    user_message_id=message.message_id,
-                    event_type=EventType.NACK,
-                    sent_message_id=message.message_id,
-                    nack_reason="No matching request",
-                )
-            )
+            await self.publish_nack(message.message_id, "No matching request")
             return
         self.finish_request(message.in_reply_to, message.content)
-        await self.connector.publish_event(
-            Event(
-                user_message_id=message.message_id,
-                event_type=EventType.ACK,
-                sent_message_id=message.message_id,
-            )
-        )
+        await self.publish_ack(message.message_id)
 
     def finish_request(self, request_id: str, data: str, code=200, headers={}):
         self.results[request_id] = Response(data=data, code=code, headers=headers)
