@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 from async_amqp import AmqpProtocol
 from attrs import Factory, define
@@ -30,7 +30,7 @@ class Request:
 
 @define
 class Response:
-    data: str
+    data: Union[str, dict]
     code: int
     headers: Dict[str, str]
 
@@ -56,7 +56,7 @@ class HttpRpcTransport(BaseWorker):
         )
         self.http_app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
 
-    async def inbound_request(self) -> Tuple[str, int, Dict[str, str]]:
+    async def inbound_request(self) -> Tuple[Union[str, dict], int, Dict[str, str]]:
         message_id = generate_message_id()
         data = await request.get_data(as_text=True)
         r = self.requests[message_id] = Request(
@@ -122,7 +122,9 @@ class HttpRpcTransport(BaseWorker):
         self.finish_request(message.in_reply_to, message.content)
         await self.publish_ack(message.message_id)
 
-    def finish_request(self, request_id: str, data: str, code=200, headers={}) -> None:
+    def finish_request(
+        self, request_id: str, data: Union[str, dict], code=200, headers={}
+    ) -> None:
         self.results[request_id] = Response(data=data, code=code, headers=headers)
         request = self.requests.pop(request_id)
         request.event.set()
