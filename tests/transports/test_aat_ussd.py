@@ -1,4 +1,5 @@
 from urllib.parse import urlencode
+from xml.etree import ElementTree as ET
 
 import pytest
 from trio import open_memory_channel
@@ -31,29 +32,24 @@ def create_callback_url(to_addr: str):
 def assert_outbound_message_response(
     body: str, content: str, callback: str, continue_session: bool
 ):
-    # Build this manually for the test, otherwise we'll be doing the same thing in the
-    # test and the transport.
-    headertext = f"<headertext>{content}</headertext>"
+    root = ET.fromstring(body)
+    assert root.tag == "request"
+
+    headertext = root[0]
+    assert headertext.tag == "headertext"
+    assert headertext.text == content
 
     if continue_session:
-        options = (
-            "<options>"
-            f'<option command="1" order="1" callback="{callback}" display="false" />'
-            "</options>"
-        )
-    else:
-        options = ""
-
-    xml = "".join(
-        [
-            "<request>",
-            headertext,
-            options,
-            "</request>",
-        ]
-    )
-
-    assert body == xml
+        options = root[1]
+        assert options.tag == "options"
+        [option] = list(options)
+        assert option.tag == "option"
+        assert option.attrib == {
+            "command": "1",
+            "order": "1",
+            "callback": callback,
+            "display": "false",
+        }
 
 
 async def test_inbound_start_session(transport: AatUssdTransport):
