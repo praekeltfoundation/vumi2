@@ -24,3 +24,9 @@ async def test_sentry(amqp_connection, config, nursery):
     assert client.dsn == sentry_dsn
     version = pkg_resources.get_distribution("vumi2").version
     assert client.options["release"] == version
+
+
+async def test_http_server(amqp_connection, config, nursery):
+    config.http_bind = "localhost"
+    worker = BaseWorker(nursery, amqp_connection, config)
+    assert worker.http_app is not None
