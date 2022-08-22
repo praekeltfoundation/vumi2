@@ -16,6 +16,7 @@ from vumi2.workers import BaseConfig, BaseWorker
 class HttpRpcConfig(BaseConfig):
     transport_name: str = "http_rpc"
     web_path: str = "/http_rpc"
+    # TODO: implement request_timeout
     request_timeout: int = 4 * 60
 
 

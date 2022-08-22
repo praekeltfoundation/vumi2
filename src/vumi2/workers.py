@@ -51,6 +51,7 @@ class BaseWorker:
         self.http_app = QuartTrio(__name__)
         http_config = HypercornConfig()
         http_config.bind = [http_bind]
+        http_config.backlog = self.config.worker_concurrency
         self.nursery.start_soon(hypercorn_serve, self.http_app, http_config)
 
     async def setup(self):
