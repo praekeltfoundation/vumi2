@@ -1,6 +1,6 @@
 import json
 from logging import getLogger
-from typing import Awaitable, Callable, Dict, Optional, Type
+from typing import Awaitable, Callable, Dict, Optional, Type, overload
 
 import trio
 from async_amqp import AmqpProtocol
@@ -14,7 +14,6 @@ from vumi2.messages import Event, Message, MessageType
 logger = getLogger(__name__)
 
 
-CallbackType = Callable[[MessageType], Optional[Awaitable[None]]]
 MessageCallbackType = Callable[[Message], Optional[Awaitable[None]]]
 EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
 
@@ -24,14 +23,32 @@ class Consumer:
     exchange_type = "direct"
     durable = True
 
+    @overload
     def __init__(
         self,
         nursery: trio.Nursery,
         connection: AmqpProtocol,
         queue_name: str,
-        callback: CallbackType,
-        message_class: Type[MessageType],
+        callback: MessageCallbackType,
+        message_class: Type[Message],
         concurrency: int,
+    ) -> None:
+        ...
+
+    @overload
+    def __init__(
+        self,
+        nursery: trio.Nursery,
+        connection: AmqpProtocol,
+        queue_name: str,
+        callback: EventCallbackType,
+        message_class: Type[Event],
+        concurrency: int,
+    ) -> None:
+        ...
+
+    def __init__(
+        self, nursery, connection, queue_name, callback, message_class, concurrency
     ) -> None:
         self.nursery = nursery
         self.connection = connection
@@ -117,12 +134,22 @@ class BaseConnector:
     def routing_key(self, message_type: str):
         return f"{self.name}.{message_type}"
 
+    @overload
     async def _setup_consumer(
         self,
         message_type: str,
-        handler: CallbackType,
-        message_class=Type[MessageType],
+        handler: MessageCallbackType,
+        message_class: Type[Message],
     ) -> None:
+        ...
+
+    @overload
+    async def _setup_consumer(
+        self, message_type: str, handler: EventCallbackType, message_class: Type[Event]
+    ) -> None:
+        ...
+
+    async def _setup_consumer(self, message_type, handler, message_class) -> None:
         routing_key = self.routing_key(message_type)
         consumer = Consumer(
             nursery=self.nursery,
@@ -147,7 +174,9 @@ class BaseConnector:
 
 
 class ReceiveInboundConnector(BaseConnector):
-    async def setup(self, inbound_handler: CallbackType, event_handler: CallbackType):
+    async def setup(
+        self, inbound_handler: MessageCallbackType, event_handler: EventCallbackType
+    ):
         await self._setup_publisher("outbound")
         await self._setup_consumer("inbound", inbound_handler, Message)
         await self._setup_consumer("event", event_handler, Event)
@@ -157,7 +186,7 @@ class ReceiveInboundConnector(BaseConnector):
 
 
 class ReceiveOutboundConnector(BaseConnector):
-    async def setup(self, outbound_handler: CallbackType):
+    async def setup(self, outbound_handler: MessageCallbackType):
         await self._setup_publisher("inbound")
         await self._setup_publisher("event")
         await self._setup_consumer("outbound", outbound_handler, Message)

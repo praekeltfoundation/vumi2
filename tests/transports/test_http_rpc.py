@@ -46,14 +46,7 @@ async def test_inbound(transport: OkTransport):
     async with client.request(path="/http_rpc") as connection:
         await connection.send_complete()
         inbound = await receive_channel.receive()
-        reply = Message(
-            to_addr=inbound.from_addr,
-            from_addr=inbound.to_addr,
-            transport_name=inbound.transport_name,
-            transport_type=inbound.transport_type,
-            content="test",
-            in_reply_to=inbound.message_id,
-        )
+        reply = inbound.reply("test")
         await ri_connector.publish_outbound(reply)
         response = await connection.receive()
         assert response == b"test"

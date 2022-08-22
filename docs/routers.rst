@@ -4,6 +4,8 @@ Routers
 Routers manage moving messages between transports and applications according to a
 specified set of rules.
 
+.. _to-address-router:
+
 To address router
 -----------------
 

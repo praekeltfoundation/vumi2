@@ -9,7 +9,8 @@ from quart_trio import QuartTrio
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
-    CallbackType,
+    EventCallbackType,
+    MessageCallbackType,
     ReceiveInboundConnector,
     ReceiveOutboundConnector,
 )
@@ -50,6 +51,7 @@ class BaseWorker:
         self.http_app = QuartTrio(__name__)
         http_config = HypercornConfig()
         http_config.bind = [http_bind]
+        http_config.backlog = self.config.worker_concurrency
         self.nursery.start_soon(hypercorn_serve, self.http_app, http_config)
 
     async def setup(self):
@@ -58,8 +60,8 @@ class BaseWorker:
     async def setup_receive_inbound_connector(
         self,
         connector_name: str,
-        inbound_handler: CallbackType,
-        event_handler: CallbackType,
+        inbound_handler: MessageCallbackType,
+        event_handler: EventCallbackType,
     ) -> ReceiveInboundConnector:
         if connector_name in self.receive_inbound_connectors:
             raise DuplicateConnectorError(
@@ -79,7 +81,7 @@ class BaseWorker:
         return connector
 
     async def setup_receive_outbound_connector(
-        self, connector_name: str, outbound_handler: CallbackType
+        self, connector_name: str, outbound_handler: MessageCallbackType
     ) -> ReceiveOutboundConnector:
         if connector_name in self.receive_outbound_connectors:
             raise DuplicateConnectorError(
