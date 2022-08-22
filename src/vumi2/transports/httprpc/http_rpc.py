@@ -5,7 +5,7 @@ from attrs import Factory, define
 from quart import request
 from quart.datastructures import Headers
 from trio import Event as TrioEvent
-from trio import Nursery
+from trio import Nursery, move_on_after
 from werkzeug.datastructures import MultiDict
 
 from vumi2.messages import Event, EventType, Message, generate_message_id
@@ -16,7 +16,6 @@ from vumi2.workers import BaseConfig, BaseWorker
 class HttpRpcConfig(BaseConfig):
     transport_name: str = "http_rpc"
     web_path: str = "/http_rpc"
-    # TODO: implement request_timeout
     request_timeout: int = 4 * 60
 
 
@@ -59,17 +58,24 @@ class HttpRpcTransport(BaseWorker):
 
     async def inbound_request(self) -> Tuple[Union[str, dict], int, Dict[str, str]]:
         message_id = generate_message_id()
-        data = await request.get_data(as_text=True)
-        r = self.requests[message_id] = Request(
-            method=request.method, headers=request.headers, args=request.args, data=data
-        )
+        with move_on_after(self.config.request_timeout):
+            data = await request.get_data(as_text=True)
+            r = self.requests[message_id] = Request(
+                method=request.method,
+                headers=request.headers,
+                args=request.args,
+                data=data,
+            )
 
-        await self.handle_raw_inbound_message(message_id, r)
+            await self.handle_raw_inbound_message(message_id, r)
 
-        # Wait for finish_request to be called
-        await r.event.wait()
-        response = self.results.pop(message_id)
-        return response.data, response.code, response.headers
+            # Wait for finish_request to be called
+            await r.event.wait()
+            response = self.results.pop(message_id)
+            return response.data, response.code, response.headers
+        self.results.pop(message_id, None)
+        self.requests.pop(message_id, None)
+        return "", 504, {}
 
     async def handle_raw_inbound_message(
         self, message_id: str, r: Request
