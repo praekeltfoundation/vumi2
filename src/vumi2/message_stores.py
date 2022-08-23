@@ -1,8 +1,9 @@
 from datetime import datetime
-from typing import Dict, Optional, Protocol, Type
+from typing import Dict, Optional, Type
 
 from attrs import define
 from cattrs import structure
+from typing_extensions import Protocol
 
 from vumi2.messages import Message
 
