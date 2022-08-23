@@ -77,7 +77,7 @@ class AatUssdTransport(HttpRpcTransport):
             },
             provider=provider,
         )
-        logger.info("Publishing inbound message %s", message)
+        logger.debug("Publishing inbound message %s", message)
         await self.connector.publish_inbound(message)
 
     def generate_body(self, reply: str, callback: str, session_event: Session) -> str:
@@ -106,7 +106,7 @@ class AatUssdTransport(HttpRpcTransport):
         return f"{url}?{query}"
 
     async def handle_outbound_message(self, message: Message) -> None:
-        logger.info("Consuming outbound message %s", message)
+        logger.debug("Consuming outbound message %s", message)
         if not message.in_reply_to:
             logger.info("Outbound message is not a reply, will nack")
             await self.publish_nack(
