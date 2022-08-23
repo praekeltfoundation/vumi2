@@ -4,6 +4,9 @@ This is a transport for integrating into `AAT`_/`Vodacom messaging`_ USSD HTTP R
 
 It is often used together with the :ref:`to-address-router`, in order for a single USSD code to be shared between applications.
 
+.. note::
+    Because this is an HTTP RPC transport, we need to respond to the inbound HTTP request with the content that we want to send back to the user. This means that the outbound reply message needs to go to the same transport that received the inbound request, so you cannot have multiple instances of this transport with the same `transport_name`.
+
 .. _AAT: https://www.aat.co.za/always-active-mobile/ussd/
 .. _Vodacom messaging: https://www.vodacommessaging.co.za/ussdapi.asp
 
@@ -15,19 +18,11 @@ The transport has the following configuration options:
 **Common to all vumi workers**
 
 http_bind
-    Required. This is where the HTTP server will bind. For example, `localhost:8000` to
-    bind to port 8000 on localhost, or `0.0.0.0:80` to bind to port 80 on all
-    interfaces, or `unix:/tmp/socket` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like
-    `nginx`_ in front of the transport to handle HTTPS.
-amqp
-    Optional. Contains the following keys to connect to the AMQP broker: `hostname`, `port`, `username`, `password`, `vhost`. Defaults to `127.0.0.1` on port `5672` with `guest` as the username and password, and a vhost of `/`.
-amqp_url
-    Optional. A URL to connect to the AMQP broker. If this is set, it will override the `amqp` configuration. For example, `amqp://guest:guest@localhost:5672/%2F`.
+    Required. This is where the HTTP server will bind. For example, `localhost:8000` to bind to port 8000 on localhost, or `0.0.0.0:80` to bind to port 80 on all interfaces, or `unix:/tmp/socket` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like `nginx`_ in front of the transport to handle HTTPS.
 worker_concurrency
-    Optional. The number of worker tasks to run concurrently. Defaults to 20. This is
-    the maximum amount of concurrent connections allowed.
-sentry_dsn
-    Optional. If set, errors will be reported to Sentry.
+    Optional. The number of worker tasks to run concurrently. Defaults to 20. This is the maximum amount of concurrent connections allowed.
+
+You can find the rest of the base worker configuration at :ref:`base-worker-configuration`
 
 .. _the hypercorn documentation: https://pgjones.gitlab.io/hypercorn/how_to_guides/binds.html
 .. _nginx: https://nginx.org/en/docs/

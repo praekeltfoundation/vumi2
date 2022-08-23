@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from logging import getLogger
 from urllib.parse import urlencode, urljoin
 
 from async_amqp import AmqpProtocol
@@ -7,6 +8,8 @@ from trio import Nursery
 
 from vumi2.messages import AddressType, Message, Session, TransportType
 from vumi2.transports.httprpc import HttpRpcConfig, HttpRpcTransport, Request
+
+logger = getLogger(__name__)
 
 
 @define
@@ -35,6 +38,7 @@ class AatUssdTransport(HttpRpcTransport):
         if values.get("to_addr") is None and values.get("request") is None:
             missing_fields.add("request")
         if missing_fields:
+            logger.info("Invalid request, missing fields %s", missing_fields)
             self.finish_request(
                 request_id=message_id,
                 data={"missing_parameter": sorted(missing_fields)},
@@ -55,26 +59,26 @@ class AatUssdTransport(HttpRpcTransport):
             to_addr = values["request"]
             content = None
 
-        await self.connector.publish_inbound(
-            Message(
-                to_addr=to_addr,
-                from_addr=from_addr,
-                transport_name=self.config.transport_name,
-                transport_type=TransportType.USSD,
-                message_id=message_id,
-                session_event=session_event,
-                content=content,
-                from_addr_type=AddressType.MSISDN,
-                helper_metadata={"session_id": ussd_session_id},
-                transport_metadata={
-                    "aat_ussd": {
-                        "provider": provider,
-                        "ussd_session_id": ussd_session_id,
-                    }
-                },
-                provider=provider,
-            )
+        message = Message(
+            to_addr=to_addr,
+            from_addr=from_addr,
+            transport_name=self.config.transport_name,
+            transport_type=TransportType.USSD,
+            message_id=message_id,
+            session_event=session_event,
+            content=content,
+            from_addr_type=AddressType.MSISDN,
+            helper_metadata={"session_id": ussd_session_id},
+            transport_metadata={
+                "aat_ussd": {
+                    "provider": provider,
+                    "ussd_session_id": ussd_session_id,
+                }
+            },
+            provider=provider,
         )
+        logger.debug("Publishing inbound message %s", message)
+        await self.connector.publish_inbound(message)
 
     def generate_body(self, reply: str, callback: str, session_event: Session) -> str:
         request = ET.Element("request")
@@ -102,12 +106,15 @@ class AatUssdTransport(HttpRpcTransport):
         return f"{url}?{query}"
 
     async def handle_outbound_message(self, message: Message) -> None:
+        logger.debug("Consuming outbound message %s", message)
         if not message.in_reply_to:
+            logger.info("Outbound message is not a reply, will nack")
             await self.publish_nack(
                 message.message_id, "Outbound message is not a reply"
             )
             return
         if not message.content:
+            logger.info("Outbound message has no content, will nack")
             await self.publish_nack(
                 message.message_id, "Outbound message has no content"
             )

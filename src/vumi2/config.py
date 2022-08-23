@@ -24,6 +24,7 @@ class BaseConfig:
     worker_concurrency: int = 20
     sentry_dsn: Optional[str] = None
     http_bind: Optional[str] = None
+    log_level: str = "INFO"
 
     @classmethod
     def deserialise(cls, config: Dict[str, Any]) -> "BaseConfig":

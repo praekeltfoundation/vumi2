@@ -39,6 +39,13 @@ worker_concurrency
    The number of messages to prefetch and process in parallel. Defaults to 20.
 sentry_dsn
    The Sentry DSN to use. If specified, errors will be logged to Sentry.
+http_bind
+   Optional. If supplied, runs an HTTP server that binds to `http_bind`. For example, `localhost:8000` to bind to port 8000 on localhost, or `0.0.0.0:80` to bind to port 80 on all interfaces, or `unix:/tmp/socket` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like `nginx`_ in front of the transport to handle HTTPS.
+log_level
+   The threshold for which messages to log. Defaults to INFO.
+
+.. _the hypercorn documentation: https://pgjones.gitlab.io/hypercorn/how_to_guides/binds.html
+.. _nginx: https://nginx.org/en/docs/
 
 .. _amqp-config:
 
