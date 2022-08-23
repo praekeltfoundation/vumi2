@@ -58,23 +58,26 @@ class HttpRpcTransport(BaseWorker):
 
     async def inbound_request(self) -> Tuple[Union[str, dict], int, Dict[str, str]]:
         message_id = generate_message_id()
-        with move_on_after(self.config.request_timeout):
-            data = await request.get_data(as_text=True)
-            r = self.requests[message_id] = Request(
-                method=request.method,
-                headers=request.headers,
-                args=request.args,
-                data=data,
-            )
+        try:
+            with move_on_after(self.config.request_timeout):
+                data = await request.get_data(as_text=True)
+                r = self.requests[message_id] = Request(
+                    method=request.method,
+                    headers=request.headers,
+                    args=request.args,
+                    data=data,
+                )
 
-            await self.handle_raw_inbound_message(message_id, r)
+                await self.handle_raw_inbound_message(message_id, r)
 
-            # Wait for finish_request to be called
-            await r.event.wait()
-            response = self.results.pop(message_id)
-            return response.data, response.code, response.headers
-        self.results.pop(message_id, None)
-        self.requests.pop(message_id, None)
+                # Wait for finish_request to be called
+                await r.event.wait()
+                response = self.results.pop(message_id)
+                return response.data, response.code, response.headers
+        finally:
+            # Clean up any unprocessed requests or results to not leak memory
+            self.requests.pop(message_id, None)
+            self.results.pop(message_id, None)
         return "", 504, {}
 
     async def handle_raw_inbound_message(

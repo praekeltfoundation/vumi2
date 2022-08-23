@@ -6,6 +6,7 @@ from async_amqp import AmqpProtocol
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart_trio import QuartTrio
+from trio import Nursery
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
@@ -27,7 +28,7 @@ class BaseWorker:
     CONFIG_CLASS = BaseConfig
 
     def __init__(
-        self, nursery, amqp_connection: AmqpProtocol, config: BaseConfig
+        self, nursery: Nursery, amqp_connection: AmqpProtocol, config: BaseConfig
     ) -> None:
         self.nursery = nursery
         self.connection = amqp_connection
