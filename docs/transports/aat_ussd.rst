@@ -4,6 +4,9 @@ This is a transport for integrating into `AAT`_/`Vodacom messaging`_ USSD HTTP R
 
 It is often used together with the :ref:`to-address-router`, in order for a single USSD code to be shared between applications.
 
+.. note::
+    Because this is an HTTP RPC transport, we need to respond to the inbound HTTP request with the content that we want to send back to the user. This means that the outbound reply message needs to go to the same transport that received the inbound request, so you cannot have multiple instances of this transport with the same `transport_name`.
+
 .. _AAT: https://www.aat.co.za/always-active-mobile/ussd/
 .. _Vodacom messaging: https://www.vodacommessaging.co.za/ussdapi.asp
 
