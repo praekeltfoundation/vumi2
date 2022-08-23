@@ -1,3 +1,4 @@
+from logging import getLogger
 from typing import Dict, List, Tuple, Union
 
 from async_amqp import AmqpProtocol
@@ -10,6 +11,8 @@ from werkzeug.datastructures import MultiDict
 
 from vumi2.messages import Event, EventType, Message, generate_message_id
 from vumi2.workers import BaseConfig, BaseWorker
+
+logger = getLogger(__name__)
 
 
 @define
@@ -67,6 +70,7 @@ class HttpRpcTransport(BaseWorker):
                     args=request.args,
                     data=data,
                 )
+                logger.debug("Received request %s %s", message_id, r)
 
                 await self.handle_raw_inbound_message(message_id, r)
 
@@ -78,6 +82,13 @@ class HttpRpcTransport(BaseWorker):
             # Clean up any unprocessed requests or results to not leak memory
             self.requests.pop(message_id, None)
             self.results.pop(message_id, None)
+        logger.warning(
+            "Timing out request %s %s %s %s",
+            message_id,
+            request.method,
+            request.url,
+            request.headers,
+        )
         return "", 504, {}
 
     async def handle_raw_inbound_message(
@@ -116,6 +127,7 @@ class HttpRpcTransport(BaseWorker):
         )
 
     async def handle_outbound_message(self, message: Message) -> None:
+        logger.debug("Consuming outbound message %s", message)
         # Need to do this double check for the type checker
         if not message.in_reply_to or not message.content:
             missing_fields = self.ensure_message_fields(
@@ -135,6 +147,9 @@ class HttpRpcTransport(BaseWorker):
     def finish_request(
         self, request_id: str, data: Union[str, dict], code=200, headers={}
     ) -> None:
+        logger.debug(
+            "Finishing request %s with %s %s %s", request_id, code, headers, data
+        )
         self.results[request_id] = Response(data=data, code=code, headers=headers)
         request = self.requests.pop(request_id)
         request.event.set()

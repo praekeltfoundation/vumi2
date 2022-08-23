@@ -1,4 +1,5 @@
 import argparse
+import logging
 import sys
 from importlib import import_module
 from typing import List, Type
@@ -92,6 +93,7 @@ async def run_worker(worker_cls: Type[BaseWorker], args: List[str]) -> BaseWorke
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
     config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
+    logging.basicConfig(level=config.log_level)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:
             worker = worker_cls(
