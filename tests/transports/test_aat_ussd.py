@@ -81,7 +81,8 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         assert inbound.provider == "Vodacom"
         assert inbound.session_event == Session.NEW
 
-        await ri_connector.publish_outbound(inbound.reply("Test response"))
+        reply = inbound.reply("Test response")
+        await ri_connector.publish_outbound(reply)
 
         response = await connection.receive()
         assert_outbound_message_response(
@@ -90,6 +91,10 @@ async def test_inbound_start_session(transport: AatUssdTransport):
             create_callback_url(inbound.from_addr),
             continue_session=True,
         )
+
+    ack = await receive_channel.receive()
+    assert ack.event_type == EventType.ACK
+    assert ack.user_message_id == reply.message_id
 
 
 async def test_close_session(transport: AatUssdTransport):
@@ -116,9 +121,8 @@ async def test_close_session(transport: AatUssdTransport):
         await connection.send_complete()
         inbound = await receive_channel.receive()
 
-        await ri_connector.publish_outbound(
-            inbound.reply("Test response", Session.CLOSE)
-        )
+        reply = inbound.reply("Test response", Session.CLOSE)
+        await ri_connector.publish_outbound(reply)
 
         response = await connection.receive()
         assert_outbound_message_response(
@@ -127,6 +131,10 @@ async def test_close_session(transport: AatUssdTransport):
             create_callback_url(inbound.from_addr),
             continue_session=False,
         )
+
+    ack = await receive_channel.receive()
+    assert ack.event_type == EventType.ACK
+    assert ack.user_message_id == reply.message_id
 
 
 async def test_missing_fields(transport: AatUssdTransport):
@@ -169,7 +177,12 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
         assert inbound.content == "user response"
         assert inbound.session_event == Session.RESUME
 
-        await ri_connector.publish_outbound(inbound.reply("Test response"))
+        reply = inbound.reply("Test response")
+        await ri_connector.publish_outbound(reply)
+
+    ack = await receive_channel.receive()
+    assert ack.event_type == EventType.ACK
+    assert ack.user_message_id == reply.message_id
 
 
 async def test_outbound_not_reply(transport: AatUssdTransport):

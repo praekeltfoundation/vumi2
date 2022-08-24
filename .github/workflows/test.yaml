@@ -1,5 +1,11 @@
-name: Run tests
-on: [push]
+name: Continuous integration
+on:
+  push:
+    branches: ["*"]
+    tags: ["*"]
+  pull_request:
+    branches: ["main"]
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -32,3 +38,30 @@ jobs:
         run: poetry run pytest
       - name: Build docs
         run: poetry run sphinx-build -b html docs docs/_build/html
+  docker-image:
+    needs: [test]
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: docker/setup-buildx-action@v2
+      - uses: docker/metadata-action@v4
+        id: meta
+        with:
+          images: |
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{ version }}
+            type=sha
+      - uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

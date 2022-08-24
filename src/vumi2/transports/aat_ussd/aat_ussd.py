@@ -123,3 +123,4 @@ class AatUssdTransport(HttpRpcTransport):
         callback_url = self.get_callback_url(message.to_addr)
         body = self.generate_body(message.content, callback_url, message.session_event)
         self.finish_request(message.in_reply_to, body)
+        await self.publish_ack(message.message_id)

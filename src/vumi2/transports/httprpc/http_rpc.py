@@ -108,23 +108,23 @@ class HttpRpcTransport(BaseWorker):
         return missing_fields
 
     async def publish_nack(self, message_id: str, reason: str) -> None:
-        await self.connector.publish_event(
-            Event(
-                user_message_id=message_id,
-                sent_message_id=message_id,
-                event_type=EventType.NACK,
-                nack_reason=reason,
-            )
+        nack = Event(
+            user_message_id=message_id,
+            sent_message_id=message_id,
+            event_type=EventType.NACK,
+            nack_reason=reason,
         )
+        logger.debug("Not acknowledging message %s", nack)
+        await self.connector.publish_event(nack)
 
     async def publish_ack(self, message_id: str) -> None:
-        await self.connector.publish_event(
-            Event(
-                user_message_id=message_id,
-                sent_message_id=message_id,
-                event_type=EventType.ACK,
-            )
+        ack = Event(
+            user_message_id=message_id,
+            sent_message_id=message_id,
+            event_type=EventType.ACK,
         )
+        logger.debug("Acknowledging message %s", ack)
+        await self.connector.publish_event(ack)
 
     async def handle_outbound_message(self, message: Message) -> None:
         logger.debug("Consuming outbound message %s", message)
