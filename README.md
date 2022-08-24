@@ -3,7 +3,7 @@
 
 Currently under development.
 - [x] To address router
-- [ ] HTTP RPC USSD transport
+- [x] HTTP RPC USSD transport
 - [ ] SMPP SMS transport
 
 ## Development
