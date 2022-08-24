@@ -111,12 +111,12 @@ def main(args=sys.argv[1:]):
     if len(args) >= 2 and args[0] == "worker":
         try:
             worker_cls = class_from_string(class_path=args[1])
-            return trio.run(run_worker, worker_cls, args)
         except (AttributeError, ModuleNotFoundError, ValueError):
             # If the second argument is not a valid class, then display an error
             parser.parse_args(args=args)  # If the argument is --help
             parser.print_help()
             print(f"Invalid worker class: {args[1]}")
             exit(1)
+        return trio.run(run_worker, worker_cls, args)
 
     parser.parse_args(args=args)
