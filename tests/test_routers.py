@@ -34,9 +34,9 @@ async def test_to_addr_router_setup(amqp_connection, nursery):
     )
 
 
-async def test_to_addr_router_event(amqp_connection, nursery):
+async def test_to_addr_router_event_no_routing(amqp_connection, nursery):
     """
-    Events should be ignored
+    Events that don't have an outbound in the store should be ignored
     """
     router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
     await router.setup()
@@ -46,6 +46,43 @@ async def test_to_addr_router_event(amqp_connection, nursery):
         sent_message_id="1",
     )
     await router.handle_event(event)
+
+
+async def test_to_addr_router_event(amqp_connection, nursery):
+    """
+    Events that have an outbound in the store should be routed
+    """
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
+    await router.setup()
+    outbound = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="test1",
+        transport_type=TransportType.SMS,
+    )
+    event = Event(
+        user_message_id=outbound.message_id,
+        event_type=EventType.ACK,
+        sent_message_id=outbound.message_id,
+    )
+    send_channel, receive_channel = open_memory_channel(1)
+
+    async def consumer(msg):
+        with send_channel:
+            await send_channel.send(msg)
+
+    await router.setup_receive_inbound_connector(
+        connector_name="app1",
+        inbound_handler=consumer,
+        event_handler=consumer,
+    )
+
+    await router.handle_outbound_message(outbound)
+    await router.handle_event(event)
+
+    async with receive_channel:
+        received_event = await receive_channel.receive()
+    assert event == received_event
 
 
 async def test_to_addr_router_inbound(amqp_connection, nursery):

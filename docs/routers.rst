@@ -19,9 +19,6 @@ Outbound messages from applications are routed to the transport that the are in 
 to. The ``transport_name`` field on the message is used to determine which transport
 to send the message to.
 
-.. warning::
-    Transport events are currently not handled by the router, and are discarded.
-
 A good use for this router is on USSD, where for example you have a transport for the
 ``*1234#`` USSD code. Then you can route the base code ``*1234#`` to one application,
 and the ``*1234*1#`` to another.
@@ -37,6 +34,10 @@ transport_names: list[str]
 to_address_mappings: dict[str, str]
     The keys of this dictionary are the application names to send the inbound messages
     to, and the values are the regular expression patterns to match against
+message_store_class: str
+    The path to the class to use for storing messages. Defaults to `vumi2.message_stores.MemoryMessageStore`, a message store that temporarily stores the messages in memory. This transport stores outbound messages in order to know where to route the events for those messages. See :ref:`memory-message-store` for more information
+message_store_config: dict
+    The config for the specified message store.
 
 For example:
 
