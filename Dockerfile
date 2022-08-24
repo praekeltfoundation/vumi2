@@ -7,5 +7,6 @@ RUN poetry config virtualenvs.in-project true \
 
 FROM ghcr.io/praekeltfoundation/python-base-nw:3.10-bullseye
 COPY --from=build .venv/ .venv/
+COPY src src/
 
 ENTRYPOINT [ "tini", "--", ".venv/bin/vumi2" ]
