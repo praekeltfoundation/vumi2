@@ -61,7 +61,7 @@ class ToAddressRouter(BaseWorker):
     # TODO: Teardown
 
     async def handle_inbound_message(self, message: Message):
-        logger.debug("Processing inbound message %s")
+        logger.debug("Processing inbound message %s", message)
         for name, pattern in self.mappings:
             if pattern.match(message.to_addr):
                 logger.debug("Routing inbound message to %s", name)
@@ -71,7 +71,7 @@ class ToAddressRouter(BaseWorker):
         logger.debug("Processing event %s", event)
         outbound = await self.message_store.fetch_outbound(event.user_message_id)
         if outbound is None:
-            logger.debug("Cannot find outbound for event %s, not routing", event)
+            logger.info("Cannot find outbound for event %s, not routing", event)
             return
         for name, pattern in self.mappings:
             if pattern.match(outbound.from_addr):
