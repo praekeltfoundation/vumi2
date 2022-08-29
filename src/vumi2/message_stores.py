@@ -1,11 +1,16 @@
+import sys
 from datetime import datetime
 from typing import Dict, Optional, Type
 
 from attrs import define
 from cattrs import structure
-from typing_extensions import Protocol
 
 from vumi2.messages import Message
+
+if sys.version_info >= (3, 8):
+    from typing import Protocol
+else:  # pragma: no cover
+    from typing_extensions import Protocol
 
 
 class MessageStoreConfig(Protocol):  # pragma: no cover
