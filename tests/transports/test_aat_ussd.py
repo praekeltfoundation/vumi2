@@ -88,7 +88,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         assert_outbound_message_response(
             response.decode(),
             "Test response",
-            create_callback_url(inbound.from_addr),
+            create_callback_url(inbound.to_addr),
             continue_session=True,
         )
 
