@@ -1,3 +1,4 @@
+from logging import getLogger
 from typing import Dict, TypeVar
 
 import pkg_resources
@@ -24,6 +25,8 @@ ConnectorsType = TypeVar(
     ReceiveOutboundConnector,
 )
 
+logger = getLogger(__name__)
+
 
 class BaseWorker:
     CONFIG_CLASS = BaseConfig
@@ -31,6 +34,9 @@ class BaseWorker:
     def __init__(
         self, nursery: Nursery, amqp_connection: AmqpProtocol, config: BaseConfig
     ) -> None:
+        logger.info(
+            "Starting %s worker with config %s", self.__class__.__name__, config
+        )
         self.nursery = nursery
         self.connection = amqp_connection
         self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
