@@ -5,6 +5,14 @@ import sentry_sdk
 from vumi2.workers import BaseWorker
 
 
+class FailingHealthcheckWorker(BaseWorker):
+    async def setup(self):
+        self.healthchecks["failing"] = self.failing_healthcheck
+
+    async def failing_healthcheck(self):
+        return {"health": "down"}
+
+
 @pytest.fixture
 def config():
     return BaseWorker.CONFIG_CLASS.deserialise({})
@@ -30,3 +38,24 @@ async def test_http_server(amqp_connection, config, nursery):
     config.http_bind = "localhost"
     worker = BaseWorker(nursery, amqp_connection, config)
     assert worker.http_app is not None
+
+
+async def test_healthcheck(amqp_connection, config, nursery):
+    config.http_bind = "localhost"
+    worker = BaseWorker(nursery, amqp_connection, config)
+    client = worker.http_app.test_client()
+    response = await client.get("/health")
+    data = await response.json
+    assert data["health"] == "ok"
+    assert data["components"]["amqp"]["state"] == "open"
+
+
+async def test_down_healthcheck(amqp_connection, config, nursery):
+    config.http_bind = "localhost"
+    worker = FailingHealthcheckWorker(nursery, amqp_connection, config)
+    await worker.setup()
+    client = worker.http_app.test_client()
+    response = await client.get("/health")
+    data = await response.json
+    assert data["health"] == "down"
+    assert data["components"]["failing"] == {"health": "down"}

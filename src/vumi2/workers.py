@@ -3,6 +3,7 @@ from typing import Dict, TypeVar
 import pkg_resources
 import sentry_sdk
 from async_amqp import AmqpProtocol
+from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart_trio import QuartTrio
@@ -36,6 +37,7 @@ class BaseWorker:
         self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
         self.config = config
         self._setup_sentry()
+        self.healthchecks = {"amqp": self._amqp_healthcheck}
         if config.http_bind is not None:
             self._setup_http(config.http_bind)
 
@@ -54,6 +56,32 @@ class BaseWorker:
         http_config.bind = [http_bind]
         http_config.backlog = self.config.worker_concurrency
         self.nursery.start_soon(hypercorn_serve, self.http_app, http_config)
+        self.http_app.add_url_rule("/health", view_func=self._healthcheck_request)
+
+    async def _healthcheck_request(self):
+        response = {"health": "ok", "components": {}}
+        for name, function in self.healthchecks.items():
+            result = await function()
+            if result["health"] != "ok":
+                response["health"] = "down"
+            response["components"][name] = result
+        return response, 200 if response["health"] == "ok" else 500
+
+    async def _amqp_healthcheck(self):
+        result = {
+            "health": "ok",
+            "server_properties": self.connection.server_properties,
+        }
+        state = {
+            CONNECTING: "connecting",
+            OPEN: "open",
+            CLOSING: "closing",
+            CLOSED: "closed",
+        }[self.connection.state]
+        result["state"] = state
+        if state != "open":  # pragma: no cover
+            result["health"] = "down"
+        return result
 
     async def setup(self):
         pass
