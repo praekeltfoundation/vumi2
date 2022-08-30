@@ -135,3 +135,6 @@ dmypy.json
 
 # docker
 Dockerfile
+
+# application
+utils/
