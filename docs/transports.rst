@@ -14,3 +14,4 @@ The following transports are available:
     :maxdepth: 2
 
     transports/aat_ussd
+    transports/smpp

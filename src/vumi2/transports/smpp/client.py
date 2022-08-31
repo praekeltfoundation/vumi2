@@ -2,13 +2,7 @@ from io import BytesIO
 from logging import getLogger
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
-from smpp.pdu.operations import (
-    BindTransceiver,
-    EnquireLink,
-    PDUDataRequest,
-    PDURequest,
-    PDUResponse,
-)
+from smpp.pdu.operations import BindTransceiver, EnquireLink, PDURequest, PDUResponse
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
 from trio import MemorySendChannel, Nursery, SocketStream, open_memory_channel, sleep
@@ -48,7 +42,7 @@ class EsmeClient:
         self.responses: Dict[int, MemorySendChannel] = {}
         self.sequence_number = 0
         nursery.start_soon(self.consume_stream)
-        self.pdu_serializer = PDUEncoder()
+        self.encoder = PDUEncoder()
 
     async def get_next_sequence_number(self) -> int:
         # TODO: proper sequence number generation
@@ -88,13 +82,13 @@ class EsmeClient:
                 pdu_data = self.extract_pdu(self.buffer)
                 if pdu_data is None:
                     break
-                pdu = self.pdu_serializer.decode(BytesIO(pdu_data))
+                pdu = self.encoder.decode(BytesIO(pdu_data))
                 await self.handle_pdu(pdu)
 
     async def handle_pdu(self, pdu: PDU) -> None:
         logger.debug("Received PDU %s", pdu)
         # Data requests must go to the handler functions
-        if isinstance(pdu, PDUDataRequest):
+        if isinstance(pdu, PDURequest):
             command_name = pdu.commandId.name
             handler_function = getattr(self, f"handle_{command_name}", None)
             # TODO: implement handler functions for commands
@@ -137,7 +131,7 @@ class EsmeClient:
         interface_version: int = 34,
         addr_ton: AddrTon = AddrTon.UNKNOWN,
         addr_npi: AddrNpi = AddrNpi.UNKNOWN,
-        address_range: str = "",
+        address_range: Optional[str] = None,
     ) -> PDU:
         pdu = BindTransceiver(
             seqNum=await self.get_next_sequence_number(),
@@ -158,12 +152,12 @@ class EsmeClient:
         logger.debug("Sending PDU %s", pdu)
 
         if isinstance(pdu, PDUResponse):
-            await self.stream.send_all(self.pdu_serializer.encode(pdu))
+            await self.stream.send_all(self.encoder.encode(pdu))
             return None
 
         send_channel, receive_channel = open_memory_channel(0)
         self.responses[pdu.seqNum] = send_channel
-        await self.stream.send_all(self.pdu_serializer.encode(pdu))
+        await self.stream.send_all(self.encoder.encode(pdu))
         async for response in receive_channel:
             if response.status != CommandStatus.ESME_ROK:
                 raise EsmeResponseStatusError(f"Received error response {response}")

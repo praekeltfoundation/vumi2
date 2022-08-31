@@ -15,14 +15,14 @@ logger = getLogger(__name__)
 
 @define
 class SmppTransceiverTransportConfig(BaseConfig):
-    transport_name: str = "sms"
+    transport_name: str = "smpp"
     host: str = "localhost"
     port: int = 2775
     system_id: str = "smppclient1"
     password: str = "password"
     system_type: Optional[str] = None
     interface_version: int = 34
-    address_range: str = ""
+    address_range: Optional[str] = None
     smpp_enquire_link_interval: int = 55
 
 

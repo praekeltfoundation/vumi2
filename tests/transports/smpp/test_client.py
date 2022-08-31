@@ -7,6 +7,7 @@ from smpp.pdu.operations import (
     BindTransceiverResp,
     EnquireLink,
     EnquireLinkResp,
+    Outbind,
     SubmitSM,
     SubmitSMResp,
 )
@@ -137,7 +138,7 @@ async def test_send_pdu_wrong_response(client: EsmeClient, server_stream):
 
 async def test_handle_pdu_invalid_type(client: EsmeClient, caplog):
     """Only data requests and responses should be sent by the server"""
-    pdu = BindTransceiver(seqNum=1)
+    pdu = Outbind(seqNum=1)
     await client.handle_pdu(pdu)
     [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
     assert "Unknown PDU type" in log.getMessage()
