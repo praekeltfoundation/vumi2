@@ -92,7 +92,7 @@ async def test_get_next_sequence_value(client: EsmeClient):
 
 async def complete_client_startup(client, server_stream):
     """
-    Receives and responds to the client's bind request, and it's first enquire link
+    Receives and responds to the client's bind request, and its first enquire link
     request, completing the startup of the client and making it ready to accept commands
     """
     client.nursery.start_soon(client.start)
