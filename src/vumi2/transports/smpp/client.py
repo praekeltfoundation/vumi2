@@ -48,7 +48,6 @@ class EsmeClient:
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
         self.sequence_number = 0
-        nursery.start_soon(self.consume_stream)
         self.encoder = PDUEncoder()
 
     async def get_next_sequence_number(self) -> int:
@@ -59,6 +58,7 @@ class EsmeClient:
 
     async def start(self) -> None:
         # TODO: timeout on bind
+        self.nursery.start_soon(self.consume_stream)
         await self.bind(
             system_id=self.config.system_id,
             password=self.config.password,
