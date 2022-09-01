@@ -64,13 +64,14 @@ async def client(nursery, client_stream) -> EsmeClient:
 
 
 async def test_get_next_sequence_value(client: EsmeClient):
+    """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
     client.sequence_number = 0
     assert await client.get_next_sequence_number() == 1
     assert await client.get_next_sequence_number() == 2
     assert await client.get_next_sequence_number() == 3
     # wrap around at 0xFFFFFFFF
-    client.sequence_number = 0xFFFFFFFE
-    assert await client.get_next_sequence_number() == 0xFFFFFFFF
+    client.sequence_number = 0x7FFFFFFE
+    assert await client.get_next_sequence_number() == 0x7FFFFFFF
     assert await client.get_next_sequence_number() == 1
 
 
