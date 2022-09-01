@@ -16,6 +16,7 @@ from smpp.pdu.pdu_types import CommandStatus
 from trio.testing import memory_stream_pair
 
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
+from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 
 
@@ -75,19 +76,7 @@ async def server_stream(stream):
 async def client(nursery, client_stream) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(nursery, client_stream, config)
-
-
-async def test_get_next_sequence_value(client: EsmeClient):
-    """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
-    client.sequence_number = 0
-    assert await client.get_next_sequence_number() == 1
-    assert await client.get_next_sequence_number() == 2
-    assert await client.get_next_sequence_number() == 3
-    # wrap around at 0xFFFFFFFF
-    client.sequence_number = 0x7FFFFFFE
-    assert await client.get_next_sequence_number() == 0x7FFFFFFF
-    assert await client.get_next_sequence_number() == 1
+    return EsmeClient(nursery, client_stream, config, InMemorySequencer({}))
 
 
 async def complete_client_startup(client, server_stream):

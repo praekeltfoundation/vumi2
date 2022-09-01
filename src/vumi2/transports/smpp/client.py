@@ -14,6 +14,8 @@ from trio import (
     sleep_until,
 )
 
+from vumi2.transports.smpp.sequencers import Sequencer
+
 logger = getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -41,21 +43,15 @@ class EsmeClient:
         nursery: Nursery,
         stream: SocketStream,
         config: "SmppTransceiverTransportConfig",
+        sequencer: Sequencer,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
+        self.sequencer = sequencer
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
-        self.sequence_number = 0
         self.encoder = PDUEncoder()
-
-    async def get_next_sequence_number(self) -> int:
-        """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
-        # TODO: proper sequence number generation
-        # The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF
-        self.sequence_number = (self.sequence_number % 0x7FFFFFFF) + 1
-        return self.sequence_number
 
     async def start(self) -> None:
         """
@@ -80,7 +76,7 @@ class EsmeClient:
         # TODO: timeout if we don't get a response
         while True:
             deadline = current_time() + self.config.smpp_enquire_link_interval
-            pdu = EnquireLink(seqNum=await self.get_next_sequence_number())
+            pdu = EnquireLink(seqNum=await self.sequencer.get_next_sequence_number())
             await self.send_pdu(pdu)
             await sleep_until(deadline)
 
@@ -160,7 +156,7 @@ class EsmeClient:
         Sends a bind request to the server, and waits for a successful bind response
         """
         pdu = BindTransceiver(
-            seqNum=await self.get_next_sequence_number(),
+            seqNum=await self.sequencer.get_next_sequence_number(),
             system_id=system_id,
             password=password,
             system_type=system_type,
