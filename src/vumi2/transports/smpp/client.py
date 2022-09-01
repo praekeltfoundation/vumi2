@@ -152,7 +152,9 @@ class EsmeClient:
             addr_npi=addr_npi,
             address_range=address_range,
         )
-        return await self.send_pdu(pdu)
+        bind_response = await self.send_pdu(pdu)
+        logger.info("SMPP bound with response %s", bind_response)
+        return bind_response
 
     async def send_pdu(self, pdu: Union[PDURequest, PDUResponse]) -> Optional[PDU]:
         """
