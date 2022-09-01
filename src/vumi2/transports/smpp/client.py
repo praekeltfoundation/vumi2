@@ -5,7 +5,14 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 from smpp.pdu.operations import BindTransceiver, EnquireLink, PDURequest, PDUResponse
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
-from trio import MemorySendChannel, Nursery, SocketStream, open_memory_channel, sleep
+from trio import (
+    MemorySendChannel,
+    Nursery,
+    SocketStream,
+    current_time,
+    open_memory_channel,
+    sleep_until,
+)
 
 logger = getLogger(__name__)
 
@@ -67,9 +74,10 @@ class EsmeClient:
         """
         # TODO: timeout if we don't get a response
         while True:
+            deadline = current_time() + self.config.smpp_enquire_link_interval
             pdu = EnquireLink(seqNum=await self.get_next_sequence_number())
             await self.send_pdu(pdu)
-            await sleep(self.config.smpp_enquire_link_interval)
+            await sleep_until(deadline)
 
     async def consume_stream(self) -> None:
         """
