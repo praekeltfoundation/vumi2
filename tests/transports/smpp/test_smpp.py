@@ -1,8 +1,5 @@
-from io import BytesIO
-
 from pytest import fixture
 from smpp.pdu.operations import BindTransceiverResp
-from smpp.pdu.pdu_encoding import PDUEncoder
 from trio import Nursery, open_nursery
 
 from vumi2.connectors import ReceiveOutboundConnector

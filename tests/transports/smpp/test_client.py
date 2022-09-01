@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 
 from pytest import fixture, raises
 from smpp.pdu.operations import (
@@ -11,7 +10,6 @@ from smpp.pdu.operations import (
     SubmitSM,
     SubmitSMResp,
 )
-from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import CommandStatus
 from trio.testing import memory_stream_pair
 

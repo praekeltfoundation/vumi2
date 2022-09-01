@@ -1,10 +1,9 @@
 from io import BytesIO
-# from typing import Optional
 
 from smpp.pdu.operations import BindTransceiverResp, EnquireLinkResp
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU
-from trio import open_memory_channel, serve_tcp
+from trio import serve_tcp
 from trio.testing import memory_stream_pair
 
 
