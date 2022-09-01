@@ -17,6 +17,13 @@ TEST_PORT = 8000
 
 @fixture
 async def tcp_server(nursery):
+    """
+    Creates a TCP server listening on port TEST_PORT, and returns a send and receive
+    trio in memory channel.
+
+    Used to convert a TCP stream to an in memory channel stream, to provide a place for
+    the transport to connect to, and to be able to simulate an SMPP server in the tests
+    """
     from_stream_send, from_stream_receive = open_memory_channel(0)
     to_stream_send, to_stream_receive = open_memory_channel(0)
 
@@ -35,11 +42,19 @@ async def tcp_server(nursery):
 
 @fixture
 async def transport(nursery, amqp_connection):
+    """
+    An SMPP transciever transport, with default config except connecting to the
+    TEST_PORT
+    """
     config = SmppTransceiverTransportConfig(port=TEST_PORT)
     return SmppTransceiverTransport(nursery, amqp_connection, config)
 
 
 async def test_startup(transport, tcp_server, nursery: Nursery):
+    """
+    For the transport's `setup`, it should create and bind/start a client, and an AMQP
+    connector.
+    """
     send_channel, receive_channel = tcp_server
     async with open_nursery() as start_nursery:
         start_nursery.start_soon(transport.setup)

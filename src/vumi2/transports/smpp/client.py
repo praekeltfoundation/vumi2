@@ -51,12 +51,17 @@ class EsmeClient:
         self.encoder = PDUEncoder()
 
     async def get_next_sequence_number(self) -> int:
+        """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
         # TODO: proper sequence number generation
         # The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF
         self.sequence_number = (self.sequence_number % 0x7FFFFFFF) + 1
         return self.sequence_number
 
     async def start(self) -> None:
+        """
+        Starts the client consuming from the TCP tream, completes an SMPP bind, and
+        starts the periodic sending of enquire links
+        """
         # TODO: timeout on bind
         self.nursery.start_soon(self.consume_stream)
         await self.bind(
@@ -95,8 +100,17 @@ class EsmeClient:
                 await self.handle_pdu(pdu)
 
     async def handle_pdu(self, pdu: PDU) -> None:
+        """
+        Handles the received decoded PDUs.
+
+        Sends requests to handler functions, eg. `unbind` will be handled by
+        `self.handle_unbind`. If such a function doesn't exist, a warning is logged
+        and the PDU is ignored.
+
+        Sends responses back to the task that made the request.
+        """
         logger.debug("Received PDU %s", pdu)
-        # Data requests must go to the handler functions
+        # Requests must go to the handler functions
         if isinstance(pdu, PDURequest):
             command_name = pdu.commandId.name
             handler_function = getattr(self, f"handle_{command_name}", None)
@@ -142,6 +156,9 @@ class EsmeClient:
         addr_npi: AddrNpi = AddrNpi.UNKNOWN,
         address_range: Optional[str] = None,
     ) -> PDU:
+        """
+        Sends a bind request to the server, and waits for a successful bind response
+        """
         pdu = BindTransceiver(
             seqNum=await self.get_next_sequence_number(),
             system_id=system_id,

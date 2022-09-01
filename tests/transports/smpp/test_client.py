@@ -20,6 +20,13 @@ from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 
 
 def test_extract_pdu():
+    """
+    If the whole data is too short for an SMPP packet, or if the data is shorter than
+    the specified packet length, should return None and leave data alone.
+
+    If the data is equal to or bigger than the specified packet length, then it should
+    return that packet, and remove it from data
+    """
     # Too short
     assert EsmeClient.extract_pdu(bytearray.fromhex("00000004")) is None
     # Not complete packet
@@ -43,22 +50,30 @@ def test_extract_pdu():
 
 @fixture
 async def stream():
+    """
+    A trio memory stream pair. Done as a fixture so that the same stream can easily
+    injected into other fixtures and the test method, without ending up with duplicates
+    that aren't connected.
+    """
     client, server = memory_stream_pair()
     return (client, server)
 
 
 @fixture
 async def client_stream(stream):
+    """The client part of the trio stream"""
     return stream[0]
 
 
 @fixture
 async def server_stream(stream):
+    """The server part of the trio stream"""
     return stream[1]
 
 
 @fixture
 async def client(nursery, client_stream) -> EsmeClient:
+    """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
     return EsmeClient(nursery, client_stream, config)
 
