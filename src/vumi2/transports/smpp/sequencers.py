@@ -1,7 +1,7 @@
 # TODO: Sequencers that can be shared across processes
 
 
-class Sequencer:
+class Sequencer:  # pragma: no cover
     def __init__(self, config: dict):
         ...
 
