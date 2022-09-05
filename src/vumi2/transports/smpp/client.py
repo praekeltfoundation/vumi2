@@ -14,7 +14,9 @@ from trio import (
     sleep_until,
 )
 
-from vumi2.transports.smpp.sequencers import Sequencer
+from ...messages import Message
+from .processors import SubmitShortMessageProcesserBase
+from .sequencers import Sequencer
 
 logger = getLogger(__name__)
 
@@ -44,11 +46,13 @@ class EsmeClient:
         stream: SocketStream,
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
+        submit_sm_processor: SubmitShortMessageProcesserBase,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
         self.sequencer = sequencer
+        self.submit_sm_processor = submit_sm_processor
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
@@ -190,3 +194,7 @@ class EsmeClient:
                     f"Received response of incorrect type {response}"
                 )
         return response
+
+    async def send_vumi_message(self, message: Message):
+        for pdu in await self.submit_sm_processor.handle_outbound_message(message):
+            await self.send_pdu(pdu)

@@ -13,7 +13,9 @@ from smpp.pdu.operations import (
 from smpp.pdu.pdu_types import CommandStatus
 from trio.testing import memory_stream_pair
 
+from vumi2.messages import Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
+from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 
@@ -73,28 +75,26 @@ async def server_stream(stream):
 
 
 @fixture
-async def client(nursery, client_stream) -> EsmeClient:
+async def sequencer():
+    return InMemorySequencer({})
+
+
+@fixture
+async def submit_sm_processor(sequencer):
+    return SubmitShortMessageProcessor({}, sequencer)
+
+
+@fixture
+async def client(nursery, client_stream, sequencer, submit_sm_processor) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(nursery, client_stream, config)
+    return EsmeClient(nursery, client_stream, config, sequencer, submit_sm_processor)
 
 
 @fixture
 async def smsc(server_stream) -> FakeSmsc:
     """A FakeSmsc"""
     return FakeSmsc(server_stream)
-
-
-async def test_get_next_sequence_value(client: EsmeClient):
-    """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
-    client.sequence_number = 0
-    assert await client.get_next_sequence_number() == 1
-    assert await client.get_next_sequence_number() == 2
-    assert await client.get_next_sequence_number() == 3
-    # wrap around at 0xFFFFFFFF
-    client.sequence_number = 0x7FFFFFFE
-    assert await client.get_next_sequence_number() == 0x7FFFFFFF
-    assert await client.get_next_sequence_number() == 1
 
 
 async def test_start(client: EsmeClient, smsc: FakeSmsc):
@@ -185,3 +185,24 @@ async def test_handle_known_command(client: EsmeClient):
     pdu = SubmitSM(seqNum=1)
     await client.handle_pdu(pdu)
     assert received_pdu == pdu
+
+
+async def test_send_vumi_message(client: EsmeClient, smsc: FakeSmsc):
+    """Sends the PDU/s that represent the vumi message"""
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content='Knights who say "Nì!"',
+    )
+
+    client.nursery.start_soon(client.send_vumi_message, message)
+
+    pdu = await smsc.receive_pdu()
+    assert pdu.params["source_addr"] == b"12345"
+    assert pdu.params["destination_addr"] == b"+27820001001"
+    assert pdu.params["short_message"] == b'Knights who say "N\x07!"'
+
+    response_pdu = SubmitSMResp(seqNum=pdu.seqNum)
+    await smsc.send_pdu(response_pdu)

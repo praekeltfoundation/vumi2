@@ -27,6 +27,10 @@ class SmppTransceiverTransportConfig(BaseConfig):
     smpp_enquire_link_interval: int = 55
     sequencer_class: str = "vumi2.transports.smpp.sequencers.InMemorySequencer"
     sequencer_config: dict = Factory(dict)
+    submit_sm_processor_class: str = (
+        "vumi2.transports.smpp.processors.SubmitShortMessageProcessor"
+    )
+    submit_sm_processor_config: dict = Factory(dict)
 
 
 class SmppTransceiverTransport(BaseWorker):
@@ -42,6 +46,10 @@ class SmppTransceiverTransport(BaseWorker):
         self.config: SmppTransceiverTransportConfig = config
         sequencer_class = class_from_string(config.sequencer_class)
         self.sequencer = sequencer_class(config.sequencer_config)
+        submit_sm_processor_class = class_from_string(config.submit_sm_processor_class)
+        self.submit_sm_processor = submit_sm_processor_class(
+            self.config.submit_sm_processor_config, self.sequencer
+        )
 
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any
@@ -49,7 +57,13 @@ class SmppTransceiverTransport(BaseWorker):
         self.stream = await open_tcp_stream(
             host=self.config.host, port=self.config.port
         )
-        self.client = EsmeClient(self.nursery, self.stream, self.config, self.sequencer)
+        self.client = EsmeClient(
+            self.nursery,
+            self.stream,
+            self.config,
+            self.sequencer,
+            self.submit_sm_processor,
+        )
         await self.client.start()
         self.connector = await self.setup_receive_outbound_connector(
             connector_name=self.config.transport_name,
@@ -57,5 +71,4 @@ class SmppTransceiverTransport(BaseWorker):
         )
 
     async def handle_outbound(self, message: Message) -> None:  # pragma: no cover
-        # TODO: implement sending outbound messages to client
-        pass
+        await self.client.send_vumi_message(message)

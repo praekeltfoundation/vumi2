@@ -71,6 +71,14 @@ class SubmitShortMessageProcessorConfig:
     registered_delivery: RegisteredDeliveryConfig = Factory(RegisteredDeliveryConfig)
 
 
+class SubmitShortMessageProcesserBase:  # pragma: no cover
+    def __init__(self, config: dict, sequencer: Sequencer) -> None:
+        ...
+
+    async def handle_outbound_message(self, message: Message) -> List[PDU]:
+        ...
+
+
 class SubmitShortMessageProcessor:
     CONFIG_CLASS = SubmitShortMessageProcessorConfig
 
