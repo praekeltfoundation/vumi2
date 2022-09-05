@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 
 from pytest import fixture, raises
 from smpp.pdu.operations import (
@@ -11,13 +10,14 @@ from smpp.pdu.operations import (
     SubmitSM,
     SubmitSMResp,
 )
-from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import CommandStatus
 from trio.testing import memory_stream_pair
 
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
+
+from .helpers import FakeSmsc
 
 
 def test_extract_pdu():
@@ -76,69 +76,60 @@ async def server_stream(stream):
 async def client(nursery, client_stream) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(nursery, client_stream, config, InMemorySequencer({}))
+    return EsmeClient(nursery, client_stream, config)
 
 
-async def complete_client_startup(client, server_stream):
-    """
-    Receives and responds to the client's bind request, and its first enquire link
-    request, completing the startup of the client and making it ready to accept commands
-    """
-    client.nursery.start_soon(client.start)
-    pdu_data = await server_stream.receive_some()
-    pdu = PDUEncoder().decode(BytesIO(pdu_data))
-
-    response_pdu = BindTransceiverResp(seqNum=pdu.seqNum)
-    response = PDUEncoder().encode(response_pdu)
-    await server_stream.send_all(response)
-
-    enquire_data = await server_stream.receive_some()
-    enquire_pdu = PDUEncoder().decode(BytesIO(enquire_data))
-
-    enquire_response_pdu = EnquireLinkResp(seqNum=enquire_pdu.seqNum)
-    enquire_response = PDUEncoder().encode(enquire_response_pdu)
-    await server_stream.send_all(enquire_response)
+@fixture
+async def smsc(server_stream) -> FakeSmsc:
+    """A FakeSmsc"""
+    return FakeSmsc(server_stream)
 
 
-async def test_start(client: EsmeClient, server_stream):
+async def test_get_next_sequence_value(client: EsmeClient):
+    """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
+    client.sequence_number = 0
+    assert await client.get_next_sequence_number() == 1
+    assert await client.get_next_sequence_number() == 2
+    assert await client.get_next_sequence_number() == 3
+    # wrap around at 0xFFFFFFFF
+    client.sequence_number = 0x7FFFFFFE
+    assert await client.get_next_sequence_number() == 0x7FFFFFFF
+    assert await client.get_next_sequence_number() == 1
+
+
+async def test_start(client: EsmeClient, smsc: FakeSmsc):
     """Client should try to bind, and on binding, should start to send enquires"""
     client.nursery.start_soon(client.start)
-    pdu_data = await server_stream.receive_some()
-    pdu = PDUEncoder().decode(BytesIO(pdu_data))
-    assert isinstance(pdu, BindTransceiver)
-    assert pdu.params["system_id"] == b"smppclient1"
-    assert pdu.params["password"] == b"password"
-    assert pdu.params["interface_version"] == 34
 
-    response_pdu = BindTransceiverResp(seqNum=pdu.seqNum)
-    response = PDUEncoder().encode(response_pdu)
-    await server_stream.send_all(response)
+    bind_pdu = await smsc.receive_pdu()
+    assert isinstance(bind_pdu, BindTransceiver)
+    assert bind_pdu.params["system_id"] == b"smppclient1"
+    assert bind_pdu.params["password"] == b"password"
+    assert bind_pdu.params["interface_version"] == 34
 
-    enquire_data = await server_stream.receive_some()
-    enquire_pdu = PDUEncoder().decode(BytesIO(enquire_data))
+    await smsc.send_pdu(BindTransceiverResp(seqNum=bind_pdu.seqNum))
+
+    enquire_pdu = await smsc.receive_pdu()
     assert isinstance(enquire_pdu, EnquireLink)
 
-    enquire_response_pdu = EnquireLinkResp(seqNum=enquire_pdu.seqNum)
-    enquire_response = PDUEncoder().encode(enquire_response_pdu)
-    await server_stream.send_all(enquire_response)
+    await smsc.send_pdu(EnquireLinkResp(seqNum=enquire_pdu.seqNum))
 
 
-async def test_send_response_pdu(client: EsmeClient, server_stream):
+async def test_send_response_pdu(client: EsmeClient, smsc: FakeSmsc):
     """Response PDUs should not wait for a reply"""
-    await complete_client_startup(client, server_stream)
+    await smsc.start_and_bind(client)
 
     pdu = SubmitSMResp(seqNum=1, message_id="test")
     await client.send_pdu(pdu)
 
-    received_data = await server_stream.receive_some()
-    received_pdu = PDUEncoder().decode(BytesIO(received_data))
+    received_pdu = await smsc.receive_pdu()
 
     assert received_pdu == pdu
 
 
-async def test_send_pdu_error_response(client: EsmeClient, server_stream):
+async def test_send_pdu_error_response(client: EsmeClient, smsc: FakeSmsc):
     """If we don't get an ESME_ROK back, raise an error"""
-    await complete_client_startup(client, server_stream)
+    await smsc.start_and_bind(client)
 
     pdu = EnquireLink(seqNum=1)
     task = client.send_pdu(pdu)
@@ -146,23 +137,22 @@ async def test_send_pdu_error_response(client: EsmeClient, server_stream):
     response_pdu = EnquireLinkResp(
         seqNum=pdu.seqNum, status=CommandStatus.ESME_RX_P_APPN
     )
-    await server_stream.send_all(PDUEncoder().encode(response_pdu))
+    await smsc.send_pdu(response_pdu)
     with raises(EsmeResponseStatusError):
         await task
 
 
-async def test_send_pdu_wrong_response(client: EsmeClient, server_stream):
+async def test_send_pdu_wrong_response(client: EsmeClient, smsc: FakeSmsc):
     """
     If we receive a PDU with the correct sequence number, but incorrect response type,
     we should raise an error
     """
-    await complete_client_startup(client, server_stream)
+    await smsc.start_and_bind(client)
 
     pdu = EnquireLink(seqNum=1)
     task = client.send_pdu(pdu)
 
-    response_pdu = BindTransceiverResp(seqNum=pdu.seqNum)
-    await server_stream.send_all(PDUEncoder().encode(response_pdu))
+    await smsc.send_pdu(BindTransceiverResp(seqNum=pdu.seqNum))
     with raises(EsmeResponseStatusError):
         await task
 
