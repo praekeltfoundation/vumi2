@@ -14,7 +14,8 @@ from trio import (
     sleep_until,
 )
 
-from ...messages import Message
+from vumi2.messages import Message
+
 from .processors import SubmitShortMessageProcesserBase
 from .sequencers import Sequencer
 
