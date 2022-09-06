@@ -1,30 +1,14 @@
-import sys
 from datetime import datetime
-from typing import Dict, Optional, Type
+from typing import Dict, Optional
 
 from attrs import define
 from cattrs import structure
 
 from vumi2.messages import Message
 
-if sys.version_info >= (3, 8):
-    from typing import Protocol
-else:  # pragma: no cover
-    from typing_extensions import Protocol
 
-
-class MessageStoreConfig(Protocol):  # pragma: no cover
-    @classmethod
-    def deserialise(
-        cls: "Type[MessageStoreConfig]", config: dict
-    ) -> "MessageStoreConfig":
-        ...
-
-
-class MessageStore(Protocol):  # pragma: no cover
-    CONFIG_CLASS: Type[MessageStoreConfig]
-
-    def __init__(self, config: MessageStoreConfig) -> None:
+class MessageCache:  # pragma: no cover
+    def __init__(self, config: dict) -> None:
         ...
 
     async def store_outbound(self, outbound: Message) -> None:
@@ -35,19 +19,13 @@ class MessageStore(Protocol):  # pragma: no cover
 
 
 @define
-class MemoryMessageStoreConfig:
+class MemoryMessageCacheConfig:
     timeout: int = 60 * 60
 
-    @classmethod
-    def deserialise(cls, config: dict) -> "MemoryMessageStoreConfig":
-        return structure(config, cls)
 
-
-class MemoryMessageStore:
-    CONFIG_CLASS = MemoryMessageStoreConfig
-
-    def __init__(self, config: MemoryMessageStoreConfig) -> None:
-        self.config = config
+class MemoryMessageCache(MessageCache):
+    def __init__(self, config: dict) -> None:
+        self.config = structure(config, MemoryMessageCacheConfig)
         self.outbounds: Dict[str, Message] = {}
 
     def _remove_expired(self) -> None:
