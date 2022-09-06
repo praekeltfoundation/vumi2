@@ -2,13 +2,13 @@ import codecs
 from typing import Tuple
 
 GSM0338_CHARSET = (
-    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?¡ABCDEFGHIJK"
-    "LMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
 )
 GSM0338_CHARSET_MAP = {c: i for i, c in enumerate(GSM0338_CHARSET)}
 GSM0338_CHARSET_EXTENSION = (
-    "````````````````````^```````````````````{}`````\\````````````[~]`|````````````````"
-    "````````````````````€``````````````````````````"
+    "````````````````````^```````````````````{}`````\\````````````[~]`"
+    "|````````````````````````````````````€``````````````````````````"
 )
 GSM0338_CHARSET_EXTENSION_MAP = {c: i for i, c in enumerate(GSM0338_CHARSET_EXTENSION)}
 GSM0338_CHARSET_EXTENSION_ESCAPE = 27
