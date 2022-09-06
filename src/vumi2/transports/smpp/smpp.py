@@ -70,5 +70,5 @@ class SmppTransceiverTransport(BaseWorker):
             outbound_handler=self.handle_outbound,
         )
 
-    async def handle_outbound(self, message: Message) -> None:  # pragma: no cover
+    async def handle_outbound(self, message: Message) -> None:
         await self.client.send_vumi_message(message)
