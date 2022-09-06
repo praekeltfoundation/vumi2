@@ -9,7 +9,7 @@ from attrs import Factory, define
 
 from vumi2.cli import class_from_string
 from vumi2.config import BaseConfig
-from vumi2.message_stores import MessageStore, MessageStoreConfig
+from vumi2.message_caches import MessageCache
 from vumi2.messages import Event, Message
 from vumi2.workers import BaseWorker
 
@@ -20,8 +20,8 @@ logger = getLogger(__name__)
 class ToAddressRouterConfig(BaseConfig):
     transport_names: List[str] = Factory(list)
     to_address_mappings: Dict[str, str] = Factory(dict)
-    message_store_class: str = "vumi2.message_stores.MemoryMessageStore"
-    message_store_config: dict = Factory(dict)
+    message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
+    message_cache_config: dict = Factory(dict)
 
 
 class ToAddressRouter(BaseWorker):
@@ -34,13 +34,12 @@ class ToAddressRouter(BaseWorker):
         config: ToAddressRouterConfig,
     ):
         super().__init__(nursery, amqp_connection, config)
-        message_store_cls: Type[MessageStore] = class_from_string(
-            config.message_store_class
+        message_cache_cls: Type[MessageCache] = class_from_string(
+            config.message_cache_class
         )
-        message_store_config: MessageStoreConfig = (
-            message_store_cls.CONFIG_CLASS.deserialise(config.message_store_config)
+        self.message_cache: MessageCache = message_cache_cls(
+            config.message_cache_config
         )
-        self.message_store: MessageStore = message_store_cls(message_store_config)
 
     async def setup(self):
         self.mappings: List[Tuple[str, Pattern]] = []
@@ -69,7 +68,7 @@ class ToAddressRouter(BaseWorker):
 
     async def handle_event(self, event: Event):
         logger.debug("Processing event %s", event)
-        outbound = await self.message_store.fetch_outbound(event.user_message_id)
+        outbound = await self.message_cache.fetch_outbound(event.user_message_id)
         if outbound is None:
             logger.info("Cannot find outbound for event %s, not routing", event)
             return
@@ -80,7 +79,7 @@ class ToAddressRouter(BaseWorker):
 
     async def handle_outbound_message(self, message: Message):
         logger.debug("Processing outbound message %s", message)
-        await self.message_store.store_outbound(message)
+        await self.message_cache.store_outbound(message)
         await self.receive_inbound_connectors[message.transport_name].publish_outbound(
             message
         )

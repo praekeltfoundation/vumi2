@@ -34,10 +34,10 @@ transport_names: list[str]
 to_address_mappings: dict[str, str]
     The keys of this dictionary are the application names to send the inbound messages
     to, and the values are the regular expression patterns to match against
-message_store_class: str
-    The path to the class to use for storing messages. Defaults to `vumi2.message_stores.MemoryMessageStore`, a message store that temporarily stores the messages in memory. This transport stores outbound messages in order to know where to route the events for those messages. See :ref:`memory-message-store` for more information
-message_store_config: dict
-    The config for the specified message store.
+message_cache_class: str
+    The path to the class to use for caching messages. Defaults to `vumi2.message_caches.MemoryMessageCache`, a message cache that caches the messages in memory. This transport caches outbound messages in order to know where to route the events for those messages. See :ref:`memory-message-cache` for more information
+message_cache_config: dict
+    The config for the specified message cache.
 
 For example:
 
