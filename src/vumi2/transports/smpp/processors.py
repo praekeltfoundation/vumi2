@@ -14,7 +14,8 @@ from smpp.pdu.pdu_types import (
     RegisteredDeliverySmeOriginatedAcks,
 )
 
-from ...messages import Message
+from vumi2.messages import Message
+
 from .codecs import register_codecs
 from .sequencers import Sequencer
 
