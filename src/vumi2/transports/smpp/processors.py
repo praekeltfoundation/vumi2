@@ -79,7 +79,7 @@ class SubmitShortMessageProcesserBase:  # pragma: no cover
         ...
 
 
-class SubmitShortMessageProcessor:
+class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
     CONFIG_CLASS = SubmitShortMessageProcessorConfig
 
     def __init__(self, config: dict, sequencer: Sequencer) -> None:
