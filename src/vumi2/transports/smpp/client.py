@@ -14,6 +14,11 @@ from trio import (
     sleep_until,
 )
 
+from vumi2.messages import Message
+
+from .processors import SubmitShortMessageProcesserBase
+from .sequencers import Sequencer
+
 logger = getLogger(__name__)
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -41,21 +46,17 @@ class EsmeClient:
         nursery: Nursery,
         stream: SocketStream,
         config: "SmppTransceiverTransportConfig",
+        sequencer: Sequencer,
+        submit_sm_processor: SubmitShortMessageProcesserBase,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
+        self.sequencer = sequencer
+        self.submit_sm_processor = submit_sm_processor
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
-        self.sequence_number = 0
         self.encoder = PDUEncoder()
-
-    async def get_next_sequence_number(self) -> int:
-        """The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF"""
-        # TODO: proper sequence number generation
-        # The allowed sequence_number range is from 0x00000001 to 0x7FFFFFFF
-        self.sequence_number = (self.sequence_number % 0x7FFFFFFF) + 1
-        return self.sequence_number
 
     async def start(self) -> None:
         """
@@ -80,7 +81,7 @@ class EsmeClient:
         # TODO: timeout if we don't get a response
         while True:
             deadline = current_time() + self.config.smpp_enquire_link_interval
-            pdu = EnquireLink(seqNum=await self.get_next_sequence_number())
+            pdu = EnquireLink(seqNum=await self.sequencer.get_next_sequence_number())
             await self.send_pdu(pdu)
             await sleep_until(deadline)
 
@@ -160,7 +161,7 @@ class EsmeClient:
         Sends a bind request to the server, and waits for a successful bind response
         """
         pdu = BindTransceiver(
-            seqNum=await self.get_next_sequence_number(),
+            seqNum=await self.sequencer.get_next_sequence_number(),
             system_id=system_id,
             password=password,
             system_type=system_type,
@@ -194,3 +195,7 @@ class EsmeClient:
                     f"Received response of incorrect type {response}"
                 )
         return response
+
+    async def send_vumi_message(self, message: Message):
+        for pdu in await self.submit_sm_processor.handle_outbound_message(message):
+            await self.send_pdu(pdu)

@@ -1,8 +1,9 @@
 from pytest import fixture
-from smpp.pdu.operations import BindTransceiverResp
+from smpp.pdu.operations import BindTransceiverResp, SubmitSMResp
 from trio import Nursery, open_nursery
 
 from vumi2.connectors import ReceiveOutboundConnector
+from vumi2.messages import Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient
 from vumi2.transports.smpp.smpp import (
     SmppTransceiverTransport,
@@ -45,3 +46,29 @@ async def test_startup(transport, tcp_smsc, nursery: Nursery):
 
     assert isinstance(transport.connector, ReceiveOutboundConnector)
     assert isinstance(transport.client, EsmeClient)
+
+
+async def test_outbound_message(
+    transport: SmppTransceiverTransport, tcp_smsc: TcpFakeSmsc, nursery: Nursery
+):
+    """
+    Outbound messages should send a submit short message PDU to the server
+    """
+    async with open_nursery() as start_nursery:
+        start_nursery.start_soon(transport.setup)
+        await tcp_smsc.handle_bind()
+
+    message = Message(
+        from_addr="123456",
+        to_addr="+27820001001",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content="test",
+    )
+
+    async with open_nursery() as send_message_nursery:
+        send_message_nursery.start_soon(transport.handle_outbound, message)
+        pdu = await tcp_smsc.receive_pdu()
+        await tcp_smsc.send_pdu(SubmitSMResp(seqNum=pdu.seqNum))
+
+    assert pdu.params["short_message"] == b"test"
