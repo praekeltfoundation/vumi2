@@ -3,10 +3,10 @@ from typing import Optional
 
 from async_amqp import AmqpProtocol
 from attrs import Factory, define
-from trio import Nursery, open_tcp_stream
+from trio import MemoryReceiveChannel, Nursery, open_memory_channel, open_tcp_stream
 
 from vumi2.cli import class_from_string
-from vumi2.messages import Message
+from vumi2.messages import Event, Message
 from vumi2.workers import BaseConfig, BaseWorker
 
 from .client import EsmeClient
@@ -31,6 +31,8 @@ class SmppTransceiverTransportConfig(BaseConfig):
         "vumi2.transports.smpp.processors.SubmitShortMessageProcessor"
     )
     submit_sm_processor_config: dict = Factory(dict)
+    smpp_cache_class: str = "vumi2.transports.smpp.smpp_cache.InMemorySmppCache"
+    smpp_cache_config: dict = Factory(dict)
 
 
 class SmppTransceiverTransport(BaseWorker):
@@ -50,6 +52,8 @@ class SmppTransceiverTransport(BaseWorker):
         self.submit_sm_processor = submit_sm_processor_class(
             self.config.submit_sm_processor_config, self.sequencer
         )
+        smpp_cache_class = class_from_string(config.smpp_cache_class)
+        self.smpp_cache = smpp_cache_class(config.smpp_cache_config)
 
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any
@@ -57,18 +61,29 @@ class SmppTransceiverTransport(BaseWorker):
         self.stream = await open_tcp_stream(
             host=self.config.host, port=self.config.port
         )
+        send_channel, receive_channel = open_memory_channel(0)
         self.client = EsmeClient(
             self.nursery,
             self.stream,
             self.config,
             self.sequencer,
             self.submit_sm_processor,
+            self.smpp_cache,
+            send_channel,
         )
         await self.client.start()
         self.connector = await self.setup_receive_outbound_connector(
             connector_name=self.config.transport_name,
             outbound_handler=self.handle_outbound,
         )
+        self.nursery.start_soon(self.handle_inbound_message_or_event, receive_channel)
+
+    async def handle_inbound_message_or_event(
+        self, receive_message_channel: MemoryReceiveChannel
+    ) -> None:
+        async for msg in receive_message_channel:
+            if isinstance(msg, Event):
+                await self.connector.publish_event(msg)
 
     async def handle_outbound(self, message: Message) -> None:
         await self.client.send_vumi_message(message)

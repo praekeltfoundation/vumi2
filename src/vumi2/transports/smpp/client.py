@@ -2,7 +2,8 @@ from io import BytesIO
 from logging import getLogger
 from typing import TYPE_CHECKING, Dict, Optional
 
-from smpp.pdu.operations import BindTransceiver, EnquireLink
+from smpp.pdu.constants import command_status_name_map, command_status_value_map
+from smpp.pdu.operations import BindTransceiver, EnquireLink, SubmitSMResp
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
 from trio import (
@@ -14,10 +15,11 @@ from trio import (
     sleep_until,
 )
 
-from vumi2.messages import Message
+from vumi2.messages import Event, EventType, Message
 
 from .processors import SubmitShortMessageProcesserBase
 from .sequencers import Sequencer
+from .smpp_cache import SmppCache
 
 logger = getLogger(__name__)
 
@@ -48,12 +50,16 @@ class EsmeClient:
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
         submit_sm_processor: SubmitShortMessageProcesserBase,
+        smpp_cache: SmppCache,
+        send_message_channel: MemorySendChannel,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
         self.sequencer = sequencer
         self.submit_sm_processor = submit_sm_processor
+        self.smpp_cache = smpp_cache
+        self.send_message_channel = send_message_channel
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
@@ -199,4 +205,33 @@ class EsmeClient:
 
     async def send_vumi_message(self, message: Message):
         for pdu in await self.submit_sm_processor.handle_outbound_message(message):
+            await self.smpp_cache.store_sequence_number_to_message_id(
+                pdu.seqNum, message.message_id
+            )
             await self.send_pdu(pdu)
+
+    async def handle_submit_sm_resp(self, pdu: SubmitSMResp):
+        message_id = await self.smpp_cache.fetch_message_id_from_sequence_number(
+            pdu.seqNum
+        )
+        if message_id is None:
+            logger.warning(f"Cannot find message ID for PDU {pdu}, won't send ack")
+            return
+
+        if pdu.status == CommandStatus.ESME_ROK:
+            event = Event(
+                user_message_id=message_id,
+                sent_message_id=message_id,
+                event_type=EventType.ACK,
+            )
+        else:
+            status_code = command_status_name_map[pdu.status.name]
+            nack_reason = command_status_value_map[status_code]["description"]
+            event = Event(
+                user_message_id=message_id,
+                sent_message_id=message_id,
+                event_type=EventType.NACK,
+                nack_reason=nack_reason,
+            )
+
+        await self.send_message_channel.send(event)

@@ -10,13 +10,15 @@ from smpp.pdu.operations import (
     SubmitSMResp,
 )
 from smpp.pdu.pdu_types import CommandStatus
+from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
-from vumi2.messages import Message, TransportType
+from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
 from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
+from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 from .helpers import FakeSmsc
 
@@ -84,10 +86,45 @@ async def submit_sm_processor(sequencer):
 
 
 @fixture
-async def client(nursery, client_stream, sequencer, submit_sm_processor) -> EsmeClient:
+async def smpp_cache():
+    return InMemorySmppCache({})
+
+
+@fixture
+async def message_channel():
+    return open_memory_channel(1)
+
+
+@fixture
+async def send_message_channel(message_channel):
+    return message_channel[0]
+
+
+@fixture
+async def receive_message_channel(message_channel):
+    return message_channel[1]
+
+
+@fixture
+async def client(
+    nursery,
+    client_stream,
+    sequencer,
+    submit_sm_processor,
+    smpp_cache,
+    send_message_channel,
+) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(nursery, client_stream, config, sequencer, submit_sm_processor)
+    return EsmeClient(
+        nursery,
+        client_stream,
+        config,
+        sequencer,
+        submit_sm_processor,
+        smpp_cache,
+        send_message_channel,
+    )
 
 
 @fixture
@@ -197,3 +234,45 @@ async def test_send_vumi_message(client: EsmeClient, smsc: FakeSmsc):
 
     response_pdu = SubmitSMResp(seqNum=pdu.seqNum)
     await smsc.send_pdu(response_pdu)
+
+
+async def test_submit_sm_resp_unknown_seqno(client: EsmeClient, caplog):
+    """
+    If there isn't a message ID for the PDU sequence number in the cache, then log a
+    warning and continue
+    """
+    pdu = SubmitSMResp(seqNum=1)
+    await client.handle_submit_sm_resp(pdu)
+    [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
+    assert "Cannot find message ID for PDU" in log.getMessage()
+
+
+async def test_submit_sm_resp_ack(client: EsmeClient, receive_message_channel):
+    """
+    If the response PDU is ESME_ROK, send an ack
+    """
+    await client.smpp_cache.store_sequence_number_to_message_id(1, "test_messageid")
+    pdu = SubmitSMResp(seqNum=1)
+    await client.handle_submit_sm_resp(pdu)
+
+    event = await receive_message_channel.receive()
+    assert isinstance(event, Event)
+    assert event.user_message_id == "test_messageid"
+    assert event.sent_message_id == "test_messageid"
+    assert event.event_type == EventType.ACK
+
+
+async def test_submit_sm_resp_nack(client: EsmeClient, receive_message_channel):
+    """
+    If the response PDU is not ESME_ROK, send a nack with reason
+    """
+    await client.smpp_cache.store_sequence_number_to_message_id(1, "test_messageid")
+    pdu = SubmitSMResp(seqNum=1, status=CommandStatus.ESME_RINVMSGLEN)
+    await client.handle_submit_sm_resp(pdu)
+
+    event = await receive_message_channel.receive()
+    assert isinstance(event, Event)
+    assert event.user_message_id == "test_messageid"
+    assert event.sent_message_id == "test_messageid"
+    assert event.event_type == EventType.NACK
+    assert event.nack_reason == "Message Length is invalid"
