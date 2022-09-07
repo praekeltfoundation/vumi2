@@ -6,6 +6,7 @@ from smpp.pdu.operations import (
     BindTransceiverResp,
     EnquireLink,
     EnquireLinkResp,
+    GenericNack,
     Outbind,
     SubmitSM,
     SubmitSMResp,
@@ -190,12 +191,22 @@ async def test_handle_pdu_invalid_type(client: EsmeClient, caplog):
     assert "Unknown PDU type" in log.getMessage()
 
 
-async def test_handle_pdu_unknown_command(client: EsmeClient, caplog):
-    """We should log an error if we receive a data request that we don't yet handle"""
+async def test_handle_pdu_unknown_command(client: EsmeClient, caplog, smsc):
+    """
+    We should log an error and respond with a generic nack if we receive a request
+    that we don't handle
+    """
+    await smsc.start_and_bind(client)
+
     pdu = SubmitSM(seqNum=1)
     await client.handle_pdu(pdu)
+
     [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
     assert "Received PDU with unknown command name" in log.getMessage()
+
+    nack = await smsc.receive_pdu()
+    assert isinstance(nack, GenericNack)
+    assert nack.status == CommandStatus.ESME_RINVCMDID
 
 
 async def test_handle_known_command(client: EsmeClient):

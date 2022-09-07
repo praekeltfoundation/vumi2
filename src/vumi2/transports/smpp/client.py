@@ -3,7 +3,13 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Dict, Optional, Union, cast
 
 from smpp.pdu.constants import command_status_name_map, command_status_value_map
-from smpp.pdu.operations import BindTransceiver, EnquireLink, PDURequest, PDUResponse
+from smpp.pdu.operations import (
+    BindTransceiver,
+    EnquireLink,
+    GenericNack,
+    PDURequest,
+    PDUResponse,
+)
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
 from trio import (
@@ -122,6 +128,9 @@ class EsmeClient:
             if handler_function is None:
                 logger.warning(
                     "Received PDU with unknown command name %s", command_name
+                )
+                await self.send_pdu(
+                    GenericNack(seqNum=pdu.seqNum, status=CommandStatus.ESME_RINVCMDID)
                 )
                 return
             await handler_function(pdu)
