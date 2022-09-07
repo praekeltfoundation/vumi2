@@ -6,7 +6,6 @@ from smpp.pdu.operations import (
     BindTransceiverResp,
     EnquireLink,
     EnquireLinkResp,
-    Outbind,
     SubmitSM,
     SubmitSMResp,
 )
@@ -127,12 +126,12 @@ async def test_send_response_pdu(client: EsmeClient, smsc: FakeSmsc):
     assert received_pdu == pdu
 
 
-async def test_send_pdu_error_response(client: EsmeClient, smsc: FakeSmsc):
+async def test_send_pdu_wait_error_response(client: EsmeClient, smsc: FakeSmsc):
     """If we don't get an ESME_ROK back, raise an error"""
     await smsc.start_and_bind(client)
 
     pdu = EnquireLink(seqNum=1)
-    task = client.send_pdu(pdu)
+    task = client.send_pdu(pdu, wait=True)
 
     response_pdu = EnquireLinkResp(
         seqNum=pdu.seqNum, status=CommandStatus.ESME_RX_P_APPN
@@ -142,7 +141,7 @@ async def test_send_pdu_error_response(client: EsmeClient, smsc: FakeSmsc):
         await task
 
 
-async def test_send_pdu_wrong_response(client: EsmeClient, smsc: FakeSmsc):
+async def test_send_pdu_wait_wrong_response(client: EsmeClient, smsc: FakeSmsc):
     """
     If we receive a PDU with the correct sequence number, but incorrect response type,
     we should raise an error
@@ -150,19 +149,11 @@ async def test_send_pdu_wrong_response(client: EsmeClient, smsc: FakeSmsc):
     await smsc.start_and_bind(client)
 
     pdu = EnquireLink(seqNum=1)
-    task = client.send_pdu(pdu)
+    task = client.send_pdu(pdu, wait=True)
 
     await smsc.send_pdu(BindTransceiverResp(seqNum=pdu.seqNum))
     with raises(EsmeResponseStatusError):
         await task
-
-
-async def test_handle_pdu_invalid_type(client: EsmeClient, caplog):
-    """Only data requests and responses should be sent by the server"""
-    pdu = Outbind(seqNum=1)
-    await client.handle_pdu(pdu)
-    [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
-    assert "Unknown PDU type" in log.getMessage()
 
 
 async def test_handle_pdu_unknown_command(client: EsmeClient, caplog):

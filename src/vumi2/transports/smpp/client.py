@@ -1,8 +1,8 @@
 from io import BytesIO
 from logging import getLogger
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import TYPE_CHECKING, Dict, Optional
 
-from smpp.pdu.operations import BindTransceiver, EnquireLink, PDURequest, PDUResponse
+from smpp.pdu.operations import BindTransceiver, EnquireLink
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
 from trio import (
@@ -82,7 +82,7 @@ class EsmeClient:
         while True:
             deadline = current_time() + self.config.smpp_enquire_link_interval
             pdu = EnquireLink(seqNum=await self.sequencer.get_next_sequence_number())
-            await self.send_pdu(pdu)
+            await self.send_pdu(pdu, wait=True)
             await sleep_until(deadline)
 
     async def consume_stream(self) -> None:
@@ -111,8 +111,12 @@ class EsmeClient:
         Sends responses back to the task that made the request.
         """
         logger.debug("Received PDU %s", pdu)
-        # Requests must go to the handler functions
-        if isinstance(pdu, PDURequest):
+        # If there's a task waiting, send to that
+        if pdu.seqNum in self.responses:
+            send_channel = self.responses.pop(pdu.seqNum)
+            async with send_channel:
+                await send_channel.send(pdu)
+        else:
             command_name = pdu.commandId.name
             handler_function = getattr(self, f"handle_{command_name}", None)
             # TODO: implement handler functions for commands
@@ -122,13 +126,6 @@ class EsmeClient:
                 )
                 return
             await handler_function(pdu)
-        # If this is a response, send the response PDU to the task waiting for it
-        elif isinstance(pdu, PDUResponse):
-            send_channel = self.responses.pop(pdu.seqNum)
-            async with send_channel:
-                await send_channel.send(pdu)
-        else:
-            logger.warning("Unknown PDU type, ignoring %s", pdu)
 
     @staticmethod
     def extract_pdu(data: bytearray) -> Optional[bytearray]:
@@ -170,31 +167,35 @@ class EsmeClient:
             addr_npi=addr_npi,
             address_range=address_range,
         )
-        bind_response = await self.send_pdu(pdu)
+        bind_response = await self.send_pdu(pdu, wait=True)
         logger.info("SMPP bound with response %s", bind_response)
         return bind_response
 
-    async def send_pdu(self, pdu: Union[PDURequest, PDUResponse]) -> Optional[PDU]:
+    async def send_pdu(self, pdu: PDU, wait=False) -> Optional[PDU]:
         """
-        Sends the PDU, waits for, and returns the response PDU
+        Sends the PDU, and if specified, waits for, and returns the response PDU
+
+        Any uses of wait imply keeping state, so we should only use it for when we're
+        guaranteed that we'll be the ones to receive the response, like for binds and
+        enquire links.
         """
         logger.debug("Sending PDU %s", pdu)
 
-        if isinstance(pdu, PDUResponse):
+        if wait:
+            send_channel, receive_channel = open_memory_channel(0)
+            self.responses[pdu.seqNum] = send_channel
+            await self.stream.send_all(self.encoder.encode(pdu))
+            async for response in receive_channel:
+                if response.status != CommandStatus.ESME_ROK:
+                    raise EsmeResponseStatusError(f"Received error response {response}")
+                if not isinstance(response, pdu.requireAck):
+                    raise EsmeResponseStatusError(
+                        f"Received response of incorrect type {response}"
+                    )
+            return response
+        else:
             await self.stream.send_all(self.encoder.encode(pdu))
             return None
-
-        send_channel, receive_channel = open_memory_channel(0)
-        self.responses[pdu.seqNum] = send_channel
-        await self.stream.send_all(self.encoder.encode(pdu))
-        async for response in receive_channel:
-            if response.status != CommandStatus.ESME_ROK:
-                raise EsmeResponseStatusError(f"Received error response {response}")
-            if not isinstance(response, pdu.requireAck):
-                raise EsmeResponseStatusError(
-                    f"Received response of incorrect type {response}"
-                )
-        return response
 
     async def send_vumi_message(self, message: Message):
         for pdu in await self.submit_sm_processor.handle_outbound_message(message):
