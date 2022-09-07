@@ -37,6 +37,10 @@ submit_sm_processor_class (str)
     The python path to the class used for generating submit short message (outbound message) requests. This class is responsible for taking an outbound vumi message, and returning a list of PDUs that represents that message, that can be sent to the ESME if we want to send that outbound message. Defaults to `vumi2.transports.smpp.processors.SubmitShortMessageProcessor`, which provides default short message processing that should be usable across a majority of ESMEs. See :ref:`submit-short-message-processors` for a list of submit short message processors that are available.
 submit_sm_processor_config (dict)
     The config that `submit_sm_processor_class` requires. See :ref:`submit-short-message-processors` for what configuration is required for the various short message processor classes.
+smpp_cache_class (str)
+    The python path to the class to be used for caching on this transport. This class is responsible for storing various state, so that the SMPP transport itself is as stateless as possible. Defaults to `vumi2.transports.smpp.smpp_cache.InMemorySmppCache`. See :ref:`smpp-caches` for a list of available caches.
+smpp_cache_config (dict)
+    The config that `smpp_cache_class` requires. See :ref:`smpp-caches` for the configuration required for each of the different types of SMPP caches.
 
 
 How it works
@@ -108,6 +112,20 @@ registered_delivery (dict)
     intermediate_notification (bool)
         Defaults to False. Whether or not to request intermediate notifications
 
+.. _smpp-caches:
+
+SMPP caches
+^^^^^^^^^^^
+The purpose of the SMPP cache is to cache various values required for storing state in the SMPP transport. Currently it caches:
+- A mapping between sequence number and message ID for outbound messages, so that we know what vumi message id to use on outbound message events when we get the response PDU back.
+
+In memory SMPP cache
+""""""""""""""""""""""""""""""""""""""
+`vumi2.transports.smpp.smpp_cache.InMemorySmppCache`
+
+This cache stores the cache in memory, so it is not suitable when the cache needs to be shared across multiple SMPP binds, or if it needs to survive process restarts.
+
+It has no configuration
 
 
 Still to do
