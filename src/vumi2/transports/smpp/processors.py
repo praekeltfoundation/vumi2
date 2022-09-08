@@ -21,6 +21,11 @@ from .sequencers import Sequencer
 
 register_codecs()
 
+# 140 bytes - 10 bytes for the user data header the SMSC is presumably going to add for
+# us. This is a guess based mostly on optimism and the hope that we'll never have to
+# deal with this stuff in production.
+CSM_MESSAGE_SIZE = 130
+
 
 class DataCodingCodecs(Enum):
     SMSC_DEFAULT_ALPHABET = "gsm0338"  # SMSC Default Alphabet
@@ -70,6 +75,7 @@ class SubmitShortMessageProcessorConfig:
     dest_addr_ton: AddrTon = AddrTon.UNKNOWN
     dest_addr_npi: AddrNpi = AddrNpi.ISDN
     registered_delivery: RegisteredDeliveryConfig = Factory(RegisteredDeliveryConfig)
+    multipart_sar_reference_rollover: int = 0x10000
 
 
 class SubmitShortMessageProcesserBase:  # pragma: no cover
@@ -87,21 +93,34 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         self.sequencer = sequencer
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
 
-    def _fits_in_one_message(self, content: bytes) -> bool:
+    def _get_msg_length(self, split_msg=False) -> int:
+        # From https://www.twilio.com/docs/glossary/what-sms-character-limit#sms-message-length-and-character-encoding
         if self.config.data_coding in (
             DataCodingDefault.SMSC_DEFAULT_ALPHABET,
             DataCodingDefault.IA5_ASCII,
         ):
-            return len(content) <= 160
+            if split_msg:
+                return 153
+            else:
+                return 160
         if self.config.data_coding in (
             DataCodingDefault.LATIN_1,
             DataCodingDefault.CYRILLIC,
             DataCodingDefault.ISO_8859_8,
         ):
-            return len(content) <= 140
+            if split_msg:
+                return 134
+            else:
+                return 140
         if self.config.data_coding in (DataCodingDefault.JIS, DataCodingDefault.UCS2):
-            return len(content) <= 70
+            if split_msg:
+                return 67
+            else:
+                return 70
         raise ValueError(f"Unknown data coding {self.config.data_coding}")
+
+    def _fits_in_one_message(self, content: bytes) -> bool:
+        return len(content) <= self._get_msg_length()
 
     async def handle_outbound_message(self, message: Message) -> List[PDU]:
         """
@@ -126,6 +145,8 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
                     message.from_addr, message.to_addr, message_content
                 )
             ]
+        if self.config.multipart_handling == MultipartHandling.multipart_sar:
+            return await self.submit_csm_sar_message(message.from_addr, message.to_addr, message_content)
         return []
 
     async def submit_sm_short_message(
@@ -169,3 +190,37 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
             ),
             message_payload=message,
         )
+
+    def _split_message(self, message: bytes, size: int):
+        for i in range(0, len(message), size):
+            yield message[i: i + size]
+
+    async def submit_csm_sar_message(
+        self, from_addr: str, to_addr: str, message: bytes
+    ) -> List[SubmitSM]:
+        pdus = []
+        ref_num = (await self.sequencer.get_next_sequence_number()) % self.config.multipart_sar_reference_rollover
+        segments = list(self._split_message(message, self._get_msg_length(split_msg=True)))
+        for i, segment in enumerate(segments):
+            pdus.append(SubmitSM(
+                seqNum=await self.sequencer.get_next_sequence_number(),
+                service_type=self.config.service_type,
+                source_addr_ton=self.config.source_addr_ton,
+                source_addr_npi=self.config.source_addr_npi,
+                source_addr=from_addr,
+                dest_addr_ton=self.config.dest_addr_ton,
+                dest_addr_npi=self.config.dest_addr_npi,
+                destination_addr=to_addr,
+                data_coding=DataCoding(schemeData=self.config.data_coding),
+                registered_delivery=RegisteredDelivery(
+                    self.config.registered_delivery.delivery_receipt,
+                    self.config.registered_delivery.sme_originated_acks,
+                    self.config.registered_delivery.intermediate_notification,
+                ),
+                sar_msg_ref_num=ref_num,
+                sar_total_segments=len(segments),
+                sar_segment_seqnum=i + 1,
+                short_message=segment,
+            ))
+        return pdus
+
