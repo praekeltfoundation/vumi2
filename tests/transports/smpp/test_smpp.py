@@ -85,8 +85,7 @@ async def test_handle_inbound_message_or_event_invalid(
     async with open_nursery() as start_nursery:
         start_nursery.start_soon(transport.setup)
         await tcp_smsc.handle_bind()
-
-    await transport.client.send_message_channel.send(object())
+        await transport.client.send_message_channel.send(object())
 
     [log] = [log for log in caplog.records if log.levelno >= logging.ERROR]
 
