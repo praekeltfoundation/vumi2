@@ -135,6 +135,7 @@ async def test_submit_sm_outbound_vumi_message_message_payload(
     assert pdu.params["short_message"] is None
     assert pdu.params["message_payload"] == b'Knights who say "N\x07!"' * 10
 
+
 async def test_submit_sm_outbound_vumi_message_csm_sar(
     submit_sm_processor: SubmitShortMessageProcessor,
 ):
@@ -147,21 +148,54 @@ async def test_submit_sm_outbound_vumi_message_csm_sar(
         from_addr="12345",
         transport_name="sms",
         transport_type=TransportType.SMS,
-        content='1234567890' * 20,
+        content="1234567890" * 20,
     )
     submit_sm_processor.config.multipart_handling = MultipartHandling.multipart_sar
     [pdu1, pdu2] = await submit_sm_processor.handle_outbound_message(message)
 
     assert pdu1.params["source_addr"] == b"12345"
     assert pdu1.params["destination_addr"] == b"+27820001001"
-    assert pdu1.params["short_message"] == b'1234567890' * 15 + b'123'
+    assert pdu1.params["short_message"] == b"1234567890" * 15 + b"123"
     assert pdu1.params["sar_msg_ref_num"] == 1
     assert pdu1.params["sar_total_segments"] == 2
     assert pdu1.params["sar_segment_seqnum"] == 1
 
     assert pdu2.params["source_addr"] == b"12345"
     assert pdu2.params["destination_addr"] == b"+27820001001"
-    assert pdu2.params["short_message"] == b'4567890' + b'1234567890' * 4
+    assert pdu2.params["short_message"] == b"4567890" + b"1234567890" * 4
     assert pdu2.params["sar_msg_ref_num"] == 1
     assert pdu2.params["sar_total_segments"] == 2
     assert pdu2.params["sar_segment_seqnum"] == 2
+
+
+async def test_submit_sm_outbound_vumi_message_udh(
+    submit_sm_processor: SubmitShortMessageProcessor,
+):
+    """
+    Creates a valid PDU representing the outbound vumi message, storing the contents of
+    long messages into multiple PDUs with sar parameters
+    """
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content="1234567890" * 20,
+    )
+    submit_sm_processor.config.data_coding = DataCodingDefault.LATIN_1
+    submit_sm_processor.config.multipart_handling = MultipartHandling.multipart_udh
+    [pdu1, pdu2] = await submit_sm_processor.handle_outbound_message(message)
+
+    assert pdu1.params["source_addr"] == b"12345"
+    assert pdu1.params["destination_addr"] == b"+27820001001"
+    assert (
+        pdu1.params["short_message"]
+        == b"\05\00\03\01\02\01" + b"1234567890" * 13 + b"1234"
+    )
+
+    assert pdu2.params["source_addr"] == b"12345"
+    assert pdu2.params["destination_addr"] == b"+27820001001"
+    assert (
+        pdu2.params["short_message"]
+        == b"\05\00\03\01\02\02" + b"567890" + b"1234567890" * 6
+    )

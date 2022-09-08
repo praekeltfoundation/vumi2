@@ -94,7 +94,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
 
     def _get_msg_length(self, split_msg=False) -> int:
-        # From https://www.twilio.com/docs/glossary/what-sms-character-limit#sms-message-length-and-character-encoding
+        # From https://www.twilio.com/docs/glossary/what-sms-character-limit
         if self.config.data_coding in (
             DataCodingDefault.SMSC_DEFAULT_ALPHABET,
             DataCodingDefault.IA5_ASCII,
@@ -103,21 +103,11 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
                 return 153
             else:
                 return 160
-        if self.config.data_coding in (
-            DataCodingDefault.LATIN_1,
-            DataCodingDefault.CYRILLIC,
-            DataCodingDefault.ISO_8859_8,
-        ):
+        else:
             if split_msg:
                 return 134
             else:
                 return 140
-        if self.config.data_coding in (DataCodingDefault.JIS, DataCodingDefault.UCS2):
-            if split_msg:
-                return 67
-            else:
-                return 70
-        raise ValueError(f"Unknown data coding {self.config.data_coding}")
 
     def _fits_in_one_message(self, content: bytes) -> bool:
         return len(content) <= self._get_msg_length()
@@ -139,15 +129,20 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
                     message.from_addr, message.to_addr, message_content
                 )
             ]
-        if self.config.multipart_handling == MultipartHandling.message_payload:
+        elif self.config.multipart_handling == MultipartHandling.message_payload:
             return [
                 await self.submit_sm_long_message(
                     message.from_addr, message.to_addr, message_content
                 )
             ]
-        if self.config.multipart_handling == MultipartHandling.multipart_sar:
-            return await self.submit_csm_sar_message(message.from_addr, message.to_addr, message_content)
-        return []
+        elif self.config.multipart_handling == MultipartHandling.multipart_sar:
+            return await self.submit_csm_sar_message(
+                message.from_addr, message.to_addr, message_content
+            )
+        else:  # multipart_udh:
+            return await self.submit_csm_udh_message(
+                message.from_addr, message.to_addr, message_content
+            )
 
     async def submit_sm_short_message(
         self, from_addr: str, to_addr: str, short_message: bytes
@@ -193,34 +188,80 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     def _split_message(self, message: bytes, size: int):
         for i in range(0, len(message), size):
-            yield message[i: i + size]
+            yield message[i : i + size]
 
     async def submit_csm_sar_message(
         self, from_addr: str, to_addr: str, message: bytes
     ) -> List[SubmitSM]:
         pdus = []
-        ref_num = (await self.sequencer.get_next_sequence_number()) % self.config.multipart_sar_reference_rollover
-        segments = list(self._split_message(message, self._get_msg_length(split_msg=True)))
+        ref_num = (
+            await self.sequencer.get_next_sequence_number()
+        ) % self.config.multipart_sar_reference_rollover
+        segments = list(
+            self._split_message(message, self._get_msg_length(split_msg=True))
+        )
         for i, segment in enumerate(segments):
-            pdus.append(SubmitSM(
-                seqNum=await self.sequencer.get_next_sequence_number(),
-                service_type=self.config.service_type,
-                source_addr_ton=self.config.source_addr_ton,
-                source_addr_npi=self.config.source_addr_npi,
-                source_addr=from_addr,
-                dest_addr_ton=self.config.dest_addr_ton,
-                dest_addr_npi=self.config.dest_addr_npi,
-                destination_addr=to_addr,
-                data_coding=DataCoding(schemeData=self.config.data_coding),
-                registered_delivery=RegisteredDelivery(
-                    self.config.registered_delivery.delivery_receipt,
-                    self.config.registered_delivery.sme_originated_acks,
-                    self.config.registered_delivery.intermediate_notification,
-                ),
-                sar_msg_ref_num=ref_num,
-                sar_total_segments=len(segments),
-                sar_segment_seqnum=i + 1,
-                short_message=segment,
-            ))
+            pdus.append(
+                SubmitSM(
+                    seqNum=await self.sequencer.get_next_sequence_number(),
+                    service_type=self.config.service_type,
+                    source_addr_ton=self.config.source_addr_ton,
+                    source_addr_npi=self.config.source_addr_npi,
+                    source_addr=from_addr,
+                    dest_addr_ton=self.config.dest_addr_ton,
+                    dest_addr_npi=self.config.dest_addr_npi,
+                    destination_addr=to_addr,
+                    data_coding=DataCoding(schemeData=self.config.data_coding),
+                    registered_delivery=RegisteredDelivery(
+                        self.config.registered_delivery.delivery_receipt,
+                        self.config.registered_delivery.sme_originated_acks,
+                        self.config.registered_delivery.intermediate_notification,
+                    ),
+                    sar_msg_ref_num=ref_num,
+                    sar_total_segments=len(segments),
+                    sar_segment_seqnum=i + 1,
+                    short_message=segment,
+                )
+            )
         return pdus
 
+    async def submit_csm_udh_message(
+        self, from_addr: str, to_addr: str, message: bytes
+    ) -> List[SubmitSM]:
+        pdus = []
+        ref_num = (await self.sequencer.get_next_sequence_number()) % 0xFF
+        segments = list(
+            self._split_message(message, self._get_msg_length(split_msg=True))
+        )
+        for i, segment in enumerate(segments):
+            short_message = b"".join(
+                [
+                    b"\05",  # UDH header length
+                    b"\00",  # Information Element Identifier for concatenated SMS
+                    b"\03",  # Header length
+                    bytes([ref_num]),  # Concatenated SMS reference number
+                    bytes([len(segments)]),  # Total number of parts
+                    bytes([i + 1]),  # This part's number in the sequence
+                    segment,
+                ]
+            )
+            pdus.append(
+                SubmitSM(
+                    seqNum=await self.sequencer.get_next_sequence_number(),
+                    service_type=self.config.service_type,
+                    source_addr_ton=self.config.source_addr_ton,
+                    source_addr_npi=self.config.source_addr_npi,
+                    source_addr=from_addr,
+                    dest_addr_ton=self.config.dest_addr_ton,
+                    dest_addr_npi=self.config.dest_addr_npi,
+                    destination_addr=to_addr,
+                    data_coding=DataCoding(schemeData=self.config.data_coding),
+                    registered_delivery=RegisteredDelivery(
+                        self.config.registered_delivery.delivery_receipt,
+                        self.config.registered_delivery.sme_originated_acks,
+                        self.config.registered_delivery.intermediate_notification,
+                    ),
+                    short_message=short_message,
+                )
+            )
+        return pdus
