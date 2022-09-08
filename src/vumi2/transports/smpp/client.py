@@ -211,6 +211,8 @@ class EsmeClient:
         return response
 
     async def send_vumi_message(self, message: Message):
+        # At the moment this will always only return a single PDU. When we implement
+        # multipart messages, this error handling will need to be improved
         for pdu in await self.submit_sm_processor.handle_outbound_message(message):
             response = await self.send_pdu(pdu, check_response=False)
 
