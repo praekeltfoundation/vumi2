@@ -6,14 +6,16 @@ from smpp.pdu.operations import (
     BindTransceiverResp,
     EnquireLink,
     EnquireLinkResp,
+    GenericNack,
     Outbind,
     SubmitSM,
     SubmitSMResp,
 )
 from smpp.pdu.pdu_types import CommandStatus
+from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
-from vumi2.messages import Message, TransportType
+from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
 from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
 from vumi2.transports.smpp.sequencers import InMemorySequencer
@@ -85,10 +87,34 @@ async def submit_sm_processor(sequencer):
 
 
 @fixture
-async def client(nursery, client_stream, sequencer, submit_sm_processor) -> EsmeClient:
+async def message_channel():
+    return open_memory_channel(1)
+
+
+@fixture
+async def send_message_channel(message_channel):
+    return message_channel[0]
+
+
+@fixture
+async def receive_message_channel(message_channel):
+    return message_channel[1]
+
+
+@fixture
+async def client(
+    nursery, client_stream, sequencer, submit_sm_processor, send_message_channel
+) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(nursery, client_stream, config, sequencer, submit_sm_processor)
+    return EsmeClient(
+        nursery,
+        client_stream,
+        config,
+        sequencer,
+        submit_sm_processor,
+        send_message_channel,
+    )
 
 
 @fixture
@@ -165,12 +191,22 @@ async def test_handle_pdu_invalid_type(client: EsmeClient, caplog):
     assert "Unknown PDU type" in log.getMessage()
 
 
-async def test_handle_pdu_unknown_command(client: EsmeClient, caplog):
-    """We should log an error if we receive a data request that we don't yet handle"""
+async def test_handle_pdu_unknown_command(client: EsmeClient, caplog, smsc):
+    """
+    We should log an error and respond with a generic nack if we receive a request
+    that we don't handle
+    """
+    await smsc.start_and_bind(client)
+
     pdu = SubmitSM(seqNum=1)
     await client.handle_pdu(pdu)
+
     [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
     assert "Received PDU with unknown command name" in log.getMessage()
+
+    nack = await smsc.receive_pdu()
+    assert isinstance(nack, GenericNack)
+    assert nack.status == CommandStatus.ESME_RINVCMDID
 
 
 async def test_handle_known_command(client: EsmeClient):
@@ -206,3 +242,53 @@ async def test_send_vumi_message(client: EsmeClient, smsc: FakeSmsc):
 
     response_pdu = SubmitSMResp(seqNum=pdu.seqNum)
     await smsc.send_pdu(response_pdu)
+
+
+async def test_submit_sm_resp_ack(client: EsmeClient, receive_message_channel, smsc):
+    """
+    If the response PDU is ESME_ROK, send an ack
+    """
+    await smsc.start_and_bind(client)
+
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content='Knights who say "Nì!"',
+    )
+
+    client.nursery.start_soon(client.send_vumi_message, message)
+    msg_pdu = await smsc.receive_pdu()
+
+    pdu = SubmitSMResp(seqNum=msg_pdu.seqNum)
+    await smsc.send_pdu(pdu)
+
+    event = await receive_message_channel.receive()
+    assert isinstance(event, Event)
+    assert event.event_type == EventType.ACK
+
+
+async def test_submit_sm_resp_nack(client: EsmeClient, receive_message_channel, smsc):
+    """
+    If the response PDU is not ESME_ROK, send a nack with reason
+    """
+    await smsc.start_and_bind(client)
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content='Knights who say "Nì!"',
+    )
+
+    client.nursery.start_soon(client.send_vumi_message, message)
+    msg_pdu = await smsc.receive_pdu()
+
+    pdu = SubmitSMResp(seqNum=msg_pdu.seqNum, status=CommandStatus.ESME_RINVMSGLEN)
+    await smsc.send_pdu(pdu)
+
+    event = await receive_message_channel.receive()
+    assert isinstance(event, Event)
+    assert event.event_type == EventType.NACK
+    assert event.nack_reason == "Message Length is invalid"

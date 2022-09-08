@@ -3,10 +3,10 @@ from typing import Optional
 
 from async_amqp import AmqpProtocol
 from attrs import Factory, define
-from trio import Nursery, open_tcp_stream
+from trio import MemoryReceiveChannel, Nursery, open_memory_channel, open_tcp_stream
 
 from vumi2.cli import class_from_string
-from vumi2.messages import Message
+from vumi2.messages import Event, Message
 from vumi2.workers import BaseConfig, BaseWorker
 
 from .client import EsmeClient
@@ -57,18 +57,30 @@ class SmppTransceiverTransport(BaseWorker):
         self.stream = await open_tcp_stream(
             host=self.config.host, port=self.config.port
         )
+        send_channel, receive_channel = open_memory_channel(0)
         self.client = EsmeClient(
             self.nursery,
             self.stream,
             self.config,
             self.sequencer,
             self.submit_sm_processor,
+            send_channel,
         )
         await self.client.start()
         self.connector = await self.setup_receive_outbound_connector(
             connector_name=self.config.transport_name,
             outbound_handler=self.handle_outbound,
         )
+        self.nursery.start_soon(self.handle_inbound_message_or_event, receive_channel)
+
+    async def handle_inbound_message_or_event(
+        self, receive_message_channel: MemoryReceiveChannel
+    ) -> None:
+        async for msg in receive_message_channel:
+            if isinstance(msg, Event):
+                await self.connector.publish_event(msg)
+            else:
+                logger.error(f"Received invalid message type {type(msg)}")
 
     async def handle_outbound(self, message: Message) -> None:
         await self.client.send_vumi_message(message)

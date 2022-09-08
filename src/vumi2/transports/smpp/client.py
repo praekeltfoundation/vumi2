@@ -1,8 +1,15 @@
 from io import BytesIO
 from logging import getLogger
-from typing import TYPE_CHECKING, Dict, Optional, Union
+from typing import TYPE_CHECKING, Dict, Optional, Union, cast
 
-from smpp.pdu.operations import BindTransceiver, EnquireLink, PDURequest, PDUResponse
+from smpp.pdu.constants import command_status_name_map, command_status_value_map
+from smpp.pdu.operations import (
+    BindTransceiver,
+    EnquireLink,
+    GenericNack,
+    PDURequest,
+    PDUResponse,
+)
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
 from trio import (
@@ -14,7 +21,7 @@ from trio import (
     sleep_until,
 )
 
-from vumi2.messages import Message
+from vumi2.messages import Event, EventType, Message
 
 from .processors import SubmitShortMessageProcesserBase
 from .sequencers import Sequencer
@@ -48,12 +55,14 @@ class EsmeClient:
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
         submit_sm_processor: SubmitShortMessageProcesserBase,
+        send_message_channel: MemorySendChannel,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
         self.sequencer = sequencer
         self.submit_sm_processor = submit_sm_processor
+        self.send_message_channel = send_message_channel
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
@@ -120,6 +129,9 @@ class EsmeClient:
                 logger.warning(
                     "Received PDU with unknown command name %s", command_name
                 )
+                await self.send_pdu(
+                    GenericNack(seqNum=pdu.seqNum, status=CommandStatus.ESME_RINVCMDID)
+                )
                 return
             await handler_function(pdu)
         # If this is a response, send the response PDU to the task waiting for it
@@ -174,7 +186,9 @@ class EsmeClient:
         logger.info("SMPP bound with response %s", bind_response)
         return bind_response
 
-    async def send_pdu(self, pdu: Union[PDURequest, PDUResponse]) -> Optional[PDU]:
+    async def send_pdu(
+        self, pdu: Union[PDURequest, PDUResponse], check_response: bool = True
+    ) -> Optional[PDU]:
         """
         Sends the PDU, waits for, and returns the response PDU
         """
@@ -188,7 +202,7 @@ class EsmeClient:
         self.responses[pdu.seqNum] = send_channel
         await self.stream.send_all(self.encoder.encode(pdu))
         async for response in receive_channel:
-            if response.status != CommandStatus.ESME_ROK:
+            if check_response and response.status != CommandStatus.ESME_ROK:
                 raise EsmeResponseStatusError(f"Received error response {response}")
             if not isinstance(response, pdu.requireAck):
                 raise EsmeResponseStatusError(
@@ -197,5 +211,28 @@ class EsmeClient:
         return response
 
     async def send_vumi_message(self, message: Message):
+        # At the moment this will always only return a single PDU. When we implement
+        # multipart messages, this error handling will need to be improved
         for pdu in await self.submit_sm_processor.handle_outbound_message(message):
-            await self.send_pdu(pdu)
+            response = await self.send_pdu(pdu, check_response=False)
+
+        # Requests always get responses
+        response = cast(PDUResponse, response)
+
+        if response.status == CommandStatus.ESME_ROK:
+            event = Event(
+                user_message_id=message.message_id,
+                sent_message_id=message.message_id,
+                event_type=EventType.ACK,
+            )
+        else:
+            status_code = command_status_name_map[response.status.name]
+            nack_reason = command_status_value_map[status_code]["description"]
+            event = Event(
+                user_message_id=message.message_id,
+                sent_message_id=message.message_id,
+                event_type=EventType.NACK,
+                nack_reason=nack_reason,
+            )
+
+        await self.send_message_channel.send(event)
