@@ -87,32 +87,85 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         self.sequencer = sequencer
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
 
+    def _fits_in_one_message(self, content: bytes) -> bool:
+        if self.config.data_coding in (
+            DataCodingDefault.SMSC_DEFAULT_ALPHABET,
+            DataCodingDefault.IA5_ASCII,
+        ):
+            return len(content) <= 160
+        if self.config.data_coding in (
+            DataCodingDefault.LATIN_1,
+            DataCodingDefault.CYRILLIC,
+            DataCodingDefault.ISO_8859_8,
+        ):
+            return len(content) <= 140
+        if self.config.data_coding in (DataCodingDefault.JIS, DataCodingDefault.UCS2):
+            return len(content) <= 70
+        raise ValueError(f"Unknown data coding {self.config.data_coding}")
+
     async def handle_outbound_message(self, message: Message) -> List[PDU]:
         """
         Takes an outbound vumi message, and returns the PDUs necessary to send it.
         """
         # TODO: support USSD over SMPP
         codec = DataCodingCodecs[self.config.data_coding.name]
-        short_message = (message.content or "").encode(codec.value)
+        message_content = (message.content or "").encode(codec.value)
 
-        registered_delivery = RegisteredDelivery(
-            self.config.registered_delivery.delivery_receipt,
-            self.config.registered_delivery.sme_originated_acks,
-            self.config.registered_delivery.intermediate_notification,
+        if (
+            self.config.multipart_handling == MultipartHandling.short_message
+            or self._fits_in_one_message(message_content)
+        ):
+            return [
+                await self.submit_sm_short_message(
+                    message.from_addr, message.to_addr, message_content
+                )
+            ]
+        if self.config.multipart_handling == MultipartHandling.message_payload:
+            return [
+                await self.submit_sm_long_message(
+                    message.from_addr, message.to_addr, message_content
+                )
+            ]
+        return []
+
+    async def submit_sm_short_message(
+        self, from_addr: str, to_addr: str, short_message: bytes
+    ) -> SubmitSM:
+        return SubmitSM(
+            seqNum=await self.sequencer.get_next_sequence_number(),
+            service_type=self.config.service_type,
+            source_addr_ton=self.config.source_addr_ton,
+            source_addr_npi=self.config.source_addr_npi,
+            source_addr=from_addr,
+            dest_addr_ton=self.config.dest_addr_ton,
+            dest_addr_npi=self.config.dest_addr_npi,
+            destination_addr=to_addr,
+            data_coding=DataCoding(schemeData=self.config.data_coding),
+            registered_delivery=RegisteredDelivery(
+                self.config.registered_delivery.delivery_receipt,
+                self.config.registered_delivery.sme_originated_acks,
+                self.config.registered_delivery.intermediate_notification,
+            ),
+            short_message=short_message,
         )
 
-        return [
-            SubmitSM(
-                seqNum=await self.sequencer.get_next_sequence_number(),
-                service_type=self.config.service_type,
-                source_addr_ton=self.config.source_addr_ton,
-                source_addr_npi=self.config.source_addr_npi,
-                source_addr=message.from_addr,
-                dest_addr_ton=self.config.dest_addr_ton,
-                dest_addr_npi=self.config.dest_addr_npi,
-                destination_addr=message.to_addr,
-                data_coding=DataCoding(schemeData=self.config.data_coding),
-                registered_delivery=registered_delivery,
-                short_message=short_message,
-            )
-        ]
+    async def submit_sm_long_message(
+        self, from_addr: str, to_addr: str, message: bytes
+    ) -> SubmitSM:
+        return SubmitSM(
+            seqNum=await self.sequencer.get_next_sequence_number(),
+            service_type=self.config.service_type,
+            source_addr_ton=self.config.source_addr_ton,
+            source_addr_npi=self.config.source_addr_npi,
+            source_addr=from_addr,
+            dest_addr_ton=self.config.dest_addr_ton,
+            dest_addr_npi=self.config.dest_addr_npi,
+            destination_addr=to_addr,
+            data_coding=DataCoding(schemeData=self.config.data_coding),
+            registered_delivery=RegisteredDelivery(
+                self.config.registered_delivery.delivery_receipt,
+                self.config.registered_delivery.sme_originated_acks,
+                self.config.registered_delivery.intermediate_notification,
+            ),
+            message_payload=message,
+        )

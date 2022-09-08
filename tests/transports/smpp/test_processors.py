@@ -10,7 +10,10 @@ from smpp.pdu.pdu_types import (
 )
 
 from vumi2.messages import Message, TransportType
-from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
+from vumi2.transports.smpp.processors import (
+    MultipartHandling,
+    SubmitShortMessageProcessor,
+)
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 
 
@@ -109,3 +112,25 @@ async def test_submit_sm_outbound_vumi_message_custom_config(
         schemeData=DataCodingDefault.IA5_ASCII
     )
     assert pdu.params["short_message"] == b'Knights who say "Ni!"'
+
+
+async def test_submit_sm_outbound_vumi_message_message_payload(
+    submit_sm_processor: SubmitShortMessageProcessor,
+):
+    """
+    Creates a valid PDU representing the outbound vumi message, storing the contents of
+    long messages in the message_payload portion
+    """
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content='Knights who say "Nì!"' * 10,
+    )
+    submit_sm_processor.config.multipart_handling = MultipartHandling.message_payload
+    [pdu] = await submit_sm_processor.handle_outbound_message(message)
+    assert pdu.params["source_addr"] == b"12345"
+    assert pdu.params["destination_addr"] == b"+27820001001"
+    assert pdu.params["short_message"] is None
+    assert pdu.params["message_payload"] == b'Knights who say "N\x07!"' * 10
