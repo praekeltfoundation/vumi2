@@ -22,6 +22,9 @@ def create_outbound(timestamp: datetime) -> Message:
 
 
 async def test_memory_cache_and_fetch(memory_message_cache: MemoryMessageCache):
+    """
+    Caching a message and then fetching it later should return the same message
+    """
     outbound = create_outbound(datetime.utcnow())
     await memory_message_cache.store_outbound(outbound)
     returned_outbound = await memory_message_cache.fetch_outbound(outbound.message_id)
@@ -29,6 +32,9 @@ async def test_memory_cache_and_fetch(memory_message_cache: MemoryMessageCache):
 
 
 async def test_memory_timeout(memory_message_cache: MemoryMessageCache):
+    """
+    Messages that are older than the configered timeout should be removed from the cache
+    """
     expired_outbound = create_outbound(
         datetime.utcnow() - timedelta(seconds=memory_message_cache.config.timeout + 1)
     )
