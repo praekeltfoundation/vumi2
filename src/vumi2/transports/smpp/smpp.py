@@ -79,6 +79,8 @@ class SmppTransceiverTransport(BaseWorker):
         async for msg in receive_message_channel:
             if isinstance(msg, Event):
                 await self.connector.publish_event(msg)
+            else:
+                logger.error(f"Received invalid message type {type(msg)}")
 
     async def handle_outbound(self, message: Message) -> None:
         await self.client.send_vumi_message(message)

@@ -1,3 +1,5 @@
+import logging
+
 from pytest import fixture
 from smpp.pdu.operations import BindTransceiverResp, SubmitSMResp
 from trio import Nursery, open_nursery
@@ -72,3 +74,20 @@ async def test_outbound_message(
         await tcp_smsc.send_pdu(SubmitSMResp(seqNum=pdu.seqNum))
 
     assert pdu.params["short_message"] == b"test"
+
+
+async def test_handle_inbound_message_or_event_invalid(
+    transport: SmppTransceiverTransport, tcp_smsc: TcpFakeSmsc, caplog
+):
+    """
+    If we receive an invalid type, it should be logged at an error level.
+    """
+    async with open_nursery() as start_nursery:
+        start_nursery.start_soon(transport.setup)
+        await tcp_smsc.handle_bind()
+
+    await transport.client.send_message_channel.send(object())
+
+    [log] = [log for log in caplog.records if log.levelno >= logging.ERROR]
+
+    assert "Received invalid message type" in log.getMessage()
