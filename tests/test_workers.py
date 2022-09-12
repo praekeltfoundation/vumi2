@@ -32,6 +32,8 @@ async def test_sentry(amqp_connection, config, nursery):
     assert client.dsn == sentry_dsn
     version = pkg_resources.get_distribution("vumi2").version
     assert client.options["release"] == version
+    # Disable sentry for the rest of the tests
+    sentry_sdk.init()
 
 
 async def test_http_server(amqp_connection, config, nursery):
