@@ -87,7 +87,7 @@ It has the following configuration fields:
 data_coding (int)
     What data encoding to use. This sets both the `data_coding` field on the PDU, as well as sets the encoding that we use for the message body. The following encodings are supported: SMSC default (GSM03.38), ASCII, Latin 1, JIS (ISO 2022 JP), Cyrllic (ISO-8859-5), Latin/Hebrew (ISO-8859-8), UCS2
 multipart_handling (str)
-    How to handle splitting messages. Defaults to `short_message`, which does not allow long messages. Other options are not yet implemented, but they will be `message_payload`, `multipart_sar`, `multipart_udh`
+    How to handle splitting messages. Defaults to `short_message`, which does not allow long messages. Other options are: `message_payload`, which puts the whole message in the message_payload parameter of the PDU, `multipart_sar`, which splits the message, and puts the part details in the SAR fields of the PDU, and `multipart_udh`, which splits the message and puts the part details as a header in front of each message part.
 service_type (str)
     Defaults to none. ESME specific, what string to put in the `service_type` field of the PDU.
 source_addr_ton (int)
@@ -116,7 +116,7 @@ The transport is not yet complete, the following things need to still be done
 
 - Support receiver and transmitter binds, not just transceiver.
 - Better config for processors
-- Outbound messages: support multipart and USSD
+- Outbound messages: support USSD
 - Support inbound SMPP commands for inbound messages and delivery reports
 - Support all other SMPP inbound commands
 - Timeout for binding
