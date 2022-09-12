@@ -1,16 +1,23 @@
+import logging
+
 import pytest
+from smpp.pdu.operations import SubmitSM
 from smpp.pdu.pdu_types import (
     AddrNpi,
     AddrTon,
     DataCoding,
     DataCodingDefault,
+    EsmClass,
+    EsmClassMode,
+    EsmClassType,
     RegisteredDelivery,
     RegisteredDeliveryReceipt,
     RegisteredDeliverySmeOriginatedAcks,
 )
 
-from vumi2.messages import Message, TransportType
+from vumi2.messages import DeliveryStatus, EventType, Message, TransportType
 from vumi2.transports.smpp.processors import (
+    DeliveryReportProcesser,
     MultipartHandling,
     SubmitShortMessageProcessor,
 )
@@ -27,6 +34,11 @@ async def submit_sm_processor(
     sequencer: InMemorySequencer,
 ) -> SubmitShortMessageProcessor:
     return SubmitShortMessageProcessor({}, sequencer)
+
+
+@pytest.fixture
+async def dr_processer() -> DeliveryReportProcesser:
+    return DeliveryReportProcesser({})
 
 
 async def test_submit_sm_outbound_vumi_message(
@@ -258,3 +270,94 @@ async def test_submit_sm_msg_length(submit_sm_processor: SubmitShortMessageProce
     submit_sm_processor.config.data_coding = DataCodingDefault.UCS2
     assert submit_sm_processor._get_msg_length() == 140
     assert submit_sm_processor._get_msg_length(split_msg=True) == 134
+
+
+async def test_delivery_report_optional_params(dr_processer: DeliveryReportProcesser):
+    """
+    If there is a delivery report in the optional params, return an Event of it
+    """
+    event = await dr_processer.handle_deliver_sm(
+        SubmitSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
+    )
+    assert event is not None
+    assert event.event_type == EventType.DELIVERY_REPORT
+    assert event.delivery_status == DeliveryStatus.FAILED
+    assert event.transport_metadata == {"smpp_delivery_status": "UNDELIVERABLE"}
+
+
+async def test_delivery_report_esm_class(dr_processer: DeliveryReportProcesser):
+    """
+    If the ESM class says this is a delivery report, return an Event of it
+    """
+    event = await dr_processer.handle_deliver_sm(
+        SubmitSM(
+            esm_class=EsmClass(
+                EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
+            ),
+            short_message=(
+                b"id:0123456789 sub:001 dlvrd:001 submit date:2209121354 done"
+                b" date:2209121454 stat:DELIVRD Text:01234567890123456789"
+            ),
+        )
+    )
+    assert event is not None
+    assert event.event_type == EventType.DELIVERY_REPORT
+    assert event.delivery_status == DeliveryStatus.DELIVERED
+    assert event.transport_metadata == {"smpp_delivery_status": "DELIVRD"}
+
+
+async def test_delivery_report_body(dr_processer: DeliveryReportProcesser):
+    """
+    If the body contains a delivery report, return an Event of it, even if the esm_class
+    isn't one of a delivery report
+    """
+    event = await dr_processer.handle_deliver_sm(
+        SubmitSM(
+            esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
+            short_message=(
+                b"id:0123456789 sub:001 dlvrd:001 submit date:2209121354 done"
+                b" date:2209121454 stat:REJECTD Text:01234567890123456789"
+            ),
+        )
+    )
+    assert event is not None
+    assert event.event_type == EventType.DELIVERY_REPORT
+    assert event.delivery_status == DeliveryStatus.FAILED
+    assert event.transport_metadata == {"smpp_delivery_status": "REJECTD"}
+
+
+async def test_invalid_delivery_report_esm_class(
+    dr_processer: DeliveryReportProcesser, caplog
+):
+    """
+    If the ESM class says this is a delivery report, and we can't decode the body,
+    then log a warning and don't return any event
+    """
+    event = await dr_processer.handle_deliver_sm(
+        SubmitSM(
+            esm_class=EsmClass(
+                EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
+            ),
+            short_message=b"not a delivery report",
+        )
+    )
+    assert event is None
+    [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
+    assert (
+        log.getMessage()
+        == "esm_class SMSC_DELIVERY_RECEIPT indicates delivery report, but regex"
+        " does not match content: not a delivery report"
+    )
+
+
+async def test_delivery_report_none(dr_processer: DeliveryReportProcesser):
+    """
+    If it is not a delivery report, don't return any Event
+    """
+    event = await dr_processer.handle_deliver_sm(
+        SubmitSM(
+            esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
+            short_message=b"not a delivery report",
+        )
+    )
+    assert event is None

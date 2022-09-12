@@ -1,25 +1,30 @@
+import re
 from enum import Enum
+from logging import getLogger
 from typing import List, Optional
 
 import cattrs
 from attrs import Factory, define
-from smpp.pdu.operations import PDU, SubmitSM
+from smpp.pdu.operations import PDU, DeliverSM, SubmitSM
 from smpp.pdu.pdu_types import (
     AddrNpi,
     AddrTon,
     DataCoding,
     DataCodingDefault,
+    EsmClassType,
     RegisteredDelivery,
     RegisteredDeliveryReceipt,
     RegisteredDeliverySmeOriginatedAcks,
 )
 
-from vumi2.messages import Message
+from vumi2.messages import DeliveryStatus, Event, EventType, Message
 
 from .codecs import register_codecs
 from .sequencers import Sequencer
 
 register_codecs()
+
+logger = getLogger(__name__)
 
 
 class DataCodingCodecs(Enum):
@@ -228,3 +233,134 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
             ),
             **kwargs
         )
+
+
+class DeliveryReportProcesserBase:  # pragma: no cover
+    def __init__(self, config: dict) -> None:
+        ...
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Event]:
+        ...
+
+
+DELIVERY_REPORT_REGEX = (
+    r"id:(?P<id>[^ ]{,65})"
+    r"(?: +sub:(?P<sub>[^ ]+))?"
+    r"(?: +dlvrd:(?P<dlvrd>[^ ]+))?"
+    r"(?: +submit date:(?P<submit_date>\d*))?"
+    r"(?: +done date:(?P<done_date>\d*))?"
+    r" +stat:(?P<stat>[A-Z]{5,7})"
+    r"(?: +err:(?P<err>[^ ]+))?"
+    r" +[Tt]ext:(?P<text>.{,20})"
+    r".*"
+)
+
+DELIVERY_REPORT_STATUS_MAPPING = {
+    # SMPP `message_state` values:
+    "ENROUTE": "pending",
+    "DELIVERED": "delivered",
+    "EXPIRED": "failed",
+    "DELETED": "failed",
+    "UNDELIVERABLE": "failed",
+    "ACCEPTED": "delivered",
+    "UNKNOWN": "pending",
+    "REJECTED": "failed",
+    # From the most common regex-extracted format:
+    "DELIVRD": "delivered",
+    "REJECTD": "failed",
+    "FAILED": "failed",
+    # Currently we will accept this for Yo! TODO: investigate
+    "0": "delivered",
+}
+
+
+@define
+class DeliveryReportProcessorConfig:
+    regex: str = DELIVERY_REPORT_REGEX
+    status_mapping: dict = DELIVERY_REPORT_STATUS_MAPPING
+
+
+class DeliveryReportProcesser(DeliveryReportProcesserBase):
+    CONFIG_CLASS = DeliveryReportProcessorConfig
+
+    def __init__(self, config: dict) -> None:
+        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.regex = re.compile(self.config.regex)
+
+    async def _handle_deliver_sm_optional_params(
+        self, pdu: DeliverSM
+    ) -> Optional[Event]:
+        """
+        Check if this is a delivery report using the optional PDU params.
+
+        If so, return the equivalent vumi Event, otherwise return None.
+        """
+        receipted_message_id = pdu.params.get("receipted_message_id")
+        message_state = pdu.params.get("message_state")
+        if receipted_message_id is None or message_state is None:
+            return None
+        return await self._create_event(
+            receipted_message_id.decode(), message_state.decode()
+        )
+
+    async def _handle_deliver_sm_esm_class(self, pdu: DeliverSM) -> Optional[Event]:
+        """
+        Check if this is a delivery report by looking at the esm_class.
+
+        If so, return the equivalent vumi Event, otherwise return None.
+        """
+        esm_class = pdu.params["esm_class"]
+        # Any type other than default is delivery report
+        if esm_class.type == EsmClassType.DEFAULT:
+            return None
+
+        content = pdu.params["short_message"].decode()
+        match = self.regex.match(content)
+        if not match:
+            logger.warning(
+                "esm_class %s indicates delivery report, but regex does not match"
+                " content: %s",
+                esm_class.type.name,
+                content,
+            )
+            return None
+
+        fields = match.groupdict()
+        return await self._create_event(fields["id"], fields["stat"])
+
+    async def _handle_deliver_sm_body(self, pdu: DeliverSM) -> Optional[Event]:
+        """
+        Try to decode the body as a delivery report, even if the esm_class doesn't
+        say it's a delivery report
+        """
+        content = pdu.params["short_message"].decode()
+        match = self.regex.match(content)
+        if not match:
+            return None
+
+        fields = match.groupdict()
+        return await self._create_event(fields["id"], fields["stat"])
+
+    async def _create_event(self, smpp_message_id: str, smpp_status: str) -> Event:
+        status = self.config.status_mapping.get(smpp_status, "pending")
+        return Event(
+            user_message_id="",  # TODO
+            event_type=EventType.DELIVERY_REPORT,
+            delivery_status=DeliveryStatus(status),
+            transport_metadata={"smpp_delivery_status": smpp_status},
+        )
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Event]:
+        """
+        Try to handle the pdu as a delivery report. Returns an equivalent Event if
+        handled, or None if not.
+        """
+        for func in (
+            self._handle_deliver_sm_optional_params,
+            self._handle_deliver_sm_esm_class,
+            self._handle_deliver_sm_body,
+        ):
+            event = await func(pdu)
+            if event is not None:
+                return event
+        return None
