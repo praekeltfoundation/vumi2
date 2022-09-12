@@ -141,43 +141,15 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
     async def submit_sm_short_message(
         self, from_addr: str, to_addr: str, short_message: bytes
     ) -> SubmitSM:
-        return SubmitSM(
-            seqNum=await self.sequencer.get_next_sequence_number(),
-            service_type=self.config.service_type,
-            source_addr_ton=self.config.source_addr_ton,
-            source_addr_npi=self.config.source_addr_npi,
-            source_addr=from_addr,
-            dest_addr_ton=self.config.dest_addr_ton,
-            dest_addr_npi=self.config.dest_addr_npi,
-            destination_addr=to_addr,
-            data_coding=DataCoding(schemeData=self.config.data_coding),
-            registered_delivery=RegisteredDelivery(
-                self.config.registered_delivery.delivery_receipt,
-                self.config.registered_delivery.sme_originated_acks,
-                self.config.registered_delivery.intermediate_notification,
-            ),
-            short_message=short_message,
+        return await self._submit_sm(
+            source_addr=from_addr, destination_addr=to_addr, short_message=short_message
         )
 
     async def submit_sm_long_message(
         self, from_addr: str, to_addr: str, message: bytes
     ) -> SubmitSM:
-        return SubmitSM(
-            seqNum=await self.sequencer.get_next_sequence_number(),
-            service_type=self.config.service_type,
-            source_addr_ton=self.config.source_addr_ton,
-            source_addr_npi=self.config.source_addr_npi,
-            source_addr=from_addr,
-            dest_addr_ton=self.config.dest_addr_ton,
-            dest_addr_npi=self.config.dest_addr_npi,
-            destination_addr=to_addr,
-            data_coding=DataCoding(schemeData=self.config.data_coding),
-            registered_delivery=RegisteredDelivery(
-                self.config.registered_delivery.delivery_receipt,
-                self.config.registered_delivery.sme_originated_acks,
-                self.config.registered_delivery.intermediate_notification,
-            ),
-            message_payload=message,
+        return await self._submit_sm(
+            source_addr=from_addr, destination_addr=to_addr, message_payload=message
         )
 
     def _split_message(self, message: bytes, size: int):
@@ -196,21 +168,9 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         )
         for i, segment in enumerate(segments):
             pdus.append(
-                SubmitSM(
-                    seqNum=await self.sequencer.get_next_sequence_number(),
-                    service_type=self.config.service_type,
-                    source_addr_ton=self.config.source_addr_ton,
-                    source_addr_npi=self.config.source_addr_npi,
+                await self._submit_sm(
                     source_addr=from_addr,
-                    dest_addr_ton=self.config.dest_addr_ton,
-                    dest_addr_npi=self.config.dest_addr_npi,
                     destination_addr=to_addr,
-                    data_coding=DataCoding(schemeData=self.config.data_coding),
-                    registered_delivery=RegisteredDelivery(
-                        self.config.registered_delivery.delivery_receipt,
-                        self.config.registered_delivery.sme_originated_acks,
-                        self.config.registered_delivery.intermediate_notification,
-                    ),
                     sar_msg_ref_num=ref_num,
                     sar_total_segments=len(segments),
                     sar_segment_seqnum=i + 1,
@@ -240,22 +200,31 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
                 ]
             )
             pdus.append(
-                SubmitSM(
-                    seqNum=await self.sequencer.get_next_sequence_number(),
-                    service_type=self.config.service_type,
-                    source_addr_ton=self.config.source_addr_ton,
-                    source_addr_npi=self.config.source_addr_npi,
+                await self._submit_sm(
                     source_addr=from_addr,
-                    dest_addr_ton=self.config.dest_addr_ton,
-                    dest_addr_npi=self.config.dest_addr_npi,
                     destination_addr=to_addr,
-                    data_coding=DataCoding(schemeData=self.config.data_coding),
-                    registered_delivery=RegisteredDelivery(
-                        self.config.registered_delivery.delivery_receipt,
-                        self.config.registered_delivery.sme_originated_acks,
-                        self.config.registered_delivery.intermediate_notification,
-                    ),
                     short_message=short_message,
                 )
             )
         return pdus
+
+    async def _submit_sm(self, **kwargs):
+        """
+        Handles all the fields that are from the config and hence common to all
+        SubmitSMs. `kwargs` are the additional fields to add
+        """
+        return SubmitSM(
+            seqNum=await self.sequencer.get_next_sequence_number(),
+            service_type=self.config.service_type,
+            source_addr_ton=self.config.source_addr_ton,
+            source_addr_npi=self.config.source_addr_npi,
+            dest_addr_ton=self.config.dest_addr_ton,
+            dest_addr_npi=self.config.dest_addr_npi,
+            data_coding=DataCoding(schemeData=self.config.data_coding),
+            registered_delivery=RegisteredDelivery(
+                self.config.registered_delivery.delivery_receipt,
+                self.config.registered_delivery.sme_originated_acks,
+                self.config.registered_delivery.intermediate_notification,
+            ),
+            **kwargs
+        )
