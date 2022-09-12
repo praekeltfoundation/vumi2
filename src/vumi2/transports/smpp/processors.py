@@ -21,11 +21,6 @@ from .sequencers import Sequencer
 
 register_codecs()
 
-# 140 bytes - 10 bytes for the user data header the SMSC is presumably going to add for
-# us. This is a guess based mostly on optimism and the hope that we'll never have to
-# deal with this stuff in production.
-CSM_MESSAGE_SIZE = 130
-
 
 class DataCodingCodecs(Enum):
     SMSC_DEFAULT_ALPHABET = "gsm0338"  # SMSC Default Alphabet
