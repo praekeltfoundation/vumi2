@@ -211,28 +211,29 @@ class EsmeClient:
         return response
 
     async def send_vumi_message(self, message: Message):
-        # At the moment this will always only return a single PDU. When we implement
-        # multipart messages, this error handling will need to be improved
+        # If we encounter an error in one of the segments of a multipart message,
+        # immediately send a nack and stop trying with the rest
         for pdu in await self.submit_sm_processor.handle_outbound_message(message):
             response = await self.send_pdu(pdu, check_response=False)
 
-        # Requests always get responses
-        response = cast(PDUResponse, response)
+            # We will always get a response from a request
+            response = cast(PDUResponse, response)
 
-        if response.status == CommandStatus.ESME_ROK:
-            event = Event(
-                user_message_id=message.message_id,
-                sent_message_id=message.message_id,
-                event_type=EventType.ACK,
-            )
-        else:
-            status_code = command_status_name_map[response.status.name]
-            nack_reason = command_status_value_map[status_code]["description"]
-            event = Event(
-                user_message_id=message.message_id,
-                sent_message_id=message.message_id,
-                event_type=EventType.NACK,
-                nack_reason=nack_reason,
-            )
+            if response.status != CommandStatus.ESME_ROK:
+                status_code = command_status_name_map[response.status.name]
+                nack_reason = command_status_value_map[status_code]["description"]
+                event = Event(
+                    user_message_id=message.message_id,
+                    sent_message_id=message.message_id,
+                    event_type=EventType.NACK,
+                    nack_reason=nack_reason,
+                )
+                await self.send_message_channel.send(event)
+                return
 
+        event = Event(
+            user_message_id=message.message_id,
+            sent_message_id=message.message_id,
+            event_type=EventType.ACK,
+        )
         await self.send_message_channel.send(event)
