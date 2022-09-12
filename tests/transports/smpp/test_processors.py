@@ -173,7 +173,8 @@ async def test_submit_sm_outbound_vumi_message_udh(
 ):
     """
     Creates a valid PDU representing the outbound vumi message, storing the contents of
-    long messages into multiple PDUs with sar parameters
+    long messages into multiple PDUs with UDH parameters as a header on the message
+    content
     """
     message = Message(
         to_addr="+27820001001",
