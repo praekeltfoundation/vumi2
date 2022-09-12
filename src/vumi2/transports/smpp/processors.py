@@ -50,7 +50,6 @@ class DataCodingCodecs(Enum):
 
 class MultipartHandling(Enum):
     short_message = "short_message"
-    # TODO: Implement these multipart strategies
     message_payload = "message_payload"
     multipart_sar = "multipart_sar"
     multipart_udh = "multipart_udh"
@@ -112,7 +111,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
     def _fits_in_one_message(self, content: bytes) -> bool:
         return len(content) <= self._get_msg_length()
 
-    async def handle_outbound_message(self, message: Message) -> List[PDU]:
+    async def handle_outbound_message(self, message: Message) -> List[SubmitSM]:
         """
         Takes an outbound vumi message, and returns the PDUs necessary to send it.
         """
