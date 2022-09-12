@@ -217,7 +217,7 @@ class EsmeClient:
             response = await self.send_pdu(pdu, check_response=False)
 
             # We will always get a response from a request
-            response = cast(PDU, response)
+            response = cast(PDUResponse, response)
 
             if response.status != CommandStatus.ESME_ROK:
                 status_code = command_status_name_map[response.status.name]
