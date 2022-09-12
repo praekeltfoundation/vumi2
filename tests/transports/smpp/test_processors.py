@@ -48,6 +48,25 @@ async def test_submit_sm_outbound_vumi_message(
     assert pdu.params["short_message"] == b'Knights who say "N\x07!"'
 
 
+async def test_submit_sm_outbound_blank_vumi_message(
+    submit_sm_processor: SubmitShortMessageProcessor,
+):
+    """
+    Empty message bodies should result in an empty string short_message
+    """
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content=None,
+    )
+    [pdu] = await submit_sm_processor.handle_outbound_message(message)
+    assert pdu.params["source_addr"] == b"12345"
+    assert pdu.params["destination_addr"] == b"+27820001001"
+    assert pdu.params["short_message"] == b""
+
+
 @pytest.fixture
 async def submit_sm_processor_custom_config(
     sequencer: InMemorySequencer,
@@ -200,3 +219,42 @@ async def test_submit_sm_outbound_vumi_message_udh(
         pdu2.params["short_message"]
         == b"\05\00\03\01\02\02" + b"567890" + b"1234567890" * 6
     )
+
+
+async def test_submit_sm_outbound_vumi_message_fits_in_one(
+    submit_sm_processor: SubmitShortMessageProcessor,
+):
+    """
+    If a message is short enough to fit in a single message, then it shouldn't be split
+    according to the multipart strategy
+    """
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content="1234567890" * 16,
+    )
+    submit_sm_processor.config.data_coding = DataCodingDefault.IA5_ASCII
+    submit_sm_processor.config.multipart_handling = MultipartHandling.multipart_udh
+    [pdu] = await submit_sm_processor.handle_outbound_message(message)
+
+    assert pdu.params["source_addr"] == b"12345"
+    assert pdu.params["destination_addr"] == b"+27820001001"
+    assert pdu.params["short_message"] == b"1234567890" * 16
+
+
+async def test_submit_sm_msg_length(submit_sm_processor: SubmitShortMessageProcessor):
+    """
+    Should give the correct max length for different encoding types, and if this is a
+    multipart message or not
+    """
+    # 7-bit codecs
+    submit_sm_processor.config.data_coding = DataCodingDefault.SMSC_DEFAULT_ALPHABET
+    assert submit_sm_processor._get_msg_length() == 160
+    assert submit_sm_processor._get_msg_length(split_msg=True) == 153
+
+    # 8-bit codecs
+    submit_sm_processor.config.data_coding = DataCodingDefault.UCS2
+    assert submit_sm_processor._get_msg_length() == 140
+    assert submit_sm_processor._get_msg_length(split_msg=True) == 134
