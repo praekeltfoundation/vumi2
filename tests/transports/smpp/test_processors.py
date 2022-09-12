@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from smpp.pdu.operations import SubmitSM
+from smpp.pdu.operations import DeliverSM
 from smpp.pdu.pdu_types import (
     AddrNpi,
     AddrTon,
@@ -19,6 +19,7 @@ from vumi2.messages import DeliveryStatus, EventType, Message, TransportType
 from vumi2.transports.smpp.processors import (
     DeliveryReportProcesser,
     MultipartHandling,
+    ShortMessageProcesser,
     SubmitShortMessageProcessor,
 )
 from vumi2.transports.smpp.sequencers import InMemorySequencer
@@ -39,6 +40,13 @@ async def submit_sm_processor(
 @pytest.fixture
 async def dr_processer() -> DeliveryReportProcesser:
     return DeliveryReportProcesser({})
+
+
+@pytest.fixture
+async def sm_processer() -> ShortMessageProcesser:
+    return ShortMessageProcesser(
+        {"data_coding_overrides": {"OCTET_UNSPECIFIED": "ascii"}}
+    )
 
 
 async def test_submit_sm_outbound_vumi_message(
@@ -277,7 +285,7 @@ async def test_delivery_report_optional_params(dr_processer: DeliveryReportProce
     If there is a delivery report in the optional params, return an Event of it
     """
     event = await dr_processer.handle_deliver_sm(
-        SubmitSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
+        DeliverSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
     )
     assert event is not None
     assert event.event_type == EventType.DELIVERY_REPORT
@@ -290,7 +298,7 @@ async def test_delivery_report_esm_class(dr_processer: DeliveryReportProcesser):
     If the ESM class says this is a delivery report, return an Event of it
     """
     event = await dr_processer.handle_deliver_sm(
-        SubmitSM(
+        DeliverSM(
             esm_class=EsmClass(
                 EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
             ),
@@ -312,7 +320,7 @@ async def test_delivery_report_body(dr_processer: DeliveryReportProcesser):
     isn't one of a delivery report
     """
     event = await dr_processer.handle_deliver_sm(
-        SubmitSM(
+        DeliverSM(
             esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
             short_message=(
                 b"id:0123456789 sub:001 dlvrd:001 submit date:2209121354 done"
@@ -334,7 +342,7 @@ async def test_invalid_delivery_report_esm_class(
     then log a warning and don't return any event
     """
     event = await dr_processer.handle_deliver_sm(
-        SubmitSM(
+        DeliverSM(
             esm_class=EsmClass(
                 EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
             ),
@@ -355,9 +363,66 @@ async def test_delivery_report_none(dr_processer: DeliveryReportProcesser):
     If it is not a delivery report, don't return any Event
     """
     event = await dr_processer.handle_deliver_sm(
-        SubmitSM(
+        DeliverSM(
             esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
             short_message=b"not a delivery report",
         )
     )
     assert event is None
+
+
+async def test_short_message(sm_processer: ShortMessageProcesser):
+    """
+    Normal short message should return the equivalent Message
+    """
+    message = await sm_processer.handle_deliver_sm(
+        DeliverSM(
+            short_message=b"test message",
+            source_addr=b"27820001001",
+            destination_addr=b"123456",
+            data_coding=DataCoding(),
+        )
+    )
+    assert message is not None
+    assert message.content == "test message"
+    assert message.from_addr == "27820001001"
+    assert message.to_addr == "123456"
+    assert message.transport_type == TransportType.SMS
+
+
+async def test_short_message_codec_override(sm_processer: ShortMessageProcesser):
+    """
+    If the codec has been overwritten in the config, then we should use that
+    """
+    message = await sm_processer.handle_deliver_sm(
+        DeliverSM(
+            short_message=b"test message",
+            source_addr=b"27820001001",
+            destination_addr=b"123456",
+            data_coding=DataCoding(schemeData=DataCodingDefault.OCTET_UNSPECIFIED),
+        )
+    )
+    assert message is not None
+    assert message.content == "test message"
+    assert message.from_addr == "27820001001"
+    assert message.to_addr == "123456"
+    assert message.transport_type == TransportType.SMS
+
+
+async def test_short_message_message_payload(sm_processer: ShortMessageProcesser):
+    """
+    We should still extract the message if it's in the message payload field
+    """
+    message = await sm_processer.handle_deliver_sm(
+        DeliverSM(
+            message_payload=b"test message",
+            source_addr=b"27820001001",
+            destination_addr=b"123456",
+            data_coding=DataCoding(),
+        )
+    )
+    assert message is not None
+    assert message.content == "test message"
+    assert message.from_addr == "27820001001"
+    assert message.to_addr == "123456"
+    assert message.transport_type == TransportType.SMS

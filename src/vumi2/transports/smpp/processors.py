@@ -17,7 +17,7 @@ from smpp.pdu.pdu_types import (
     RegisteredDeliverySmeOriginatedAcks,
 )
 
-from vumi2.messages import DeliveryStatus, Event, EventType, Message
+from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 
 from .codecs import register_codecs
 from .sequencers import Sequencer
@@ -364,3 +364,57 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             if event is not None:
                 return event
         return None
+
+
+class ShortMessageProcesserBase:  # pragma: no cover
+    def __init__(self, config: dict) -> None:
+        ...
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+        ...
+
+
+@define
+class ShortMessageProcesserConfig:
+    data_coding_overrides: dict = Factory(dict)
+
+
+class ShortMessageProcesser(ShortMessageProcesserBase):
+    CONFIG_CLASS = ShortMessageProcesserConfig
+
+    def __init__(self, config: dict) -> None:
+        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+
+    def _get_text(self, pdu: DeliverSM) -> str:
+        message_payload = pdu.params.get("message_payload")
+        if message_payload is not None:
+            short_message = message_payload
+        else:
+            short_message = pdu.params["short_message"]
+
+        data_coding = pdu.params["data_coding"].schemeData.name
+        try:
+            codec = self.config.data_coding_overrides[data_coding]
+        except KeyError:
+            codec = DataCodingCodecs[data_coding].value
+        return short_message.decode(codec)
+
+    async def _handle_short_message(self, pdu: DeliverSM) -> Message:
+        """
+        Single part short message
+        """
+        return Message(
+            to_addr=pdu.params["destination_addr"].decode(),
+            from_addr=pdu.params["source_addr"].decode(),
+            # The transport needs to fill this in
+            transport_name="",
+            transport_type=TransportType.SMS,
+            content=self._get_text(pdu),
+        )
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+        """
+        Processes the DeliverSM pdu, and returns a Message if one was decoded, else
+        returns None.
+        """
+        return await self._handle_short_message(pdu)
