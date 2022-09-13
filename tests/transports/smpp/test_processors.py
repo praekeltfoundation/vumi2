@@ -23,11 +23,17 @@ from vumi2.transports.smpp.processors import (
     SubmitShortMessageProcessor,
 )
 from vumi2.transports.smpp.sequencers import InMemorySequencer
+from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 
 @pytest.fixture
 async def sequencer() -> InMemorySequencer:
     return InMemorySequencer({})
+
+
+@pytest.fixture
+async def smpp_cache() -> InMemorySmppCache:
+    return InMemorySmppCache({})
 
 
 @pytest.fixture
@@ -43,9 +49,9 @@ async def dr_processer() -> DeliveryReportProcesser:
 
 
 @pytest.fixture
-async def sm_processer() -> ShortMessageProcessor:
+async def sm_processer(smpp_cache: InMemorySmppCache) -> ShortMessageProcessor:
     return ShortMessageProcessor(
-        {"data_coding_overrides": {"OCTET_UNSPECIFIED": "ascii"}}
+        {"data_coding_overrides": {"OCTET_UNSPECIFIED": "ascii"}}, smpp_cache
     )
 
 
@@ -473,7 +479,19 @@ async def test_short_message_multipart(sm_processer: ShortMessageProcessor):
         data_coding=DataCoding(),
     )
     msg = await sm_processer.handle_deliver_sm(pdu)
+    assert msg is None
+
+    pdu = DeliverSM(
+        short_message=b"part2",
+        sar_msg_ref_num=3,
+        sar_total_segments=2,
+        sar_segment_seqnum=2,
+        source_addr=b"27820001001",
+        destination_addr=b"123456",
+        data_coding=DataCoding(),
+    )
+    msg = await sm_processer.handle_deliver_sm(pdu)
     assert msg is not None
-    assert msg.content == "part1"
+    assert msg.content == "part1part2"
     assert msg.from_addr == "27820001001"
     assert msg.to_addr == "123456"

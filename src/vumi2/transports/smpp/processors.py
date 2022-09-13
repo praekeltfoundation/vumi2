@@ -21,6 +21,7 @@ from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportT
 
 from .codecs import register_codecs
 from .sequencers import Sequencer
+from .smpp_cache import BaseSmppCache
 
 register_codecs()
 
@@ -369,7 +370,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
 
 class ShortMessageProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
         ...
 
     async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
@@ -384,8 +385,9 @@ class ShortMessageProcessorConfig:
 class ShortMessageProcessor(ShortMessageProcesserBase):
     CONFIG_CLASS = ShortMessageProcessorConfig
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.smpp_cache = smpp_cache
 
     def _decode_text(self, text: bytes, data_coding: DataCoding) -> str:
         data_coding = data_coding.schemeData.name
@@ -474,17 +476,23 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
         extracted = self._extract_multipart(pdu)
         if extracted is None:
             return False, None
-        # TODO: combine parts into single message
-        else:
-            _, _, _, content = extracted
-            return True, Message(
-                to_addr=pdu.params["destination_addr"].decode(),
-                from_addr=pdu.params["source_addr"].decode(),
-                # The transport needs to fill this in
-                transport_name="",
-                transport_type=TransportType.SMS,
-                content=self._decode_text(content, pdu.params["data_coding"]),
-            )
+
+        ref_num, tot_num, part_num, content = extracted
+        decoded_content = self._decode_text(content, pdu.params["data_coding"])
+        full_message = await self.smpp_cache.store_multipart(
+            ref_num, tot_num, part_num, decoded_content
+        )
+        if full_message is None:
+            return True, None
+
+        return True, Message(
+            to_addr=pdu.params["destination_addr"].decode(),
+            from_addr=pdu.params["source_addr"].decode(),
+            # The transport needs to fill this in
+            transport_name="",
+            transport_type=TransportType.SMS,
+            content=full_message,
+        )
 
     async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
         """

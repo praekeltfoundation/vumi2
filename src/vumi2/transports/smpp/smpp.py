@@ -33,6 +33,8 @@ class SmppTransceiverTransportConfig(BaseConfig):
     submit_sm_processor_config: dict = Factory(dict)
     sm_processor_class: str = "vumi2.transports.smpp.processors.ShortMessageProcessor"
     sm_processor_config: dict = Factory(dict)
+    smpp_cache_class: str = "vumi2.transports.smpp.smpp_cache.InMemorySmppCache"
+    smpp_cache_config: dict = Factory(dict)
 
 
 class SmppTransceiverTransport(BaseWorker):
@@ -52,8 +54,12 @@ class SmppTransceiverTransport(BaseWorker):
         self.submit_sm_processor = submit_sm_processor_class(
             self.config.submit_sm_processor_config, self.sequencer
         )
+        smpp_cache_class = class_from_string(config.smpp_cache_class)
+        self.smpp_cache = smpp_cache_class(config.smpp_cache_config)
         sm_processor_class = class_from_string(config.sm_processor_class)
-        self.sm_processor = sm_processor_class(self.config.sm_processor_config)
+        self.sm_processor = sm_processor_class(
+            self.config.sm_processor_config, self.smpp_cache
+        )
 
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any

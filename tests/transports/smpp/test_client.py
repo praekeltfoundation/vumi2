@@ -25,6 +25,7 @@ from vumi2.transports.smpp.processors import (
 )
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
+from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 from .helpers import FakeSmsc
 
@@ -87,13 +88,18 @@ async def sequencer():
 
 
 @fixture
+async def smpp_cache():
+    return InMemorySmppCache({})
+
+
+@fixture
 async def submit_sm_processor(sequencer):
     return SubmitShortMessageProcessor({}, sequencer)
 
 
 @fixture
-async def sm_processor():
-    return ShortMessageProcessor({})
+async def sm_processor(smpp_cache):
+    return ShortMessageProcessor({}, smpp_cache)
 
 
 @fixture
