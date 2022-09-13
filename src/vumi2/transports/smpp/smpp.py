@@ -85,6 +85,7 @@ class SmppTransceiverTransport(BaseWorker):
             if isinstance(msg, Event):
                 await self.connector.publish_event(msg)
             elif isinstance(msg, Message):
+                msg.transport_name = self.config.transport_name
                 await self.connector.publish_inbound(msg)
             else:
                 logger.error(f"Received invalid message type {type(msg)}")

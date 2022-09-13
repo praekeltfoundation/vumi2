@@ -134,3 +134,4 @@ async def test_handle_inbound_message_or_event_message(
     await received_msg.wait()
     [inbound] = msgs
     assert inbound.content == "test"
+    assert inbound.transport_name == "smpp"
