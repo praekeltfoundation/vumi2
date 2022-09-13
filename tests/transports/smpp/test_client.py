@@ -4,6 +4,8 @@ from pytest import fixture, raises
 from smpp.pdu.operations import (
     BindTransceiver,
     BindTransceiverResp,
+    DeliverSM,
+    DeliverSMResp,
     EnquireLink,
     EnquireLinkResp,
     GenericNack,
@@ -11,13 +13,16 @@ from smpp.pdu.operations import (
     SubmitSM,
     SubmitSMResp,
 )
-from smpp.pdu.pdu_types import CommandStatus
+from smpp.pdu.pdu_types import CommandStatus, DataCoding
 from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
-from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
+from vumi2.transports.smpp.processors import (
+    ShortMessageProcessor,
+    SubmitShortMessageProcessor,
+)
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 
@@ -87,6 +92,11 @@ async def submit_sm_processor(sequencer):
 
 
 @fixture
+async def sm_processor():
+    return ShortMessageProcessor({})
+
+
+@fixture
 async def message_channel():
     return open_memory_channel(1)
 
@@ -103,7 +113,12 @@ async def receive_message_channel(message_channel):
 
 @fixture
 async def client(
-    nursery, client_stream, sequencer, submit_sm_processor, send_message_channel
+    nursery,
+    client_stream,
+    sequencer,
+    submit_sm_processor,
+    sm_processor,
+    send_message_channel,
 ) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
@@ -113,6 +128,7 @@ async def client(
         config,
         sequencer,
         submit_sm_processor,
+        sm_processor,
         send_message_channel,
     )
 
@@ -292,3 +308,30 @@ async def test_submit_sm_resp_nack(client: EsmeClient, receive_message_channel, 
     assert isinstance(event, Event)
     assert event.event_type == EventType.NACK
     assert event.nack_reason == "Message Length is invalid"
+
+
+async def test_handle_deliver_sm(
+    client: EsmeClient, smsc: FakeSmsc, receive_message_channel
+):
+    """
+    DeliverSM PDU creates an inbound message
+    """
+    await smsc.start_and_bind(client)
+
+    pdu = DeliverSM(
+        short_message=b"test message",
+        source_addr=b"27820001001",
+        destination_addr=b"123456",
+        data_coding=DataCoding(),
+    )
+
+    await smsc.send_pdu(pdu)
+
+    msg = await receive_message_channel.receive()
+    assert msg.content == "test message"
+    assert msg.to_addr == "123456"
+    assert msg.from_addr == "27820001001"
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, DeliverSMResp)
+    assert resp.seqNum == pdu.seqNum

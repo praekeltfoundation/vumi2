@@ -31,6 +31,8 @@ class SmppTransceiverTransportConfig(BaseConfig):
         "vumi2.transports.smpp.processors.SubmitShortMessageProcessor"
     )
     submit_sm_processor_config: dict = Factory(dict)
+    sm_processor_class: str = "vumi2.transports.smpp.processors.ShortMessageProcessor"
+    sm_processor_config: dict = Factory(dict)
 
 
 class SmppTransceiverTransport(BaseWorker):
@@ -50,6 +52,8 @@ class SmppTransceiverTransport(BaseWorker):
         self.submit_sm_processor = submit_sm_processor_class(
             self.config.submit_sm_processor_config, self.sequencer
         )
+        sm_processor_class = class_from_string(config.sm_processor_class)
+        self.sm_processor = sm_processor_class(self.config.sm_processor_config)
 
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any
@@ -64,6 +68,7 @@ class SmppTransceiverTransport(BaseWorker):
             self.config,
             self.sequencer,
             self.submit_sm_processor,
+            self.sm_processor,
             send_channel,
         )
         await self.client.start()
@@ -79,6 +84,8 @@ class SmppTransceiverTransport(BaseWorker):
         async for msg in receive_message_channel:
             if isinstance(msg, Event):
                 await self.connector.publish_event(msg)
+            elif isinstance(msg, Message):
+                await self.connector.publish_inbound(msg)
             else:
                 logger.error(f"Received invalid message type {type(msg)}")
 

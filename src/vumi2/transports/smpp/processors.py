@@ -377,12 +377,12 @@ class ShortMessageProcesserBase:  # pragma: no cover
 
 
 @define
-class ShortMessageProcesserConfig:
+class ShortMessageProcessorConfig:
     data_coding_overrides: dict = Factory(dict)
 
 
-class ShortMessageProcesser(ShortMessageProcesserBase):
-    CONFIG_CLASS = ShortMessageProcesserConfig
+class ShortMessageProcessor(ShortMessageProcesserBase):
+    CONFIG_CLASS = ShortMessageProcessorConfig
 
     def __init__(self, config: dict) -> None:
         self.config = cattrs.structure(config, self.CONFIG_CLASS)

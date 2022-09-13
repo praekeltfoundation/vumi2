@@ -1,11 +1,11 @@
 import logging
 
 from pytest import fixture
-from smpp.pdu.operations import BindTransceiverResp, SubmitSMResp
-from trio import Nursery, open_nursery
+from smpp.pdu.operations import BindTransceiverResp, DeliverSM, SubmitSMResp
+from trio import Event, Nursery, open_nursery
 
 from vumi2.connectors import ReceiveOutboundConnector
-from vumi2.messages import Message, TransportType
+from vumi2.messages import EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient
 from vumi2.transports.smpp.smpp import (
     SmppTransceiverTransport,
@@ -54,8 +54,19 @@ async def test_outbound_message(
     transport: SmppTransceiverTransport, tcp_smsc: TcpFakeSmsc, nursery: Nursery
 ):
     """
-    Outbound messages should send a submit short message PDU to the server
+    Outbound messages should send a submit short message PDU to the server, and then
+    return an ACK
     """
+    msgs = []
+    received_msg = Event()
+
+    async def handler(msg):
+        print(msg)
+        msgs.append(msg)
+        received_msg.set()
+
+    await transport.setup_receive_inbound_connector("smpp", handler, handler)
+
     async with open_nursery() as start_nursery:
         start_nursery.start_soon(transport.setup)
         await tcp_smsc.handle_bind()
@@ -75,6 +86,10 @@ async def test_outbound_message(
 
     assert pdu.params["short_message"] == b"test"
 
+    await received_msg.wait()
+    [ack] = msgs
+    assert ack.event_type == EventType.ACK
+
 
 async def test_handle_inbound_message_or_event_invalid(
     transport: SmppTransceiverTransport, tcp_smsc: TcpFakeSmsc, caplog
@@ -90,3 +105,32 @@ async def test_handle_inbound_message_or_event_invalid(
     [log] = [log for log in caplog.records if log.levelno >= logging.ERROR]
 
     assert "Received invalid message type" in log.getMessage()
+
+
+async def test_handle_inbound_message_or_event_message(
+    transport: SmppTransceiverTransport, tcp_smsc: TcpFakeSmsc
+):
+    """
+    If we receive a DeliverSM PDU, it should be published as an inbound message
+    """
+    msgs = []
+    received_msg = Event()
+
+    async def handler(msg):
+        msgs.append(msg)
+        received_msg.set()
+
+    await transport.setup_receive_inbound_connector("smpp", handler, handler)
+
+    pdu = DeliverSM(short_message=b"test")
+    async with open_nursery() as start_nursery:
+        start_nursery.start_soon(transport.setup)
+        await tcp_smsc.handle_bind()
+
+    await tcp_smsc.send_pdu(pdu)
+    resp = await tcp_smsc.receive_pdu()
+    assert resp.seqNum == pdu.seqNum
+
+    await received_msg.wait()
+    [inbound] = msgs
+    assert inbound.content == "test"

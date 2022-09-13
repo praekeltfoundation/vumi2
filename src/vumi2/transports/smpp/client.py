@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Union, cast
 from smpp.pdu.constants import command_status_name_map, command_status_value_map
 from smpp.pdu.operations import (
     BindTransceiver,
+    DeliverSM,
+    DeliverSMResp,
     EnquireLink,
     GenericNack,
     PDURequest,
@@ -23,7 +25,7 @@ from trio import (
 
 from vumi2.messages import Event, EventType, Message
 
-from .processors import SubmitShortMessageProcesserBase
+from .processors import ShortMessageProcesserBase, SubmitShortMessageProcesserBase
 from .sequencers import Sequencer
 
 logger = getLogger(__name__)
@@ -55,6 +57,7 @@ class EsmeClient:
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
         submit_sm_processor: SubmitShortMessageProcesserBase,
+        sm_processer: ShortMessageProcesserBase,
         send_message_channel: MemorySendChannel,
     ) -> None:
         self.config = config
@@ -62,6 +65,7 @@ class EsmeClient:
         self.nursery = nursery
         self.sequencer = sequencer
         self.submit_sm_processor = submit_sm_processor
+        self.sm_processer = sm_processer
         self.send_message_channel = send_message_channel
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
@@ -237,3 +241,12 @@ class EsmeClient:
             event_type=EventType.ACK,
         )
         await self.send_message_channel.send(event)
+
+    async def handle_deliver_sm(self, pdu: DeliverSM):
+        """
+        Extracts the inbound message from the PDU, sends it, and responds with ROK
+        """
+        msg = await self.sm_processer.handle_deliver_sm(pdu)
+        if msg:
+            await self.send_message_channel.send(msg)
+        await self.send_pdu(DeliverSMResp(seqNum=pdu.seqNum))

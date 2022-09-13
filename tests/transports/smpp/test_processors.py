@@ -19,7 +19,7 @@ from vumi2.messages import DeliveryStatus, EventType, Message, TransportType
 from vumi2.transports.smpp.processors import (
     DeliveryReportProcesser,
     MultipartHandling,
-    ShortMessageProcesser,
+    ShortMessageProcessor,
     SubmitShortMessageProcessor,
 )
 from vumi2.transports.smpp.sequencers import InMemorySequencer
@@ -43,8 +43,8 @@ async def dr_processer() -> DeliveryReportProcesser:
 
 
 @pytest.fixture
-async def sm_processer() -> ShortMessageProcesser:
-    return ShortMessageProcesser(
+async def sm_processer() -> ShortMessageProcessor:
+    return ShortMessageProcessor(
         {"data_coding_overrides": {"OCTET_UNSPECIFIED": "ascii"}}
     )
 
@@ -371,7 +371,7 @@ async def test_delivery_report_none(dr_processer: DeliveryReportProcesser):
     assert event is None
 
 
-async def test_short_message(sm_processer: ShortMessageProcesser):
+async def test_short_message(sm_processer: ShortMessageProcessor):
     """
     Normal short message should return the equivalent Message
     """
@@ -390,7 +390,7 @@ async def test_short_message(sm_processer: ShortMessageProcesser):
     assert message.transport_type == TransportType.SMS
 
 
-async def test_short_message_codec_override(sm_processer: ShortMessageProcesser):
+async def test_short_message_codec_override(sm_processer: ShortMessageProcessor):
     """
     If the codec has been overwritten in the config, then we should use that
     """
@@ -409,7 +409,7 @@ async def test_short_message_codec_override(sm_processer: ShortMessageProcesser)
     assert message.transport_type == TransportType.SMS
 
 
-async def test_short_message_message_payload(sm_processer: ShortMessageProcesser):
+async def test_short_message_message_payload(sm_processer: ShortMessageProcessor):
     """
     We should still extract the message if it's in the message payload field
     """
@@ -428,7 +428,7 @@ async def test_short_message_message_payload(sm_processer: ShortMessageProcesser
     assert message.transport_type == TransportType.SMS
 
 
-async def test_short_message_extract_multipart(sm_processer: ShortMessageProcesser):
+async def test_short_message_extract_multipart(sm_processer: ShortMessageProcessor):
     """
     If it's a part of a multipart message, should return a tuple representing the
     extracted multipart parameters, otherwise return None
@@ -459,7 +459,7 @@ async def test_short_message_extract_multipart(sm_processer: ShortMessageProcess
     assert sm_processer._extract_multipart(pdu) is None
 
 
-async def test_short_message_multipart(sm_processer: ShortMessageProcesser):
+async def test_short_message_multipart(sm_processer: ShortMessageProcessor):
     """
     Multipart messages should be combined and returned
     """
