@@ -426,3 +426,54 @@ async def test_short_message_message_payload(sm_processer: ShortMessageProcesser
     assert message.from_addr == "27820001001"
     assert message.to_addr == "123456"
     assert message.transport_type == TransportType.SMS
+
+
+async def test_short_message_extract_multipart(sm_processer: ShortMessageProcesser):
+    """
+    If it's a part of a multipart message, should return a tuple representing the
+    extracted multipart parameters, otherwise return None
+    """
+    # Optional params
+    pdu = DeliverSM(
+        short_message=b"part1",
+        sar_msg_ref_num=3,
+        sar_total_segments=2,
+        sar_segment_seqnum=1,
+    )
+    assert sm_processer._extract_multipart(pdu) == (3, 2, 1, b"part1")
+
+    # No short_message or SAR params
+    pdu = DeliverSM(short_message=None)
+    assert sm_processer._extract_multipart(pdu) is None
+
+    # CSM
+    pdu = DeliverSM(short_message=b"\x05\x00\x03\x03\x02\x01part1")
+    assert sm_processer._extract_multipart(pdu) == (3, 2, 1, b"part1")
+
+    # CSM16
+    pdu = DeliverSM(short_message=b"\x06\x08\x04\x01\x01\x02\x01part1")
+    assert sm_processer._extract_multipart(pdu) == (257, 2, 1, b"part1")
+
+    # Single part message
+    pdu = DeliverSM(short_message=b"test message")
+    assert sm_processer._extract_multipart(pdu) is None
+
+
+async def test_short_message_multipart(sm_processer: ShortMessageProcesser):
+    """
+    Multipart messages should be combined and returned
+    """
+    pdu = DeliverSM(
+        short_message=b"part1",
+        sar_msg_ref_num=3,
+        sar_total_segments=2,
+        sar_segment_seqnum=1,
+        source_addr=b"27820001001",
+        destination_addr=b"123456",
+        data_coding=DataCoding(),
+    )
+    msg = await sm_processer.handle_deliver_sm(pdu)
+    assert msg is not None
+    assert msg.content == "part1"
+    assert msg.from_addr == "27820001001"
+    assert msg.to_addr == "123456"

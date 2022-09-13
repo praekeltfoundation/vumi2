@@ -1,7 +1,7 @@
 import re
 from enum import Enum
 from logging import getLogger
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import cattrs
 from attrs import Factory, define
@@ -94,6 +94,8 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     def _get_msg_length(self, split_msg=False) -> int:
         # From https://www.twilio.com/docs/glossary/what-sms-character-limit
+        # Also in 3GPP TS 23.040 version 16.0.0 Release 16 , page 77, section 9.2.3.24.1
+        # https://www.etsi.org/deliver/etsi_ts/123000_123099/123040/16.00.00_60/ts_123040v160000p.pdf
         if self.config.data_coding in (
             DataCodingDefault.SMSC_DEFAULT_ALPHABET,
             DataCodingDefault.IA5_ASCII,
@@ -385,6 +387,14 @@ class ShortMessageProcesser(ShortMessageProcesserBase):
     def __init__(self, config: dict) -> None:
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
 
+    def _decode_text(self, text: bytes, data_coding: DataCoding) -> str:
+        data_coding = data_coding.schemeData.name
+        try:
+            codec = self.config.data_coding_overrides[data_coding]
+        except KeyError:
+            codec = DataCodingCodecs[data_coding].value
+        return text.decode(codec)
+
     def _get_text(self, pdu: DeliverSM) -> str:
         message_payload = pdu.params.get("message_payload")
         if message_payload is not None:
@@ -392,14 +402,9 @@ class ShortMessageProcesser(ShortMessageProcesserBase):
         else:
             short_message = pdu.params["short_message"]
 
-        data_coding = pdu.params["data_coding"].schemeData.name
-        try:
-            codec = self.config.data_coding_overrides[data_coding]
-        except KeyError:
-            codec = DataCodingCodecs[data_coding].value
-        return short_message.decode(codec)
+        return self._decode_text(short_message, pdu.params["data_coding"])
 
-    async def _handle_short_message(self, pdu: DeliverSM) -> Message:
+    def _handle_short_message(self, pdu: DeliverSM) -> Message:
         """
         Single part short message
         """
@@ -412,9 +417,81 @@ class ShortMessageProcesser(ShortMessageProcesserBase):
             content=self._get_text(pdu),
         )
 
+    def _extract_multipart(
+        self, pdu: DeliverSM
+    ) -> Optional[Tuple[int, int, int, bytes]]:
+        """
+        Tries to extract the multipart data from the PDU, using optional params, or UDH
+        CSM or CSM16.
+
+        If no multipart data can be extracted, returns None, otherwise returns a tuple
+        of reference_number, total_number, part_number, part_message.
+        """
+        # Optional params
+        reference_number = pdu.params.get("sar_msg_ref_num")
+        total_number = pdu.params.get("sar_total_segments")
+        part_number = pdu.params.get("sar_segment_seqnum")
+        short_message = pdu.params["short_message"]
+        if all(i is not None for i in (reference_number, total_number, part_number)):
+            return reference_number, total_number, part_number, short_message
+
+        if short_message is None:
+            return None
+
+        # From 3GPP TS 23.040 version 16.0.0 Release 16
+        # https://www.etsi.org/deliver/etsi_ts/123000_123099/123040/16.00.00_60/ts_123040v160000p.pdf
+        # Page 76
+
+        # CSM
+        if len(short_message) >= 6 and short_message[:3] == b"\x05\x00\x03":
+            reference_number = int.from_bytes(short_message[3:4], "big")
+            total_number = int.from_bytes(short_message[4:5], "big")
+            part_number = int.from_bytes(short_message[5:6], "big")
+            if total_number >= 1 and 1 <= part_number <= total_number:
+                part_message = short_message[6:]
+                return reference_number, total_number, part_number, part_message
+
+        # CSM16
+        if len(short_message) >= 7 and short_message[:3] == b"\x06\x08\x04":
+            reference_number = int.from_bytes(short_message[3:5], "big")
+            total_number = int.from_bytes(short_message[5:6], "big")
+            part_number = int.from_bytes(short_message[6:7], "big")
+            if total_number >= 1 and 1 <= part_number <= total_number:
+                part_message = short_message[7:]
+                return reference_number, total_number, part_number, part_message
+
+        return None
+
+    async def _handle_multipart_message(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Message]]:
+        """
+        Tries to handle the message as a multipart message.
+
+        Returns a Tuple of whether the PDU was handled, and an optional message if we
+        have all the message parts
+        """
+        extracted = self._extract_multipart(pdu)
+        if extracted is None:
+            return False, None
+        # TODO: combine parts into single message
+        else:
+            _, _, _, content = extracted
+            return True, Message(
+                to_addr=pdu.params["destination_addr"].decode(),
+                from_addr=pdu.params["source_addr"].decode(),
+                # The transport needs to fill this in
+                transport_name="",
+                transport_type=TransportType.SMS,
+                content=self._decode_text(content, pdu.params["data_coding"]),
+            )
+
     async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
         """
         Processes the DeliverSM pdu, and returns a Message if one was decoded, else
         returns None.
         """
-        return await self._handle_short_message(pdu)
+        handled, msg = await self._handle_multipart_message(pdu)
+        if handled:
+            return msg
+        return self._handle_short_message(pdu)
