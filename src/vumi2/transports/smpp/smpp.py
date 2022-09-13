@@ -63,7 +63,9 @@ class SmppTransceiverTransport(BaseWorker):
             self.config.sm_processor_config, self.smpp_cache
         )
         dr_processor_class = class_from_string(config.dr_processor_class)
-        self.dr_processor = dr_processor_class(config.dr_processor_config)
+        self.dr_processor = dr_processor_class(
+            config.dr_processor_config, self.smpp_cache
+        )
 
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any

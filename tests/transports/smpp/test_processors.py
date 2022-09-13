@@ -44,8 +44,8 @@ async def submit_sm_processor(
 
 
 @pytest.fixture
-async def dr_processer() -> DeliveryReportProcesser:
-    return DeliveryReportProcesser({})
+async def dr_processer(smpp_cache) -> DeliveryReportProcesser:
+    return DeliveryReportProcesser({}, smpp_cache)
 
 
 @pytest.fixture
@@ -286,24 +286,32 @@ async def test_submit_sm_msg_length(submit_sm_processor: SubmitShortMessageProce
     assert submit_sm_processor._get_msg_length(split_msg=True) == 134
 
 
-async def test_delivery_report_optional_params(dr_processer: DeliveryReportProcesser):
+async def test_delivery_report_optional_params(
+    dr_processer: DeliveryReportProcesser, smpp_cache: InMemorySmppCache
+):
     """
     If there is a delivery report in the optional params, return an Event of it
     """
-    event = await dr_processer.handle_deliver_sm(
+    await smpp_cache.store_smpp_message_id("messageid", "abc")
+    handled, event = await dr_processer.handle_deliver_sm(
         DeliverSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
     )
+    assert handled is True
     assert event is not None
+    assert event.user_message_id == "messageid"
     assert event.event_type == EventType.DELIVERY_REPORT
     assert event.delivery_status == DeliveryStatus.FAILED
     assert event.transport_metadata == {"smpp_delivery_status": "UNDELIVERABLE"}
 
 
-async def test_delivery_report_esm_class(dr_processer: DeliveryReportProcesser):
+async def test_delivery_report_esm_class(
+    dr_processer: DeliveryReportProcesser, smpp_cache
+):
     """
     If the ESM class says this is a delivery report, return an Event of it
     """
-    event = await dr_processer.handle_deliver_sm(
+    await smpp_cache.store_smpp_message_id("messageid", "0123456789")
+    handled, event = await dr_processer.handle_deliver_sm(
         DeliverSM(
             esm_class=EsmClass(
                 EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
@@ -314,18 +322,21 @@ async def test_delivery_report_esm_class(dr_processer: DeliveryReportProcesser):
             ),
         )
     )
+    assert handled is True
     assert event is not None
+    assert event.user_message_id == "messageid"
     assert event.event_type == EventType.DELIVERY_REPORT
     assert event.delivery_status == DeliveryStatus.DELIVERED
     assert event.transport_metadata == {"smpp_delivery_status": "DELIVRD"}
 
 
-async def test_delivery_report_body(dr_processer: DeliveryReportProcesser):
+async def test_delivery_report_body(dr_processer: DeliveryReportProcesser, smpp_cache):
     """
     If the body contains a delivery report, return an Event of it, even if the esm_class
     isn't one of a delivery report
     """
-    event = await dr_processer.handle_deliver_sm(
+    await smpp_cache.store_smpp_message_id("messageid", "0123456789")
+    handled, event = await dr_processer.handle_deliver_sm(
         DeliverSM(
             esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
             short_message=(
@@ -334,6 +345,7 @@ async def test_delivery_report_body(dr_processer: DeliveryReportProcesser):
             ),
         )
     )
+    assert handled is True
     assert event is not None
     assert event.event_type == EventType.DELIVERY_REPORT
     assert event.delivery_status == DeliveryStatus.FAILED
@@ -347,7 +359,7 @@ async def test_invalid_delivery_report_esm_class(
     If the ESM class says this is a delivery report, and we can't decode the body,
     then log a warning and don't return any event
     """
-    event = await dr_processer.handle_deliver_sm(
+    handled, event = await dr_processer.handle_deliver_sm(
         DeliverSM(
             esm_class=EsmClass(
                 EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
@@ -355,6 +367,7 @@ async def test_invalid_delivery_report_esm_class(
             short_message=b"not a delivery report",
         )
     )
+    assert handled is False
     assert event is None
     [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
     assert (
@@ -368,13 +381,31 @@ async def test_delivery_report_none(dr_processer: DeliveryReportProcesser):
     """
     If it is not a delivery report, don't return any Event
     """
-    event = await dr_processer.handle_deliver_sm(
+    handled, event = await dr_processer.handle_deliver_sm(
         DeliverSM(
             esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
             short_message=b"not a delivery report",
         )
     )
+    assert handled is False
     assert event is None
+
+
+async def test_delivery_report_no_cache(dr_processer: DeliveryReportProcesser, caplog):
+    """
+    If there isn't a message ID in the cache, then we cannot send an event, so log
+    """
+    handled, event = await dr_processer.handle_deliver_sm(
+        DeliverSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
+    )
+    assert handled is True
+    assert event is None
+    [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
+    assert (
+        log.getMessage()
+        == "Unable to find message ID abc in SMPP cache, not sending status update"
+        " UNDELIVERABLE"
+    )
 
 
 async def test_short_message(sm_processer: ShortMessageProcessor):

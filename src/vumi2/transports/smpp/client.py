@@ -226,9 +226,7 @@ class EsmeClient:
     async def send_vumi_message(self, message: Message):
         # If we encounter an error in one of the segments of a multipart message,
         # immediately send a nack and stop trying with the rest
-        pdus = await self.submit_sm_processor.handle_outbound_message(message)
-        smpp_message_id = ""
-        for pdu in pdus:
+        for pdu in await self.submit_sm_processor.handle_outbound_message(message):
             response = await self.send_pdu(pdu, check_response=False)
 
             # We will always get a response from a request
@@ -244,12 +242,11 @@ class EsmeClient:
                     nack_reason=nack_reason,
                 )
                 await self.send_message_channel.send(event)
-                await self.smpp_cache.delete_smpp_message_id(smpp_message_id)
                 return
 
             smpp_message_id = response.params["message_id"]
             await self.smpp_cache.store_smpp_message_id(
-                len(pdus), message.message_id, smpp_message_id
+                message.message_id, smpp_message_id
             )
 
         event = Event(
@@ -264,9 +261,10 @@ class EsmeClient:
         If the pdu is a delivery report, extracts that and sends an event if relevant,
         otherwise extracts the inbound message and sends that
         """
-        event = await self.dr_processor.handle_deliver_sm(pdu)
-        if event is not None:
-            await self.send_message_channel.send(event)
+        handled, event = await self.dr_processor.handle_deliver_sm(pdu)
+        if handled:
+            if event:
+                await self.send_message_channel.send(event)
         else:
             msg = await self.sm_processer.handle_deliver_sm(pdu)
             if msg:

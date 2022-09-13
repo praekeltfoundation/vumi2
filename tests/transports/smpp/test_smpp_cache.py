@@ -23,50 +23,34 @@ async def test_in_memory_store_multipart(memory_smpp_cache: InMemorySmppCache):
 
 async def test_in_memory_delivery_report(memory_smpp_cache: InMemorySmppCache):
     """
-    Should keep track of the smpp message id, vumi message id, and delivery reports,
-    to know when we've seen them all and can send a success delivery report
+    Should keep track of the vumi message id for each of the smpp message IDs
     """
-    await memory_smpp_cache.store_smpp_message_id(2, "vumi", "smpp1")
-    # Haven't seen all the parts yet
-    assert await memory_smpp_cache.seen_success_delivery_report("smpp1") is False
-
-    # If it's not in the cache, no error
-    await memory_smpp_cache.seen_success_delivery_report("invalid")
-
-    await memory_smpp_cache.store_smpp_message_id(2, "vumi", "smpp2")
-    assert await memory_smpp_cache.seen_success_delivery_report("smpp2") is True
+    await memory_smpp_cache.store_smpp_message_id("vumi", "smpp1")
+    assert await memory_smpp_cache.get_smpp_message_id("smpp1") == "vumi"
 
 
 async def test_in_memory_delete_smpp_message_id(memory_smpp_cache: InMemorySmppCache):
     """
-    Deleting should also remove all other related message IDs
+    Deleting should remove from cache
     """
-    await memory_smpp_cache.store_smpp_message_id(2, "vumi", "smpp1")
-    await memory_smpp_cache.store_smpp_message_id(2, "vumi", "smpp2")
-    assert "smpp1" in memory_smpp_cache._smpp_msg_id
-    assert "smpp2" in memory_smpp_cache._smpp_msg_id
-    assert "vumi" in memory_smpp_cache._vumi_msg_dr
-
+    await memory_smpp_cache.store_smpp_message_id("vumi", "smpp1")
     await memory_smpp_cache.delete_smpp_message_id("smpp1")
-    assert "smpp1" not in memory_smpp_cache._smpp_msg_id
-    assert "smpp2" not in memory_smpp_cache._smpp_msg_id
-    assert "vumi" not in memory_smpp_cache._vumi_msg_dr
+    assert await memory_smpp_cache.get_smpp_message_id("smpp1") is None
+    # Deleting ID that doesn't exist shouldn't return error
+    await memory_smpp_cache.delete_smpp_message_id("invalid")
 
 
 async def test_in_memory_remove_expired(memory_smpp_cache: InMemorySmppCache):
     """
     If items are old, they should be removed from the cache
     """
-    await memory_smpp_cache.store_smpp_message_id(1, "vumi2", "delete")
-    await memory_smpp_cache.store_smpp_message_id(1, "vumi1", "keep")
+    await memory_smpp_cache.store_smpp_message_id("vumi2", "delete")
+    await memory_smpp_cache.store_smpp_message_id("vumi1", "keep")
     memory_smpp_cache._smpp_msg_id["delete"] = (
         "vumi2",
-        1,
         datetime.now() - timedelta(hours=25),
     )
     await memory_smpp_cache._remove_expired()
 
-    assert "vumi1" in memory_smpp_cache._vumi_msg_dr
-    assert "vumi2" not in memory_smpp_cache._vumi_msg_dr
     assert "keep" in memory_smpp_cache._smpp_msg_id
     assert "delete" not in memory_smpp_cache._smpp_msg_id

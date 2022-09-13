@@ -242,7 +242,7 @@ class DeliveryReportProcesserBase:  # pragma: no cover
     def __init__(self, config: dict) -> None:
         ...
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Event]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
         ...
 
 
@@ -286,13 +286,14 @@ class DeliveryReportProcessorConfig:
 class DeliveryReportProcesser(DeliveryReportProcesserBase):
     CONFIG_CLASS = DeliveryReportProcessorConfig
 
-    def __init__(self, config: dict) -> None:
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
         self.config = cattrs.structure(config, self.CONFIG_CLASS)
         self.regex = re.compile(self.config.regex)
+        self.smpp_cache = smpp_cache
 
     async def _handle_deliver_sm_optional_params(
         self, pdu: DeliverSM
-    ) -> Optional[Event]:
+    ) -> Tuple[bool, Optional[Event]]:
         """
         Check if this is a delivery report using the optional PDU params.
 
@@ -301,12 +302,14 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         receipted_message_id = pdu.params.get("receipted_message_id")
         message_state = pdu.params.get("message_state")
         if receipted_message_id is None or message_state is None:
-            return None
+            return False, None
         return await self._create_event(
             receipted_message_id.decode(), message_state.decode()
         )
 
-    async def _handle_deliver_sm_esm_class(self, pdu: DeliverSM) -> Optional[Event]:
+    async def _handle_deliver_sm_esm_class(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Event]]:
         """
         Check if this is a delivery report by looking at the esm_class.
 
@@ -315,7 +318,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         esm_class = pdu.params["esm_class"]
         # Any type other than default is delivery report
         if esm_class.type == EsmClassType.DEFAULT:
-            return None
+            return False, None
 
         content = pdu.params["short_message"].decode()
         match = self.regex.match(content)
@@ -326,12 +329,14 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
                 esm_class.type.name,
                 content,
             )
-            return None
+            return False, None
 
         fields = match.groupdict()
         return await self._create_event(fields["id"], fields["stat"])
 
-    async def _handle_deliver_sm_body(self, pdu: DeliverSM) -> Optional[Event]:
+    async def _handle_deliver_sm_body(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Event]]:
         """
         Try to decode the body as a delivery report, even if the esm_class doesn't
         say it's a delivery report
@@ -339,21 +344,34 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         content = pdu.params["short_message"].decode()
         match = self.regex.match(content)
         if not match:
-            return None
+            return False, None
 
         fields = match.groupdict()
         return await self._create_event(fields["id"], fields["stat"])
 
-    async def _create_event(self, smpp_message_id: str, smpp_status: str) -> Event:
-        status = self.config.status_mapping.get(smpp_status, "pending")
-        return Event(
-            user_message_id="",  # TODO
+    async def _create_event(
+        self, smpp_message_id: str, smpp_status: str
+    ) -> Tuple[bool, Optional[Event]]:
+        status = DeliveryStatus(self.config.status_mapping.get(smpp_status, "pending"))
+        vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
+        if not vumi_message_id:
+            logger.warning(
+                "Unable to find message ID %s in SMPP cache, not sending status"
+                " update %s",
+                smpp_message_id,
+                smpp_status,
+            )
+            return True, None
+        if status in (DeliveryStatus.DELIVERED, DeliveryStatus.FAILED):
+            await self.smpp_cache.delete_smpp_message_id(smpp_message_id)
+        return True, Event(
+            user_message_id=vumi_message_id,
             event_type=EventType.DELIVERY_REPORT,
-            delivery_status=DeliveryStatus(status),
+            delivery_status=status,
             transport_metadata={"smpp_delivery_status": smpp_status},
         )
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Event]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
         """
         Try to handle the pdu as a delivery report. Returns an equivalent Event if
         handled, or None if not.
@@ -363,10 +381,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             self._handle_deliver_sm_esm_class,
             self._handle_deliver_sm_body,
         ):
-            event = await func(pdu)
-            if event is not None:
-                return event
-        return None
+            handled, event = await func(pdu)
+            if handled:
+                return handled, event
+        return False, None
 
 
 class ShortMessageProcesserBase:  # pragma: no cover

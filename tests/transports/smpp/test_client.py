@@ -110,8 +110,8 @@ async def sm_processor(smpp_cache):
 
 
 @fixture
-async def dr_processor():
-    return DeliveryReportProcesser({})
+async def dr_processor(smpp_cache):
+    return DeliveryReportProcesser({}, smpp_cache)
 
 
 @fixture
@@ -360,13 +360,17 @@ async def test_handle_deliver_sm(
 
 
 async def test_handle_deliver_sm_delivery_report(
-    client: EsmeClient, smsc: FakeSmsc, receive_message_channel
+    client: EsmeClient,
+    smsc: FakeSmsc,
+    receive_message_channel,
+    smpp_cache: InMemorySmppCache,
 ):
     """
     DeliverSM PDU creates an event on delivery report
     """
     await smsc.start_and_bind(client)
 
+    await smpp_cache.store_smpp_message_id("vumimsgid", "0123456789")
     pdu = DeliverSM(
         esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
         short_message=(
@@ -378,6 +382,7 @@ async def test_handle_deliver_sm_delivery_report(
     await smsc.send_pdu(pdu)
 
     event = await receive_message_channel.receive()
+    assert event.user_message_id == "vumimsgid"
     assert event.event_type == EventType.DELIVERY_REPORT
     assert event.delivery_status == DeliveryStatus.FAILED
     assert event.transport_metadata == {"smpp_delivery_status": "REJECTD"}

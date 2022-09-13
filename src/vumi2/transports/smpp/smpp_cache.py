@@ -15,14 +15,14 @@ class BaseSmppCache:  # pragma: no cover
         ...
 
     async def store_smpp_message_id(
-        self, num_parts: int, vumi_message_id: str, smpp_message_id: str
+        self, vumi_message_id: str, smpp_message_id: str
     ) -> None:
         ...
 
-    async def delete_smpp_message_id(self, smpp_message_id: str):
+    async def delete_smpp_message_id(self, smpp_message_id: str) -> None:
         ...
 
-    async def seen_success_delivery_report(self, smpp_message_id) -> bool:
+    async def get_smpp_message_id(self, smpp_message_id: str) -> Optional[str]:
         ...
 
 
@@ -35,8 +35,7 @@ class InMemorySmppCache(BaseSmppCache):
     def __init__(self, config: dict) -> None:
         self.config = cattrs.structure(config, InMemorySmppCacheConfig)
         self._multipart: Dict[Tuple[int, int], Dict[int, str]] = {}
-        self._smpp_msg_id: Dict[str, Tuple[str, int, datetime]] = {}
-        self._vumi_msg_dr: Dict[str, Dict[str, bool]] = {}
+        self._smpp_msg_id: Dict[str, Tuple[str, datetime]] = {}
 
     async def store_multipart(
         self, ref_num: int, tot_num: int, part_num: int, content: str
@@ -57,7 +56,7 @@ class InMemorySmppCache(BaseSmppCache):
     async def _remove_expired(self):
         now = datetime.now()
         to_remove = []
-        for key, (_, _, timestamp) in self._smpp_msg_id.items():
+        for key, (_, timestamp) in self._smpp_msg_id.items():
             if (now - timestamp).total_seconds() >= self.config.timeout:
                 to_remove.append(key)
             else:
@@ -68,47 +67,29 @@ class InMemorySmppCache(BaseSmppCache):
             await self.delete_smpp_message_id(key)
 
     async def store_smpp_message_id(
-        self, num_parts: int, vumi_message_id: str, smpp_message_id: str
+        self, vumi_message_id: str, smpp_message_id: str
     ) -> None:
         """
         Stores the mapping between one or many smpp message IDs and the vumi message ID
         """
         await self._remove_expired()
-        self._smpp_msg_id[smpp_message_id] = (
-            vumi_message_id,
-            num_parts,
-            datetime.now(),
-        )
-        self._vumi_msg_dr.setdefault(vumi_message_id, {})[smpp_message_id] = False
+        self._smpp_msg_id[smpp_message_id] = (vumi_message_id, datetime.now())
 
-    async def delete_smpp_message_id(self, smpp_message_id: str):
+    async def delete_smpp_message_id(self, smpp_message_id: str) -> None:
         """
-        Removes the SMPP message ID from the cache, and all other related message ids
-        for that message
+        Removes the SMPP message ID from the cache
         """
         try:
-            (vumi_msg_id, _, _) = self._smpp_msg_id.pop(smpp_message_id)
-            vumi_msg_dr = self._vumi_msg_dr.pop(vumi_msg_id)
-            for smpp_msg_id in vumi_msg_dr.keys():
-                self._smpp_msg_id.pop(smpp_msg_id, None)
+            self._smpp_msg_id.pop(smpp_message_id)
         except KeyError:
             return
 
-    async def seen_success_delivery_report(self, smpp_message_id) -> bool:
+    async def get_smpp_message_id(self, smpp_message_id: str) -> Optional[str]:
         """
-        Called when we've received a success delivery report for this message_id.
-
-        Returns True and removes from the cache if we've have success delivery reports
-        for all of the message parts, or False if we haven't
+        Returns the vumi message ID for the given smpp message id
         """
-        await self._remove_expired()
         try:
-            vumi_message_id, num_parts, _ = self._smpp_msg_id[smpp_message_id]
-            parts = self._vumi_msg_dr[vumi_message_id]
-            parts[smpp_message_id] = True
-            if sum(1 for v in parts.values() if v) == num_parts:
-                await self.delete_smpp_message_id(smpp_message_id)
-                return True
+            vumi_message_id, _ = self._smpp_msg_id[smpp_message_id]
+            return vumi_message_id
         except KeyError:
-            pass
-        return False
+            return None
