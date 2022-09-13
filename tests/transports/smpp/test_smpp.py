@@ -61,7 +61,6 @@ async def test_outbound_message(
     received_msg = Event()
 
     async def handler(msg):
-        print(msg)
         msgs.append(msg)
         received_msg.set()
 

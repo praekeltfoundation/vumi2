@@ -25,8 +25,13 @@ from trio import (
 
 from vumi2.messages import Event, EventType, Message
 
-from .processors import ShortMessageProcesserBase, SubmitShortMessageProcesserBase
+from .processors import (
+    DeliveryReportProcesserBase,
+    ShortMessageProcesserBase,
+    SubmitShortMessageProcesserBase,
+)
 from .sequencers import Sequencer
+from .smpp_cache import BaseSmppCache
 
 logger = getLogger(__name__)
 
@@ -56,16 +61,20 @@ class EsmeClient:
         stream: SocketStream,
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
+        smpp_cache: BaseSmppCache,
         submit_sm_processor: SubmitShortMessageProcesserBase,
         sm_processer: ShortMessageProcesserBase,
+        dr_processor: DeliveryReportProcesserBase,
         send_message_channel: MemorySendChannel,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
         self.sequencer = sequencer
+        self.smpp_cache = smpp_cache
         self.submit_sm_processor = submit_sm_processor
         self.sm_processer = sm_processer
+        self.dr_processor = dr_processor
         self.send_message_channel = send_message_channel
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
@@ -217,7 +226,9 @@ class EsmeClient:
     async def send_vumi_message(self, message: Message):
         # If we encounter an error in one of the segments of a multipart message,
         # immediately send a nack and stop trying with the rest
-        for pdu in await self.submit_sm_processor.handle_outbound_message(message):
+        pdus = await self.submit_sm_processor.handle_outbound_message(message)
+        smpp_message_id = ""
+        for pdu in pdus:
             response = await self.send_pdu(pdu, check_response=False)
 
             # We will always get a response from a request
@@ -233,7 +244,13 @@ class EsmeClient:
                     nack_reason=nack_reason,
                 )
                 await self.send_message_channel.send(event)
+                await self.smpp_cache.delete_smpp_message_id(smpp_message_id)
                 return
+
+            smpp_message_id = response.params["message_id"]
+            await self.smpp_cache.store_smpp_message_id(
+                len(pdus), message.message_id, smpp_message_id
+            )
 
         event = Event(
             user_message_id=message.message_id,
@@ -244,9 +261,14 @@ class EsmeClient:
 
     async def handle_deliver_sm(self, pdu: DeliverSM):
         """
-        Extracts the inbound message from the PDU, sends it, and responds with ROK
+        If the pdu is a delivery report, extracts that and sends an event if relevant,
+        otherwise extracts the inbound message and sends that
         """
-        msg = await self.sm_processer.handle_deliver_sm(pdu)
-        if msg:
-            await self.send_message_channel.send(msg)
+        event = await self.dr_processor.handle_deliver_sm(pdu)
+        if event is not None:
+            await self.send_message_channel.send(event)
+        else:
+            msg = await self.sm_processer.handle_deliver_sm(pdu)
+            if msg:
+                await self.send_message_channel.send(msg)
         await self.send_pdu(DeliverSMResp(seqNum=pdu.seqNum))

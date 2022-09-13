@@ -13,13 +13,20 @@ from smpp.pdu.operations import (
     SubmitSM,
     SubmitSMResp,
 )
-from smpp.pdu.pdu_types import CommandStatus, DataCoding
+from smpp.pdu.pdu_types import (
+    CommandStatus,
+    DataCoding,
+    EsmClass,
+    EsmClassMode,
+    EsmClassType,
+)
 from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
-from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
 from vumi2.transports.smpp.processors import (
+    DeliveryReportProcesser,
     ShortMessageProcessor,
     SubmitShortMessageProcessor,
 )
@@ -103,6 +110,11 @@ async def sm_processor(smpp_cache):
 
 
 @fixture
+async def dr_processor():
+    return DeliveryReportProcesser({})
+
+
+@fixture
 async def message_channel():
     return open_memory_channel(1)
 
@@ -122,8 +134,10 @@ async def client(
     nursery,
     client_stream,
     sequencer,
+    smpp_cache,
     submit_sm_processor,
     sm_processor,
+    dr_processor,
     send_message_channel,
 ) -> EsmeClient:
     """An EsmeClient with default config"""
@@ -133,8 +147,10 @@ async def client(
         client_stream,
         config,
         sequencer,
+        smpp_cache,
         submit_sm_processor,
         sm_processor,
+        dr_processor,
         send_message_channel,
     )
 
@@ -337,6 +353,34 @@ async def test_handle_deliver_sm(
     assert msg.content == "test message"
     assert msg.to_addr == "123456"
     assert msg.from_addr == "27820001001"
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, DeliverSMResp)
+    assert resp.seqNum == pdu.seqNum
+
+
+async def test_handle_deliver_sm_delivery_report(
+    client: EsmeClient, smsc: FakeSmsc, receive_message_channel
+):
+    """
+    DeliverSM PDU creates an event on delivery report
+    """
+    await smsc.start_and_bind(client)
+
+    pdu = DeliverSM(
+        esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
+        short_message=(
+            b"id:0123456789 sub:001 dlvrd:001 submit date:2209121354 done"
+            b" date:2209121454 stat:REJECTD Text:01234567890123456789"
+        ),
+    )
+
+    await smsc.send_pdu(pdu)
+
+    event = await receive_message_channel.receive()
+    assert event.event_type == EventType.DELIVERY_REPORT
+    assert event.delivery_status == DeliveryStatus.FAILED
+    assert event.transport_metadata == {"smpp_delivery_status": "REJECTD"}
 
     resp = await smsc.receive_pdu()
     assert isinstance(resp, DeliverSMResp)
