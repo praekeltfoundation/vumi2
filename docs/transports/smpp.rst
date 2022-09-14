@@ -187,7 +187,6 @@ The transport is not yet complete, the following things need to still be done
 - Support receiver and transmitter binds, not just transceiver.
 - Better config for processors
 - Outbound messages: support USSD
-- Support inbound SMPP commands for inbound messages and delivery reports
 - Support all other SMPP inbound commands
 - Timeout for binding
 - Timeout for enquire link
