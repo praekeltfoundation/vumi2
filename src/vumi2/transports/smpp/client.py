@@ -11,6 +11,8 @@ from smpp.pdu.operations import (
     GenericNack,
     PDURequest,
     PDUResponse,
+    Unbind,
+    UnbindResp,
 )
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
@@ -45,6 +47,10 @@ class EsmeClientError(Exception):
 
 class EsmeResponseStatusError(EsmeClientError):
     """Received a response PDU with non-OK status"""
+
+
+class SmscUnbind(EsmeClientError):
+    """Server has requested unbind"""
 
 
 class EsmeClient:
@@ -270,3 +276,10 @@ class EsmeClient:
             if msg:
                 await self.send_message_channel.send(msg)
         await self.send_pdu(DeliverSMResp(seqNum=pdu.seqNum))
+
+    async def handle_unbind(self, pdu: Unbind):
+        """
+        Server is requesting to unbind, return response and raise error
+        """
+        await self.send_pdu(UnbindResp(seqNum=pdu.seqNum))
+        raise SmscUnbind()
