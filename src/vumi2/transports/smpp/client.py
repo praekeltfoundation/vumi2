@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Union, cast
 from smpp.pdu.constants import command_status_name_map, command_status_value_map
 from smpp.pdu.operations import (
     BindTransceiver,
+    DeliverSM,
+    DeliverSMResp,
     EnquireLink,
     GenericNack,
     PDURequest,
@@ -23,8 +25,13 @@ from trio import (
 
 from vumi2.messages import Event, EventType, Message
 
-from .processors import SubmitShortMessageProcesserBase
+from .processors import (
+    DeliveryReportProcesserBase,
+    ShortMessageProcesserBase,
+    SubmitShortMessageProcesserBase,
+)
 from .sequencers import Sequencer
+from .smpp_cache import BaseSmppCache
 
 logger = getLogger(__name__)
 
@@ -54,14 +61,20 @@ class EsmeClient:
         stream: SocketStream,
         config: "SmppTransceiverTransportConfig",
         sequencer: Sequencer,
+        smpp_cache: BaseSmppCache,
         submit_sm_processor: SubmitShortMessageProcesserBase,
+        sm_processer: ShortMessageProcesserBase,
+        dr_processor: DeliveryReportProcesserBase,
         send_message_channel: MemorySendChannel,
     ) -> None:
         self.config = config
         self.stream = stream
         self.nursery = nursery
         self.sequencer = sequencer
+        self.smpp_cache = smpp_cache
         self.submit_sm_processor = submit_sm_processor
+        self.sm_processer = sm_processer
+        self.dr_processor = dr_processor
         self.send_message_channel = send_message_channel
         self.buffer = bytearray()
         self.responses: Dict[int, MemorySendChannel] = {}
@@ -231,9 +244,29 @@ class EsmeClient:
                 await self.send_message_channel.send(event)
                 return
 
+            smpp_message_id = response.params["message_id"]
+            await self.smpp_cache.store_smpp_message_id(
+                message.message_id, smpp_message_id
+            )
+
         event = Event(
             user_message_id=message.message_id,
             sent_message_id=message.message_id,
             event_type=EventType.ACK,
         )
         await self.send_message_channel.send(event)
+
+    async def handle_deliver_sm(self, pdu: DeliverSM):
+        """
+        If the pdu is a delivery report, extracts that and sends an event if relevant,
+        otherwise extracts the inbound message and sends that
+        """
+        handled, event = await self.dr_processor.handle_deliver_sm(pdu)
+        if handled:
+            if event:
+                await self.send_message_channel.send(event)
+        else:
+            msg = await self.sm_processer.handle_deliver_sm(pdu)
+            if msg:
+                await self.send_message_channel.send(msg)
+        await self.send_pdu(DeliverSMResp(seqNum=pdu.seqNum))

@@ -4,6 +4,8 @@ from pytest import fixture, raises
 from smpp.pdu.operations import (
     BindTransceiver,
     BindTransceiverResp,
+    DeliverSM,
+    DeliverSMResp,
     EnquireLink,
     EnquireLinkResp,
     GenericNack,
@@ -11,15 +13,26 @@ from smpp.pdu.operations import (
     SubmitSM,
     SubmitSMResp,
 )
-from smpp.pdu.pdu_types import CommandStatus
+from smpp.pdu.pdu_types import (
+    CommandStatus,
+    DataCoding,
+    EsmClass,
+    EsmClassMode,
+    EsmClassType,
+)
 from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
-from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
-from vumi2.transports.smpp.processors import SubmitShortMessageProcessor
+from vumi2.transports.smpp.processors import (
+    DeliveryReportProcesser,
+    ShortMessageProcessor,
+    SubmitShortMessageProcessor,
+)
 from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
+from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 from .helpers import FakeSmsc
 
@@ -82,8 +95,23 @@ async def sequencer():
 
 
 @fixture
+async def smpp_cache():
+    return InMemorySmppCache({})
+
+
+@fixture
 async def submit_sm_processor(sequencer):
     return SubmitShortMessageProcessor({}, sequencer)
+
+
+@fixture
+async def sm_processor(smpp_cache):
+    return ShortMessageProcessor({}, smpp_cache)
+
+
+@fixture
+async def dr_processor(smpp_cache):
+    return DeliveryReportProcesser({}, smpp_cache)
 
 
 @fixture
@@ -103,7 +131,14 @@ async def receive_message_channel(message_channel):
 
 @fixture
 async def client(
-    nursery, client_stream, sequencer, submit_sm_processor, send_message_channel
+    nursery,
+    client_stream,
+    sequencer,
+    smpp_cache,
+    submit_sm_processor,
+    sm_processor,
+    dr_processor,
+    send_message_channel,
 ) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
@@ -112,7 +147,10 @@ async def client(
         client_stream,
         config,
         sequencer,
+        smpp_cache,
         submit_sm_processor,
+        sm_processor,
+        dr_processor,
         send_message_channel,
     )
 
@@ -292,3 +330,63 @@ async def test_submit_sm_resp_nack(client: EsmeClient, receive_message_channel, 
     assert isinstance(event, Event)
     assert event.event_type == EventType.NACK
     assert event.nack_reason == "Message Length is invalid"
+
+
+async def test_handle_deliver_sm(
+    client: EsmeClient, smsc: FakeSmsc, receive_message_channel
+):
+    """
+    DeliverSM PDU creates an inbound message
+    """
+    await smsc.start_and_bind(client)
+
+    pdu = DeliverSM(
+        short_message=b"test message",
+        source_addr=b"27820001001",
+        destination_addr=b"123456",
+        data_coding=DataCoding(),
+    )
+
+    await smsc.send_pdu(pdu)
+
+    msg = await receive_message_channel.receive()
+    assert msg.content == "test message"
+    assert msg.to_addr == "123456"
+    assert msg.from_addr == "27820001001"
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, DeliverSMResp)
+    assert resp.seqNum == pdu.seqNum
+
+
+async def test_handle_deliver_sm_delivery_report(
+    client: EsmeClient,
+    smsc: FakeSmsc,
+    receive_message_channel,
+    smpp_cache: InMemorySmppCache,
+):
+    """
+    DeliverSM PDU creates an event on delivery report
+    """
+    await smsc.start_and_bind(client)
+
+    await smpp_cache.store_smpp_message_id("vumimsgid", "0123456789")
+    pdu = DeliverSM(
+        esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
+        short_message=(
+            b"id:0123456789 sub:001 dlvrd:001 submit date:2209121354 done"
+            b" date:2209121454 stat:REJECTD Text:01234567890123456789"
+        ),
+    )
+
+    await smsc.send_pdu(pdu)
+
+    event = await receive_message_channel.receive()
+    assert event.user_message_id == "vumimsgid"
+    assert event.event_type == EventType.DELIVERY_REPORT
+    assert event.delivery_status == DeliveryStatus.FAILED
+    assert event.transport_metadata == {"smpp_delivery_status": "REJECTD"}
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, DeliverSMResp)
+    assert resp.seqNum == pdu.seqNum

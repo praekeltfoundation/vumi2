@@ -1,25 +1,31 @@
+import re
 from enum import Enum
-from typing import List, Optional
+from logging import getLogger
+from typing import List, Optional, Tuple
 
 import cattrs
 from attrs import Factory, define
-from smpp.pdu.operations import PDU, SubmitSM
+from smpp.pdu.operations import PDU, DeliverSM, SubmitSM
 from smpp.pdu.pdu_types import (
     AddrNpi,
     AddrTon,
     DataCoding,
     DataCodingDefault,
+    EsmClassType,
     RegisteredDelivery,
     RegisteredDeliveryReceipt,
     RegisteredDeliverySmeOriginatedAcks,
 )
 
-from vumi2.messages import Message
+from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 
 from .codecs import register_codecs
 from .sequencers import Sequencer
+from .smpp_cache import BaseSmppCache
 
 register_codecs()
+
+logger = getLogger(__name__)
 
 
 class DataCodingCodecs(Enum):
@@ -89,6 +95,8 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     def _get_msg_length(self, split_msg=False) -> int:
         # From https://www.twilio.com/docs/glossary/what-sms-character-limit
+        # Also in 3GPP TS 23.040 version 16.0.0 Release 16 , page 77, section 9.2.3.24.1
+        # https://www.etsi.org/deliver/etsi_ts/123000_123099/123040/16.00.00_60/ts_123040v160000p.pdf
         if self.config.data_coding in (
             DataCodingDefault.SMSC_DEFAULT_ALPHABET,
             DataCodingDefault.IA5_ASCII,
@@ -228,3 +236,288 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
             ),
             **kwargs
         )
+
+
+class DeliveryReportProcesserBase:  # pragma: no cover
+    def __init__(self, config: dict) -> None:
+        ...
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
+        ...
+
+
+DELIVERY_REPORT_REGEX = (
+    r"id:(?P<id>[^ ]{,65})"
+    r"(?: +sub:(?P<sub>[^ ]+))?"
+    r"(?: +dlvrd:(?P<dlvrd>[^ ]+))?"
+    r"(?: +submit date:(?P<submit_date>\d*))?"
+    r"(?: +done date:(?P<done_date>\d*))?"
+    r" +stat:(?P<stat>[A-Z]{5,7})"
+    r"(?: +err:(?P<err>[^ ]+))?"
+    r" +[Tt]ext:(?P<text>.{,20})"
+    r".*"
+)
+
+DELIVERY_REPORT_STATUS_MAPPING = {
+    # SMPP `message_state` values:
+    "ENROUTE": "pending",
+    "DELIVERED": "delivered",
+    "EXPIRED": "failed",
+    "DELETED": "failed",
+    "UNDELIVERABLE": "failed",
+    "ACCEPTED": "delivered",
+    "UNKNOWN": "pending",
+    "REJECTED": "failed",
+    # From the most common regex-extracted format:
+    "DELIVRD": "delivered",
+    "REJECTD": "failed",
+    "FAILED": "failed",
+    # Currently we will accept this for Yo! TODO: investigate
+    "0": "delivered",
+}
+
+
+@define
+class DeliveryReportProcessorConfig:
+    regex: str = DELIVERY_REPORT_REGEX
+    status_mapping: dict = DELIVERY_REPORT_STATUS_MAPPING
+
+
+class DeliveryReportProcesser(DeliveryReportProcesserBase):
+    CONFIG_CLASS = DeliveryReportProcessorConfig
+
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
+        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.regex = re.compile(self.config.regex)
+        self.smpp_cache = smpp_cache
+
+    async def _handle_deliver_sm_optional_params(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Event]]:
+        """
+        Check if this is a delivery report using the optional PDU params.
+
+        If so, return the equivalent vumi Event, otherwise return None.
+        """
+        receipted_message_id = pdu.params.get("receipted_message_id")
+        message_state = pdu.params.get("message_state")
+        if receipted_message_id is None or message_state is None:
+            return False, None
+        return True, await self._create_event(
+            receipted_message_id.decode(), message_state.decode()
+        )
+
+    async def _handle_deliver_sm_esm_class(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Event]]:
+        """
+        Check if this is a delivery report by looking at the esm_class.
+
+        If so, return the equivalent vumi Event, otherwise return None.
+        """
+        esm_class = pdu.params["esm_class"]
+        # Any type other than default is delivery report
+        if esm_class.type == EsmClassType.DEFAULT:
+            return False, None
+
+        content = pdu.params["short_message"].decode()
+        match = self.regex.match(content)
+        if not match:
+            logger.warning(
+                "esm_class %s indicates delivery report, but regex does not match"
+                " content: %s",
+                esm_class.type.name,
+                content,
+            )
+            return False, None
+
+        fields = match.groupdict()
+        return True, await self._create_event(fields["id"], fields["stat"])
+
+    async def _handle_deliver_sm_body(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Event]]:
+        """
+        Try to decode the body as a delivery report, even if the esm_class doesn't
+        say it's a delivery report
+        """
+        content = pdu.params["short_message"].decode()
+        match = self.regex.match(content)
+        if not match:
+            return False, None
+
+        fields = match.groupdict()
+        return True, await self._create_event(fields["id"], fields["stat"])
+
+    async def _create_event(
+        self, smpp_message_id: str, smpp_status: str
+    ) -> Optional[Event]:
+        status = DeliveryStatus(self.config.status_mapping.get(smpp_status, "pending"))
+        vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
+        if not vumi_message_id:
+            logger.warning(
+                "Unable to find message ID %s in SMPP cache, not sending status"
+                " update %s",
+                smpp_message_id,
+                smpp_status,
+            )
+            return None
+        if status in (DeliveryStatus.DELIVERED, DeliveryStatus.FAILED):
+            await self.smpp_cache.delete_smpp_message_id(smpp_message_id)
+        return Event(
+            user_message_id=vumi_message_id,
+            event_type=EventType.DELIVERY_REPORT,
+            delivery_status=status,
+            transport_metadata={"smpp_delivery_status": smpp_status},
+        )
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
+        """
+        Try to handle the pdu as a delivery report. Returns an equivalent Event if
+        handled, or None if not.
+        """
+        for func in (
+            self._handle_deliver_sm_optional_params,
+            self._handle_deliver_sm_esm_class,
+            self._handle_deliver_sm_body,
+        ):
+            handled, event = await func(pdu)
+            if handled:
+                return handled, event
+        return False, None
+
+
+class ShortMessageProcesserBase:  # pragma: no cover
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
+        ...
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+        ...
+
+
+@define
+class ShortMessageProcessorConfig:
+    data_coding_overrides: dict = Factory(dict)
+
+
+class ShortMessageProcessor(ShortMessageProcesserBase):
+    CONFIG_CLASS = ShortMessageProcessorConfig
+
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
+        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.smpp_cache = smpp_cache
+
+    def _decode_text(self, text: bytes, data_coding: DataCoding) -> str:
+        data_coding = data_coding.schemeData.name
+        try:
+            codec = self.config.data_coding_overrides[data_coding]
+        except KeyError:
+            codec = DataCodingCodecs[data_coding].value
+        return text.decode(codec)
+
+    def _get_text(self, pdu: DeliverSM) -> str:
+        message_payload = pdu.params.get("message_payload")
+        if message_payload is not None:
+            short_message = message_payload
+        else:
+            short_message = pdu.params["short_message"]
+
+        return self._decode_text(short_message, pdu.params["data_coding"])
+
+    def _handle_short_message(self, pdu: DeliverSM) -> Message:
+        """
+        Single part short message
+        """
+        return Message(
+            to_addr=pdu.params["destination_addr"].decode(),
+            from_addr=pdu.params["source_addr"].decode(),
+            # The transport needs to fill this in
+            transport_name="",
+            transport_type=TransportType.SMS,
+            content=self._get_text(pdu),
+        )
+
+    def _extract_multipart(
+        self, pdu: DeliverSM
+    ) -> Optional[Tuple[int, int, int, bytes]]:
+        """
+        Tries to extract the multipart data from the PDU, using optional params, or UDH
+        CSM or CSM16.
+
+        If no multipart data can be extracted, returns None, otherwise returns a tuple
+        of reference_number, total_number, part_number, part_message.
+        """
+        # Optional params
+        reference_number = pdu.params.get("sar_msg_ref_num")
+        total_number = pdu.params.get("sar_total_segments")
+        part_number = pdu.params.get("sar_segment_seqnum")
+        short_message = pdu.params["short_message"]
+        if all(i is not None for i in (reference_number, total_number, part_number)):
+            return reference_number, total_number, part_number, short_message
+
+        if short_message is None:
+            return None
+
+        # From 3GPP TS 23.040 version 16.0.0 Release 16
+        # https://www.etsi.org/deliver/etsi_ts/123000_123099/123040/16.00.00_60/ts_123040v160000p.pdf
+        # Page 76
+
+        # CSM
+        if len(short_message) >= 6 and short_message[:3] == b"\x05\x00\x03":
+            reference_number = int.from_bytes(short_message[3:4], "big")
+            total_number = int.from_bytes(short_message[4:5], "big")
+            part_number = int.from_bytes(short_message[5:6], "big")
+            if total_number >= 1 and 1 <= part_number <= total_number:
+                part_message = short_message[6:]
+                return reference_number, total_number, part_number, part_message
+
+        # CSM16
+        if len(short_message) >= 7 and short_message[:3] == b"\x06\x08\x04":
+            reference_number = int.from_bytes(short_message[3:5], "big")
+            total_number = int.from_bytes(short_message[5:6], "big")
+            part_number = int.from_bytes(short_message[6:7], "big")
+            if total_number >= 1 and 1 <= part_number <= total_number:
+                part_message = short_message[7:]
+                return reference_number, total_number, part_number, part_message
+
+        return None
+
+    async def _handle_multipart_message(
+        self, pdu: DeliverSM
+    ) -> Tuple[bool, Optional[Message]]:
+        """
+        Tries to handle the message as a multipart message.
+
+        Returns a Tuple of whether the PDU was handled, and an optional message if we
+        have all the message parts
+        """
+        extracted = self._extract_multipart(pdu)
+        if extracted is None:
+            return False, None
+
+        ref_num, tot_num, part_num, content = extracted
+        decoded_content = self._decode_text(content, pdu.params["data_coding"])
+        full_message = await self.smpp_cache.store_multipart(
+            ref_num, tot_num, part_num, decoded_content
+        )
+        if full_message is None:
+            return True, None
+
+        return True, Message(
+            to_addr=pdu.params["destination_addr"].decode(),
+            from_addr=pdu.params["source_addr"].decode(),
+            # The transport needs to fill this in
+            transport_name="",
+            transport_type=TransportType.SMS,
+            content=full_message,
+        )
+
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+        """
+        Processes the DeliverSM pdu, and returns a Message if one was decoded, else
+        returns None.
+        """
+        handled, msg = await self._handle_multipart_message(pdu)
+        if handled:
+            return msg
+        return self._handle_short_message(pdu)

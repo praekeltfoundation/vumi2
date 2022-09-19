@@ -24,14 +24,18 @@ async def test_sentry(amqp_connection, config, nursery):
     BaseWorker(nursery, amqp_connection, config)
     assert sentry_sdk.Hub.current.client is None
 
-    sentry_dsn = "http://key@example.org/0"
-    config.sentry_dsn = sentry_dsn
-    BaseWorker(nursery, amqp_connection, config)
-    client = sentry_sdk.Hub.current.client
-    assert client is not None
-    assert client.dsn == sentry_dsn
-    version = pkg_resources.get_distribution("vumi2").version
-    assert client.options["release"] == version
+    try:
+        sentry_dsn = "http://key@example.org/0"
+        config.sentry_dsn = sentry_dsn
+        BaseWorker(nursery, amqp_connection, config)
+        client = sentry_sdk.Hub.current.client
+        assert client is not None
+        assert client.dsn == sentry_dsn
+        version = pkg_resources.get_distribution("vumi2").version
+        assert client.options["release"] == version
+    finally:
+        # Disable sentry for the rest of the tests
+        sentry_sdk.init()
 
 
 async def test_http_server(amqp_connection, config, nursery):

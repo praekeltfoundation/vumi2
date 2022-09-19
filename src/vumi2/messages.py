@@ -138,6 +138,7 @@ class Event:
     timestamp: datetime = Factory(datetime.utcnow)
     routing_metadata: dict = Factory(dict)
     helper_metadata: dict = Factory(dict)
+    transport_metadata: Optional[dict] = Factory(dict)
     event_id: str = Factory(generate_message_id)
     sent_message_id: Optional[str] = None
     nack_reason: Optional[str] = None

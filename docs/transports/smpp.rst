@@ -37,6 +37,18 @@ submit_sm_processor_class (str)
     The python path to the class used for generating submit short message (outbound message) requests. This class is responsible for taking an outbound vumi message, and returning a list of PDUs that represents that message, that can be sent to the ESME if we want to send that outbound message. Defaults to `vumi2.transports.smpp.processors.SubmitShortMessageProcessor`, which provides default short message processing that should be usable across a majority of ESMEs. See :ref:`submit-short-message-processors` for a list of submit short message processors that are available.
 submit_sm_processor_config (dict)
     The config that `submit_sm_processor_class` requires. See :ref:`submit-short-message-processors` for what configuration is required for the various short message processor classes.
+sm_processor_class (str)
+    The python path to the class used for handling extracting inbound messages from deliver short message requests. This class is responsible for taking the DeliverSM PDUs, and generating inbound Messages from them. It also handles combining a multipart SMS that has been split into multiple PDUs. Defaults to `vumi2.transports.smpp.processors.ShortMessageProcessor`, which should be usable across a majority of SMSCs. See :ref:`short-message-processors` for a list of short messages processors.
+sm_processor_config (dict)
+    The config that `sm_processor_class` requires. See :ref:`short-message-processors` for what configuration is required for the various short message processors.
+dr_processor_class (str)
+    The python path to the class used for handling and extracting delivery reports from deliver short message requests. This class is reposonsible for taking the DeliverSM PDUs, and generating delivery report Events, if the PDU is for a delivery report. Defaults to `vumi2.transports.smpp.processors.DeliveryReportProcesser`, which provides delivery report processing that should be usable across a majority of SMSCs. See :ref:`delivery-report-processors` for a list of delivery report processors that are available
+dr_processor_config (dict)
+    The config that `dr_processor_class` requires. See :ref:`delivery-report-processors` for what configuration is required for the various delivery report processor classes
+smpp_cache_class (str)
+    The python path to the class used for the SMPP cache. This class is resposible for caching the parts of a multipart message, and for caching the SMPP message IDs for delivery reports. Defaults to `vumi2.transports.smpp.smpp_cache.InMemorySmppCache`, which stores the data in memory. See :ref:`smpp-caches` for a list of SMPP caches.
+smpp_cache_config (dict)
+    The config that `smpp_cache_class` requires. See :ref:`smpp-caches` for what configuration is required for the SMPP caches that are available.
 
 
 How it works
@@ -109,6 +121,64 @@ registered_delivery (dict)
         Defaults to False. Whether or not to request intermediate notifications
 
 
+.. _delivery-report-processors:
+
+Delivery Report Processors
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+The job of a delivery report processor is to take DeliverSM PDUs, and if it looks like a delivery report, return an Event representing that delivery report.
+
+Default delivery report processor
+"""""""""""""""""""""""""""""""""
+`vumi2.transports.smpp.processors.DeliveryReportProcesser`
+
+This delivery report processor is designed to work with most SMSCs.
+
+It has the following configuration fields:
+
+regex (str)
+    The regular expression to use to determine and extract the delivery report out of the message body. Defaults to a regular expression that should work for most SMSCs
+status_mapping (dict)
+    A mapping between the delivery report status, and `pending`, `delivered` and `failed`. Defaults to a default mapping that should work for most SMSCs.
+
+
+.. _short-message-processors:
+
+Short Message Processors
+^^^^^^^^^^^^^^^^^^^^^^^^
+The job of a short message processor is to take the DeliverSM PDUs, process them, and return the equivalent inbound Message. It also handles multipart messaging, by waiting for all the PDUs that make up a Message, and then returning a single Message once we have all the parts.
+
+Default short message processor
+"""""""""""""""""""""""""""""""
+`vumi2.transports.smpp.processors.ShortMessageProcessor`
+
+This short message processor is designed to work with most SMSCs.
+
+It has the following configuration fields:
+
+data_coding_overrides (dict):
+    This field can be used to override any of the default codecs used to decode the message body, or provide a codec name for any of the unhandled data codings, eg. if you want to specify `OCTET_UNSPECIFIED` as `ascii`. Defaults to no overrides.
+
+
+.. _smpp-caches:
+
+SMPP Caches
+^^^^^^^^^^^
+An SMPP cache caches state that we require for the SMPP transport. Currently it has two jobs:
+
+1. It caches the parts of an inbound multipart message, so that when we have all of the parts, we can submit it as a single message
+1. It caches the relation between the SMPP message ID, and the vumi Message ID, so that we can know what message a delivery report is for when we receive it.
+
+In memory SMPP cache
+""""""""""""""""""""
+`vumi2.transports.smpp.smpp_cache.InMemorySmppCache`
+
+This is an SMPP cache implementation that stores the data in memory. Because of this, it is not suitable to share the data across multiple processes, and it will not survive process restarts.
+
+It has the following configuration fields:
+
+timeout (int)
+    The maximum amount of time to keep SMPP message IDs for received delivery reports. Defaults to 24 hours.
+
 
 Still to do
 ^^^^^^^^^^^
@@ -117,7 +187,6 @@ The transport is not yet complete, the following things need to still be done
 - Support receiver and transmitter binds, not just transceiver.
 - Better config for processors
 - Outbound messages: support USSD
-- Support inbound SMPP commands for inbound messages and delivery reports
 - Support all other SMPP inbound commands
 - Timeout for binding
 - Timeout for enquire link
