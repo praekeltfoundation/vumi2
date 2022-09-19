@@ -303,7 +303,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         message_state = pdu.params.get("message_state")
         if receipted_message_id is None or message_state is None:
             return False, None
-        return await self._create_event(
+        return True, await self._create_event(
             receipted_message_id.decode(), message_state.decode()
         )
 
@@ -332,7 +332,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             return False, None
 
         fields = match.groupdict()
-        return await self._create_event(fields["id"], fields["stat"])
+        return True, await self._create_event(fields["id"], fields["stat"])
 
     async def _handle_deliver_sm_body(
         self, pdu: DeliverSM
@@ -347,11 +347,11 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             return False, None
 
         fields = match.groupdict()
-        return await self._create_event(fields["id"], fields["stat"])
+        return True, await self._create_event(fields["id"], fields["stat"])
 
     async def _create_event(
         self, smpp_message_id: str, smpp_status: str
-    ) -> Tuple[bool, Optional[Event]]:
+    ) -> Optional[Event]:
         status = DeliveryStatus(self.config.status_mapping.get(smpp_status, "pending"))
         vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
         if not vumi_message_id:
@@ -361,10 +361,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
                 smpp_message_id,
                 smpp_status,
             )
-            return True, None
+            return None
         if status in (DeliveryStatus.DELIVERED, DeliveryStatus.FAILED):
             await self.smpp_cache.delete_smpp_message_id(smpp_message_id)
-        return True, Event(
+        return Event(
             user_message_id=vumi_message_id,
             event_type=EventType.DELIVERY_REPORT,
             delivery_status=status,
