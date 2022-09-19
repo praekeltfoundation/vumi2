@@ -407,3 +407,17 @@ async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
     resp = await smsc.receive_pdu()
     assert isinstance(resp, UnbindResp)
     assert resp.seqNum == pdu.seqNum
+
+
+async def test_handle_enquire_link(client: EsmeClient, smsc: FakeSmsc):
+    """
+    We should send enquire link responses to enquire links
+    """
+    await smsc.start_and_bind(client)
+
+    pdu = EnquireLink(seqNum=1)
+    await smsc.send_pdu(pdu)
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, EnquireLinkResp)
+    assert resp.seqNum == pdu.seqNum

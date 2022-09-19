@@ -8,6 +8,7 @@ from smpp.pdu.operations import (
     DeliverSM,
     DeliverSMResp,
     EnquireLink,
+    EnquireLinkResp,
     GenericNack,
     PDURequest,
     PDUResponse,
@@ -283,3 +284,9 @@ class EsmeClient:
         """
         await self.send_pdu(UnbindResp(seqNum=pdu.seqNum))
         raise SmscUnbind()
+
+    async def handle_enquire_link(self, pdu: EnquireLink):
+        """
+        Send back an enquire_link_resp to show that we're still connected
+        """
+        await self.send_pdu(EnquireLinkResp(seqNum=pdu.seqNum))
