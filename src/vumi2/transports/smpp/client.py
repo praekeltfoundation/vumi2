@@ -22,6 +22,7 @@ from trio import (
     Nursery,
     SocketStream,
     current_time,
+    move_on_after,
     open_memory_channel,
     sleep_until,
 )
@@ -52,6 +53,10 @@ class EsmeResponseStatusError(EsmeClientError):
 
 class SmscUnbind(EsmeClientError):
     """Server has requested unbind"""
+
+
+class BindTimeout(EsmeClientError):
+    """Didn't receive a bind response from the server within the configured time"""
 
 
 class EsmeClient:
@@ -202,7 +207,10 @@ class EsmeClient:
             addr_npi=addr_npi,
             address_range=address_range,
         )
-        bind_response = await self.send_pdu(pdu)
+        with move_on_after(self.config.smpp_bind_timeout) as cancel_scope:
+            bind_response = await self.send_pdu(pdu)
+        if cancel_scope.cancelled_caught:
+            raise BindTimeout()
         logger.info("SMPP bound with response %s", bind_response)
         return bind_response
 
