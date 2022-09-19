@@ -85,8 +85,5 @@ class InMemorySmppCache(BaseSmppCache):
         """
         Returns the vumi message ID for the given smpp message id
         """
-        try:
-            vumi_message_id, _ = self._smpp_msg_id[smpp_message_id]
-            return vumi_message_id
-        except KeyError:
-            return None
+        vumi_message_id, _ = self._smpp_msg_id.pop(smpp_message_id, (None, None))
+        return vumi_message_id
