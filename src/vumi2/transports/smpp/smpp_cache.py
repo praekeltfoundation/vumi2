@@ -79,10 +79,7 @@ class InMemorySmppCache(BaseSmppCache):
         """
         Removes the SMPP message ID from the cache
         """
-        try:
-            self._smpp_msg_id.pop(smpp_message_id)
-        except KeyError:
-            return
+        self._smpp_msg_id.pop(smpp_message_id, None)
 
     async def get_smpp_message_id(self, smpp_message_id: str) -> Optional[str]:
         """
