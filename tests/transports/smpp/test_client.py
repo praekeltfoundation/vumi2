@@ -28,6 +28,7 @@ from trio.testing import memory_stream_pair
 from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 from vumi2.transports.smpp.client import (
     BindTimeout,
+    EnquireLinkTimeout,
     EsmeClient,
     EsmeResponseStatusError,
     SmscUnbind,
@@ -192,6 +193,16 @@ async def test_bind_timeout(client: EsmeClient, autojump_clock):
     """
     with pytest.raises(BindTimeout):
         await client.start()
+
+
+async def test_enquire_link_timeout(client: EsmeClient, smsc: FakeSmsc, autojump_clock):
+    """
+    Client should try to bind, and raise an exception if the bind response took too long
+    """
+    await smsc.start_and_bind(client)
+
+    with pytest.raises(EnquireLinkTimeout):
+        await client.enquire_link()
 
 
 async def test_send_response_pdu(client: EsmeClient, smsc: FakeSmsc):

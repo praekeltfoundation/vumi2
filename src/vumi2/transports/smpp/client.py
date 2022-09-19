@@ -59,6 +59,10 @@ class BindTimeout(EsmeClientError):
     """Didn't receive a bind response from the server within the configured time"""
 
 
+class EnquireLinkTimeout(EsmeClientError):
+    """Didn't receive an enquire link response from the server in time"""
+
+
 class EsmeClient:
     """
     An SMPP 3.4 compatible client, for use with Vumi messages.
@@ -116,7 +120,10 @@ class EsmeClient:
         while True:
             deadline = current_time() + self.config.smpp_enquire_link_interval
             pdu = EnquireLink(seqNum=await self.sequencer.get_next_sequence_number())
-            await self.send_pdu(pdu)
+            with move_on_after(self.config.smpp_enquire_link_interval) as cancel_scope:
+                await self.send_pdu(pdu)
+            if cancel_scope.cancel_called:
+                raise EnquireLinkTimeout()
             await sleep_until(deadline)
 
     async def consume_stream(self) -> None:
