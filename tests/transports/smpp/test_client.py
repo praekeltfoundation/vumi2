@@ -22,7 +22,7 @@ from smpp.pdu.pdu_types import (
     EsmClassMode,
     EsmClassType,
 )
-from trio import open_memory_channel
+from trio import open_memory_channel, open_nursery
 from trio.testing import memory_stream_pair
 
 from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
@@ -394,19 +394,21 @@ async def test_handle_deliver_sm_delivery_report(
     assert resp.seqNum == pdu.seqNum
 
 
-@pytest.mark.xfail(raises=SmscUnbind)
 async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
     """
     Unbind should respond, then raise an exception
     """
-    await smsc.start_and_bind(client)
+    with pytest.raises(SmscUnbind):
+        async with open_nursery() as nursery:
+            client.nursery = nursery
+            await smsc.start_and_bind(client)
 
-    pdu = Unbind(seqNum=1)
-    await smsc.send_pdu(pdu)
+            pdu = Unbind(seqNum=1)
+            await smsc.send_pdu(pdu)
 
-    resp = await smsc.receive_pdu()
-    assert isinstance(resp, UnbindResp)
-    assert resp.seqNum == pdu.seqNum
+            resp = await smsc.receive_pdu()
+            assert isinstance(resp, UnbindResp)
+            assert resp.seqNum == pdu.seqNum
 
 
 async def test_handle_enquire_link(client: EsmeClient, smsc: FakeSmsc):
