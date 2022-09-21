@@ -1,9 +1,10 @@
+from contextlib import asynccontextmanager
 from io import BytesIO
 
 from smpp.pdu.operations import BindTransceiverResp, EnquireLinkResp
 from smpp.pdu.pdu_encoding import PDUEncoder
 from smpp.pdu.pdu_types import PDU
-from trio import serve_tcp
+from trio import open_nursery, serve_tcp
 from trio.testing import memory_stream_pair
 
 
@@ -64,3 +65,12 @@ class TcpFakeSmsc(FakeSmsc):
     async def serve_tcp(self):
         listeners = await self.nursery.start(serve_tcp, self.server, 0)
         self.port = listeners[0].socket.getsockname()[1]
+
+
+@asynccontextmanager
+async def open_autocancel_nursery():
+    async with open_nursery() as nursery:
+        try:
+            yield nursery
+        finally:
+            nursery.cancel_scope.cancel()

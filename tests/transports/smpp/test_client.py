@@ -22,7 +22,7 @@ from smpp.pdu.pdu_types import (
     EsmClassMode,
     EsmClassType,
 )
-from trio import open_memory_channel, open_nursery
+from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
 from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
@@ -36,7 +36,7 @@ from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
-from .helpers import FakeSmsc
+from .helpers import FakeSmsc, open_autocancel_nursery
 
 
 def test_extract_pdu():
@@ -399,7 +399,7 @@ async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
     Unbind should respond, then raise an exception
     """
     with pytest.raises(SmscUnbind):
-        async with open_nursery() as nursery:
+        async with open_autocancel_nursery() as nursery:
             client.nursery = nursery
             await smsc.start_and_bind(client)
 
