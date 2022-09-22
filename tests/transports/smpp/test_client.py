@@ -1,6 +1,6 @@
 import logging
 
-from pytest import fixture, raises
+import pytest
 from smpp.pdu.operations import (
     BindTransceiver,
     BindTransceiverResp,
@@ -12,6 +12,8 @@ from smpp.pdu.operations import (
     Outbind,
     SubmitSM,
     SubmitSMResp,
+    Unbind,
+    UnbindResp,
 )
 from smpp.pdu.pdu_types import (
     CommandStatus,
@@ -24,7 +26,7 @@ from trio import open_memory_channel
 from trio.testing import memory_stream_pair
 
 from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
-from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError
+from vumi2.transports.smpp.client import EsmeClient, EsmeResponseStatusError, SmscUnbind
 from vumi2.transports.smpp.processors import (
     DeliveryReportProcesser,
     ShortMessageProcessor,
@@ -34,7 +36,7 @@ from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp import SmppTransceiverTransportConfig
 from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
-from .helpers import FakeSmsc
+from .helpers import FakeSmsc, open_autocancel_nursery
 
 
 def test_extract_pdu():
@@ -66,7 +68,7 @@ def test_extract_pdu():
     assert packet_with_extra == bytearray.fromhex("010203")
 
 
-@fixture
+@pytest.fixture
 async def stream():
     """
     A trio memory stream pair. Done as a fixture so that the same stream can easily
@@ -77,59 +79,59 @@ async def stream():
     return (client, server)
 
 
-@fixture
+@pytest.fixture
 async def client_stream(stream):
     """The client part of the trio stream"""
     return stream[0]
 
 
-@fixture
+@pytest.fixture
 async def server_stream(stream):
     """The server part of the trio stream"""
     return stream[1]
 
 
-@fixture
+@pytest.fixture
 async def sequencer():
     return InMemorySequencer({})
 
 
-@fixture
+@pytest.fixture
 async def smpp_cache():
     return InMemorySmppCache({})
 
 
-@fixture
+@pytest.fixture
 async def submit_sm_processor(sequencer):
     return SubmitShortMessageProcessor({}, sequencer)
 
 
-@fixture
+@pytest.fixture
 async def sm_processor(smpp_cache):
     return ShortMessageProcessor({}, smpp_cache)
 
 
-@fixture
+@pytest.fixture
 async def dr_processor(smpp_cache):
     return DeliveryReportProcesser({}, smpp_cache)
 
 
-@fixture
+@pytest.fixture
 async def message_channel():
     return open_memory_channel(1)
 
 
-@fixture
+@pytest.fixture
 async def send_message_channel(message_channel):
     return message_channel[0]
 
 
-@fixture
+@pytest.fixture
 async def receive_message_channel(message_channel):
     return message_channel[1]
 
 
-@fixture
+@pytest.fixture
 async def client(
     nursery,
     client_stream,
@@ -155,7 +157,7 @@ async def client(
     )
 
 
-@fixture
+@pytest.fixture
 async def smsc(server_stream) -> FakeSmsc:
     """A FakeSmsc"""
     return FakeSmsc(server_stream)
@@ -202,7 +204,7 @@ async def test_send_pdu_error_response(client: EsmeClient, smsc: FakeSmsc):
         seqNum=pdu.seqNum, status=CommandStatus.ESME_RX_P_APPN
     )
     await smsc.send_pdu(response_pdu)
-    with raises(EsmeResponseStatusError):
+    with pytest.raises(EsmeResponseStatusError):
         await task
 
 
@@ -217,7 +219,7 @@ async def test_send_pdu_wrong_response(client: EsmeClient, smsc: FakeSmsc):
     task = client.send_pdu(pdu)
 
     await smsc.send_pdu(BindTransceiverResp(seqNum=pdu.seqNum))
-    with raises(EsmeResponseStatusError):
+    with pytest.raises(EsmeResponseStatusError):
         await task
 
 
@@ -389,4 +391,35 @@ async def test_handle_deliver_sm_delivery_report(
 
     resp = await smsc.receive_pdu()
     assert isinstance(resp, DeliverSMResp)
+    assert resp.seqNum == pdu.seqNum
+
+
+async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
+    """
+    Unbind should respond, then raise an exception
+    """
+    with pytest.raises(SmscUnbind):
+        async with open_autocancel_nursery() as nursery:
+            client.nursery = nursery
+            await smsc.start_and_bind(client)
+
+            pdu = Unbind(seqNum=1)
+            await smsc.send_pdu(pdu)
+
+            resp = await smsc.receive_pdu()
+            assert isinstance(resp, UnbindResp)
+            assert resp.seqNum == pdu.seqNum
+
+
+async def test_handle_enquire_link(client: EsmeClient, smsc: FakeSmsc):
+    """
+    We should send enquire link responses to enquire links
+    """
+    await smsc.start_and_bind(client)
+
+    pdu = EnquireLink(seqNum=1)
+    await smsc.send_pdu(pdu)
+
+    resp = await smsc.receive_pdu()
+    assert isinstance(resp, EnquireLinkResp)
     assert resp.seqNum == pdu.seqNum

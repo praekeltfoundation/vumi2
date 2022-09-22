@@ -187,7 +187,6 @@ The transport is not yet complete, the following things need to still be done
 - Support receiver and transmitter binds, not just transceiver.
 - Better config for processors
 - Outbound messages: support USSD
-- Support all other SMPP inbound commands
 - Timeout for binding
 - Timeout for enquire link
 - Sequence number generation is currently just in memory. We might want to have this configurable to store in a place like Redis, to be shared across processes.
