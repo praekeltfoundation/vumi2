@@ -22,6 +22,7 @@ from trio import (
     Nursery,
     SocketStream,
     current_time,
+    move_on_after,
     open_memory_channel,
     sleep_until,
 )
@@ -52,6 +53,14 @@ class EsmeResponseStatusError(EsmeClientError):
 
 class SmscUnbind(EsmeClientError):
     """Server has requested unbind"""
+
+
+class BindTimeout(EsmeClientError):
+    """Didn't receive a bind response from the server within the configured time"""
+
+
+class EnquireLinkTimeout(EsmeClientError):
+    """Didn't receive an enquire link response from the server in time"""
 
 
 class EsmeClient:
@@ -92,7 +101,6 @@ class EsmeClient:
         Starts the client consuming from the TCP tream, completes an SMPP bind, and
         starts the periodic sending of enquire links
         """
-        # TODO: timeout on bind
         self.nursery.start_soon(self.consume_stream)
         await self.bind(
             system_id=self.config.system_id,
@@ -107,11 +115,13 @@ class EsmeClient:
         """
         Continuously loops, periodically enquiring the link status
         """
-        # TODO: timeout if we don't get a response
         while True:
             deadline = current_time() + self.config.smpp_enquire_link_interval
             pdu = EnquireLink(seqNum=await self.sequencer.get_next_sequence_number())
-            await self.send_pdu(pdu)
+            with move_on_after(self.config.smpp_enquire_link_interval) as cancel_scope:
+                await self.send_pdu(pdu)
+            if cancel_scope.cancelled_caught:
+                raise EnquireLinkTimeout()
             await sleep_until(deadline)
 
     async def consume_stream(self) -> None:
@@ -202,7 +212,10 @@ class EsmeClient:
             addr_npi=addr_npi,
             address_range=address_range,
         )
-        bind_response = await self.send_pdu(pdu)
+        with move_on_after(self.config.smpp_bind_timeout) as cancel_scope:
+            bind_response = await self.send_pdu(pdu)
+        if cancel_scope.cancelled_caught:
+            raise BindTimeout()
         logger.info("SMPP bound with response %s", bind_response)
         return bind_response
 

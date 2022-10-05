@@ -37,6 +37,7 @@ class SmppTransceiverTransportConfig(BaseConfig):
     dr_processor_config: dict = Factory(dict)
     smpp_cache_class: str = "vumi2.transports.smpp.smpp_cache.InMemorySmppCache"
     smpp_cache_config: dict = Factory(dict)
+    smpp_bind_timeout: int = 30
 
 
 class SmppTransceiverTransport(BaseWorker):
