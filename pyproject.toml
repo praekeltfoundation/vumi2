@@ -31,8 +31,9 @@ isort = "^5.10.1"
 mypy = "^0.950"
 # Pin flake8 to a lower version because it conflicts with sphinx
 flake8 = "^3.9.0"
+pytest = "^7.2.0"
 pytest-trio = "^0.7.0"
-pytest-cov = "^3.0.0"
+pytest-cov = "^4.0.0"
 Sphinx = "^5.1.1"
 
 [tool.poetry.scripts]
