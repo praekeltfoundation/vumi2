@@ -14,15 +14,15 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.7"
-trio = "^0.20.0"
+python = "^3.8"
+trio = "^0.22.0"
 async-amqp = "^0.5.0"
-attrs = "^21.4.0"
-cattrs = "^22.1.0"
+attrs = "^23.1.0"
+cattrs = "^22.2.0"
 PyYAML = "^6.0"
 sentry-sdk = "^1.9.3"
 quart-trio = "^0.10.0"
-hypercorn = "^0.13.2"
+hypercorn = "^0.14.3"
 "smpp.pdu3" = "^0.6"
 
 [tool.poetry.dev-dependencies]
