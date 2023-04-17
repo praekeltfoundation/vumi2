@@ -1,4 +1,5 @@
-import pkg_resources
+import importlib.metadata
+
 import pytest
 import sentry_sdk
 
@@ -31,7 +32,7 @@ async def test_sentry(amqp_connection, config, nursery):
         client = sentry_sdk.Hub.current.client
         assert client is not None
         assert client.dsn == sentry_dsn
-        version = pkg_resources.get_distribution("vumi2").version
+        version = importlib.metadata.distribution("vumi2").version
         assert client.options["release"] == version
     finally:
         # Disable sentry for the rest of the tests
