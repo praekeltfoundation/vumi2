@@ -56,3 +56,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 trio_mode = true
 addopts = "--cov=src"
+filterwarnings = [
+    # We can't do anything about these warnings until upstream updates.
+    "ignore::trio.TrioDeprecationWarning:quart_trio.app",
+    "ignore::trio.TrioDeprecationWarning:anyio._backends._trio",
+]
