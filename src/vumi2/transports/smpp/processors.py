@@ -79,10 +79,13 @@ class SubmitShortMessageProcessorConfig:
 
 
 class SubmitShortMessageProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict, sequencer: Sequencer) -> None:  # type: ignore
+    def __init__(self, config: dict, sequencer: Sequencer) -> None:
         ...
 
-    async def handle_outbound_message(self, message: Message) -> List[PDU]:  # type: ignore
+    async def handle_outbound_message(  # type: ignore
+        self,
+        message: Message,
+    ) -> List[PDU]:
         ...
 
 
@@ -239,10 +242,13 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
 
 class DeliveryReportProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict) -> None:  # type: ignore
+    def __init__(self, config: dict) -> None:
         ...
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:  # type: ignore
+    async def handle_deliver_sm(  # type: ignore
+        self,
+        pdu: DeliverSM,
+    ) -> Tuple[bool, Optional[Event]]:
         ...
 
 

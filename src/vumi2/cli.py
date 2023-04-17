@@ -72,7 +72,9 @@ def worker_config_options(
         # check for Type[BaseConfig] instead?
         if field.type and is_attrs(field.type):
             worker_config_options(
-                field.type, parser, _create_argument_key(prefix, field.name)  # type: ignore
+                field.type,  # type: ignore
+                parser,
+                _create_argument_key(prefix, field.name),
             )
         else:
             parser.add_argument(
