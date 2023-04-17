@@ -1,6 +1,6 @@
 FROM ghcr.io/praekeltfoundation/python-base-nw:3.10-bullseye as build
 
-RUN pip install poetry==1.1.12
+RUN pip install poetry==1.4.2
 COPY . ./
 RUN poetry config virtualenvs.in-project true \
     && poetry install --no-dev --no-interaction --no-ansi
