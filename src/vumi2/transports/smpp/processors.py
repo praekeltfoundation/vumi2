@@ -324,8 +324,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         match = self.regex.match(content)
         if not match:
             logger.warning(
-                "esm_class %s indicates delivery report, but regex does not match"
-                " content: %s",
+                (
+                    "esm_class %s indicates delivery report, but regex does not match"
+                    " content: %s"
+                ),
                 esm_class.type.name,
                 content,
             )
@@ -356,8 +358,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
         if not vumi_message_id:
             logger.warning(
-                "Unable to find message ID %s in SMPP cache, not sending status"
-                " update %s",
+                (
+                    "Unable to find message ID %s in SMPP cache, not sending status"
+                    " update %s"
+                ),
                 smpp_message_id,
                 smpp_status,
             )
