@@ -26,15 +26,15 @@ hypercorn = "^0.14.3"
 "smpp.pdu3" = "^0.6"
 
 [tool.poetry.dev-dependencies]
-black = "^22.3.0"
+black = "^23.3.0"
 isort = "^5.10.1"
-mypy = "^0.950"
+mypy = "^1.2.0"
 # Pin flake8 to a lower version because it conflicts with sphinx
 flake8 = "^3.9.0"
-pytest = "^7.2.0"
-pytest-trio = "^0.7.0"
+pytest = "^7.3.1"
+pytest-trio = "^0.8.0"
 pytest-cov = "^4.0.0"
-Sphinx = "^5.1.1"
+Sphinx = "^6.1.3"
 
 [tool.poetry.scripts]
 vumi2 = "vumi2.cli:main"
