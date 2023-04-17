@@ -66,9 +66,13 @@ def worker_config_options(
     """
     for field in fields(cls):
         # Check if nested
+
+        # FIXME: The is_attrs() check now tells mypy that we have
+        # Type[AttrsInstance] instead of whatever type we actually have. Can we
+        # check for Type[BaseConfig] instead?
         if field.type and is_attrs(field.type):
             worker_config_options(
-                field.type, parser, _create_argument_key(prefix, field.name)
+                field.type, parser, _create_argument_key(prefix, field.name)  # type: ignore
             )
         else:
             parser.add_argument(
