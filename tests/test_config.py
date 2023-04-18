@@ -1,5 +1,6 @@
 import os
 from argparse import Namespace
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from vumi2.config import (
@@ -15,8 +16,8 @@ def test_default_base_config():
     config = BaseConfig.deserialise({})
     assert config.amqp.hostname == "127.0.0.1"
     assert config.amqp.port == 5672
-    assert config.amqp.username == "guest"
-    assert config.amqp.password == "guest"
+    assert config.amqp.username == "guest"  # noqa: S105 (These are fake creds.)
+    assert config.amqp.password == "guest"  # noqa: S105 (These are fake creds.)
     assert config.amqp.vhost == "/"
     assert config.amqp_url == ""
     assert config.worker_concurrency == 20
@@ -38,8 +39,8 @@ def test_specified_base_config():
     )
     assert config.amqp.hostname == "localhost"
     assert config.amqp.port == 1234
-    assert config.amqp.username == "user"
-    assert config.amqp.password == "pass"
+    assert config.amqp.username == "user"  # noqa: S105 (These are fake creds.)
+    assert config.amqp.password == "pass"  # noqa: S105 (These are fake creds.)
     assert config.amqp.vhost == "/vumi"
     assert config.amqp_url == "amqp://user:pass@localhost:1234/vumi"
     assert config.worker_concurrency == 10
@@ -73,7 +74,7 @@ def test_load_config_from_environment():
 
 
 def test_load_config_from_nonexisting_file():
-    assert load_config_from_file(filename="nonexisting") == {}
+    assert load_config_from_file(path=Path("nonexisting")) == {}
 
 
 def test_load_config_from_cli():

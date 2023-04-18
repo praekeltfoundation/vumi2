@@ -157,6 +157,9 @@ class Event:
                 raise ValueError(
                     "delivery_status cannot be null for delivery_report event type"
                 )
+        else:
+            # Empty else clause so the linter doesn't complain about nested `if`s.
+            pass
 
     def serialise(self) -> Dict[str, Any]:
         return cattrs.unstructure(self)

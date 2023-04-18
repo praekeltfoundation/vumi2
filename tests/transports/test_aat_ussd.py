@@ -32,7 +32,7 @@ def create_callback_url(to_addr: str):
 def assert_outbound_message_response(
     body: str, content: str, callback: str, continue_session: bool
 ):
-    root = ET.fromstring(body)
+    root = ET.fromstring(body)  # noqa: S314 (This is trusted XML.)
     assert root.tag == "request"
 
     headertext = root[0]

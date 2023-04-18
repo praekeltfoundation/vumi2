@@ -31,9 +31,8 @@ jobs:
       - name: Lint
         run: |
           poetry run black --check .
-          poetry run isort -c .
           poetry run mypy --install-types --non-interactive .
-          poetry run flake8
+          poetry run ruff check .
       - name: Test
         run: poetry run pytest
       - name: Build docs

@@ -145,8 +145,9 @@ class HttpRpcTransport(BaseWorker):
         await self.publish_ack(message.message_id)
 
     def finish_request(
-        self, request_id: str, data: Union[str, dict], code=200, headers={}
+        self, request_id: str, data: Union[str, dict], code=200, headers=None
     ) -> None:
+        headers = {} if headers is None else headers
         logger.debug(
             "Finishing request %s with %s %s %s", request_id, code, headers, data
         )
