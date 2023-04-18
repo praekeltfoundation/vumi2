@@ -125,7 +125,7 @@ def load_config_from_file(filename: str) -> Dict[str, Any]:
     return {}
 
 
-def load_config(cls=BaseConfig, cli=Namespace()) -> BaseConfig:
+def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
     """
     Load the entire config from all sources.
 
@@ -136,6 +136,7 @@ def load_config(cls=BaseConfig, cli=Namespace()) -> BaseConfig:
       no prefix
     - Command line arguments
     """
+    cli = Namespace() if cli is None else cli
     config_filename = os.environ.get("VUMI_CONFIG_FILE", "config.yaml")
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
     config_env = load_config_from_environment(

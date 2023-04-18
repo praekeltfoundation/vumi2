@@ -281,7 +281,7 @@ async def test_handle_known_command(client: EsmeClient):
         nonlocal received_pdu
         received_pdu = pdu
 
-    setattr(client, "handle_submit_sm", handler)
+    setattr(client, "handle_submit_sm", handler)  # noqa: B010 (For mypy.)
     pdu = SubmitSM(seqNum=1)
     await client.handle_pdu(pdu)
     assert received_pdu == pdu

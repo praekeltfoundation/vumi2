@@ -60,6 +60,7 @@ filterwarnings = [
 select = [
     "E", "F", "W", # pycodestyle + pyflakes == flake8 - mccabe
     "I",           # isort
+    "B",           # flake8-bugbear
     "UP",          # pyupgrade
     "S",           # flake8-bandit
     "C4",          # flake8-comprehensions

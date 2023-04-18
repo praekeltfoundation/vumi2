@@ -70,11 +70,11 @@ class Gsm0338Codec(codecs.Codec):
                     result.append(GSM0338_CHARSET_EXTENSION[char])
                 else:
                     result.append(GSM0338_CHARSET[char])
-            except IndexError:
+            except IndexError as e:
                 if errors == "strict":
                     raise UnicodeDecodeError(
                         self.NAME, bytes(char), position, position + 1, repr(text)
-                    )
+                    ) from e
                 elif errors == "ignore":
                     continue
                 elif errors == "replace":
@@ -82,7 +82,7 @@ class Gsm0338Codec(codecs.Codec):
                 else:
                     raise VumiCodecException(
                         f"Invalid errors type {errors} for {self.NAME} codec decode"
-                    )
+                    ) from e
         return ("".join(result), len(result))
 
 
