@@ -2,14 +2,13 @@ import argparse
 import logging
 import sys
 from importlib import import_module
-from typing import List, Type
+from typing import Iterable, List, Type
 
 import trio
-from attrs import AttrsInstance, fields
-from attrs import has as is_attrs
+from attrs import Attribute
 
 from vumi2.amqp import create_amqp_client
-from vumi2.config import load_config
+from vumi2.config import BaseConfig, load_config, walk_config_class
 from vumi2.workers import BaseWorker
 
 
@@ -46,39 +45,26 @@ def build_main_parser(worker_cls=BaseWorker):
     return parser
 
 
-def _create_argument_key(prefix: str, name: str):
+def _create_argument_key(*parts: str):
     """
     Takes config keys like amqp_hostname and converts them to command line
     friendly keys like amqp-hostname
     """
-    name = name.lower().replace("_", "-")
-    if prefix:
-        prefix = prefix.lower().replace("_", "-")
-        return f"{prefix}-{name}"
-    return name
+    return "-".join(part.lower().replace("_", "-") for part in parts if part)
 
 
 def worker_config_options(
-    cls: Type[AttrsInstance], parser: argparse.ArgumentParser, prefix=""
+    cls: Type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
     """
-    # TODO: Factor out the recursive walk into a shared function that we can
-    # call in the various places it's used.
-    for field in fields(cls):
-        # Check if nested
-        if field.type and is_attrs(field.type):
-            worker_config_options(
-                field.type,  # type: ignore
-                parser,
-                _create_argument_key(prefix, field.name),
-            )
-        else:
-            parser.add_argument(
-                f"--{_create_argument_key(prefix, field.name)}",
-            )
-    return parser
+
+    def add_arg(field: Attribute, prefix: Iterable[str]):
+        key = _create_argument_key(*prefix, field.name)
+        parser.add_argument(f"--{key}")
+
+    walk_config_class(cls, add_arg, prefix)
 
 
 def class_from_string(class_path: str):

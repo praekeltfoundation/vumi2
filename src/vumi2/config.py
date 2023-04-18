@@ -1,9 +1,9 @@
 import os
 from argparse import Namespace
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, Optional, Type
 
 import yaml
-from attrs import Factory, define, fields
+from attrs import Attribute, AttrsInstance, Factory, define, fields
 from attrs import has as is_attrs
 from cattrs import structure
 
@@ -31,10 +31,27 @@ class BaseConfig:
         return structure(config, cls)
 
 
-def _create_env_var_key(prefix: str, name: str) -> str:
-    if prefix:
-        return f"{prefix.upper()}_{name.upper()}"
-    return name.upper()
+ConfigCallback = Callable[[Attribute, Iterable[str]], Any]
+
+
+def walk_config_class(
+    cls: Type[AttrsInstance], fn: ConfigCallback, *prefix: str
+) -> Dict[str, Any]:
+    result: Dict[str, Any] = {}
+
+    for field in fields(cls):
+        if field.type and is_attrs(field.type):
+            # For nested configs we always include the dict, even if it's empty.
+            result[field.name] = walk_config_class(field.type, fn, *prefix, field.name)
+        else:
+            # For individual fields, we ignore any `None` values.
+            if (value := fn(field, prefix)) is not None:
+                result[field.name] = value
+    return result
+
+
+def _create_env_var_key(*parts: str) -> str:
+    return "_".join(part.upper() for part in parts if part)
 
 
 def load_config_from_environment(
@@ -52,27 +69,16 @@ def load_config_from_environment(
     Returns a dictionary of the config, so that it can be merged with other config
     sources.
     """
-    env: Dict[str, Any] = {}
 
-    for field in fields(cls):
-        # Check if nested
-        if field.type and is_attrs(field.type):
-            value = load_config_from_environment(
-                field.type, _create_env_var_key(prefix, field.name), source
-            )
-            if value:
-                env[field.name] = value
-        else:
-            key = _create_env_var_key(prefix, field.name)
-            if key in source:
-                env[field.name] = source[key]
-    return env
+    def load_envvar(field: Attribute, prefix: Iterable[str]) -> Any:
+        key = _create_env_var_key(*prefix, field.name)
+        return source.get(key, None)
+
+    return walk_config_class(cls, load_envvar, prefix)
 
 
-def _create_cli_key(prefix: str, name: str) -> str:
-    if prefix:
-        return f"{prefix}_{name}"
-    return name
+def _create_cli_key(*parts: str) -> str:
+    return "_".join(part for part in parts if part)
 
 
 def load_config_from_cli(
@@ -85,23 +91,12 @@ def load_config_from_cli(
     Returns a dictionary of the config, so that it can be merged with other config
     sources.
     """
-    conf: Dict[str, Any] = {}
 
-    for field in fields(cls):
-        # Check if nested
-        if field.type and is_attrs(field.type):
-            value = load_config_from_cli(
-                source,
-                field.type,
-                _create_cli_key(prefix, field.name),
-            )
-            if value:
-                conf[field.name] = value
-        else:
-            key = _create_cli_key(prefix, field.name)
-            if hasattr(source, key) and getattr(source, key) is not None:
-                conf[field.name] = getattr(source, key)
-    return conf
+    def load_cli(field: Attribute, prefix: Iterable[str]) -> Any:
+        key = _create_cli_key(*prefix, field.name)
+        return getattr(source, key, None)
+
+    return walk_config_class(cls, load_cli, prefix)
 
 
 def _combine_nested_dictionaries(*args: Dict[Any, Any]):
