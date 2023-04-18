@@ -5,11 +5,11 @@ from importlib import import_module
 from typing import List, Type
 
 import trio
-from attrs import fields
+from attrs import AttrsInstance, fields
 from attrs import has as is_attrs
 
 from vumi2.amqp import create_amqp_client
-from vumi2.config import BaseConfig, load_config
+from vumi2.config import load_config
 from vumi2.workers import BaseWorker
 
 
@@ -59,17 +59,15 @@ def _create_argument_key(prefix: str, name: str):
 
 
 def worker_config_options(
-    cls: Type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
+    cls: Type[AttrsInstance], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
     """
+    # TODO: Factor out the recursive walk into a shared function that we can
+    # call in the various places it's used.
     for field in fields(cls):
         # Check if nested
-
-        # FIXME: The is_attrs() check now tells mypy that we have
-        # Type[AttrsInstance] instead of whatever type we actually have. Can we
-        # check for Type[BaseConfig] instead?
         if field.type and is_attrs(field.type):
             worker_config_options(
                 field.type,  # type: ignore
