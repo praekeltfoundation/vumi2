@@ -1,7 +1,7 @@
+import importlib.metadata
 from logging import getLogger
 from typing import Dict, TypeVar
 
-import pkg_resources
 import sentry_sdk
 from async_amqp import AmqpProtocol
 from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN
@@ -53,7 +53,7 @@ class BaseWorker:
 
         sentry_sdk.init(
             dsn=self.config.sentry_dsn,
-            release=pkg_resources.get_distribution("vumi2").version,
+            release=importlib.metadata.distribution("vumi2").version,
         )
 
     def _setup_http(self, http_bind: str) -> None:

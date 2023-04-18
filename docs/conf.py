@@ -1,7 +1,7 @@
+import importlib.metadata
 from datetime import datetime
 from typing import List
 
-import pkg_resources
 from packaging.version import Version
 from packaging.version import parse as parse_version
 
@@ -16,7 +16,7 @@ from packaging.version import parse as parse_version
 project = "vumi2"
 author = "praekelt.org"
 copyright = f"{datetime.now().year}, {author}"
-release = pkg_resources.get_distribution(project).version
+release = importlib.metadata.distribution(project).version
 parsed_version = parse_version(release)
 if isinstance(parsed_version, Version):
     version = f"{parsed_version.major}.{parsed_version.minor}"

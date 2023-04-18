@@ -82,7 +82,10 @@ class SubmitShortMessageProcesserBase:  # pragma: no cover
     def __init__(self, config: dict, sequencer: Sequencer) -> None:
         ...
 
-    async def handle_outbound_message(self, message: Message) -> List[PDU]:
+    async def handle_outbound_message(  # type: ignore
+        self,
+        message: Message,
+    ) -> List[PDU]:
         ...
 
 
@@ -242,7 +245,10 @@ class DeliveryReportProcesserBase:  # pragma: no cover
     def __init__(self, config: dict) -> None:
         ...
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
+    async def handle_deliver_sm(  # type: ignore
+        self,
+        pdu: DeliverSM,
+    ) -> Tuple[bool, Optional[Event]]:
         ...
 
 
@@ -324,8 +330,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         match = self.regex.match(content)
         if not match:
             logger.warning(
-                "esm_class %s indicates delivery report, but regex does not match"
-                " content: %s",
+                (
+                    "esm_class %s indicates delivery report, but regex does not match"
+                    " content: %s"
+                ),
                 esm_class.type.name,
                 content,
             )
@@ -356,8 +364,10 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
         if not vumi_message_id:
             logger.warning(
-                "Unable to find message ID %s in SMPP cache, not sending status"
-                " update %s",
+                (
+                    "Unable to find message ID %s in SMPP cache, not sending status"
+                    " update %s"
+                ),
                 smpp_message_id,
                 smpp_status,
             )
