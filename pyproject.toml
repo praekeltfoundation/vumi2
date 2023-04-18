@@ -66,6 +66,7 @@ select = [
     "C4",          # flake8-comprehensions
     "PIE",         # flake8-pie
     "SIM",         # flake8-simplify
+    "PTH",         # flake8-use-pathlib
 ]
 target-version = "py38"
 

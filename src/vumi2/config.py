@@ -1,5 +1,6 @@
 import os
 from argparse import Namespace
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, Type
 
 import yaml
@@ -114,13 +115,13 @@ def _combine_nested_dictionaries(*args: Dict[Any, Any]):
     return result
 
 
-def load_config_from_file(filename: str) -> Dict[str, Any]:
+def load_config_from_file(path: Path) -> Dict[str, Any]:
     """
     Loads a config from a yaml file, if it exists, otherwise returns an empty
     dictionary.
     """
-    if os.path.exists(filename):
-        with open(filename) as f:
+    if path.exists():
+        with path.open() as f:
             return yaml.safe_load(f)
     return {}
 
@@ -137,12 +138,12 @@ def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
     - Command line arguments
     """
     cli = Namespace() if cli is None else cli
-    config_filename = os.environ.get("VUMI_CONFIG_FILE", "config.yaml")
+    config_path = Path(os.environ.get("VUMI_CONFIG_FILE", "config.yaml"))
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
     config_env = load_config_from_environment(
         cls=cls, prefix=config_prefix, source=os.environ
     )
-    config_file = load_config_from_file(filename=config_filename)
+    config_file = load_config_from_file(path=config_path)
     config_cli = load_config_from_cli(source=cli, cls=cls)
     return cls.deserialise(
         _combine_nested_dictionaries(config_file, config_env, config_cli)

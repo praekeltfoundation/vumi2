@@ -1,5 +1,6 @@
 import os
 from argparse import Namespace
+from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from vumi2.config import (
@@ -73,7 +74,7 @@ def test_load_config_from_environment():
 
 
 def test_load_config_from_nonexisting_file():
-    assert load_config_from_file(filename="nonexisting") == {}
+    assert load_config_from_file(path=Path("nonexisting")) == {}
 
 
 def test_load_config_from_cli():
