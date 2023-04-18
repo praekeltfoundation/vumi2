@@ -60,6 +60,9 @@ filterwarnings = [
 select = [
     "E", "F", "W", # pycodestyle + pyflakes == flake8 - mccabe
     "I",           # isort
+    "UP",          # pyupgrade
+    "C4",          # flake8-comprehensions
+    "PIE",         # flake8-pie
 ]
 target-version = "py38"
 
