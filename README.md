@@ -30,7 +30,7 @@ Then you can run a local worker using the `vumi2` command, eg.
 
 To run the autoformatting and linting, run
 ```bash
-~ black . && isort . && mypy --install-types . && flake8
+~ black . && mypy --install-types . && ruff check .
 ```
 
 For the test runner, we use [pytest](https://docs.pytest.org/):
