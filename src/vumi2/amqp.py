@@ -1,13 +1,13 @@
-from typing import AsyncContextManager
+from contextlib import AbstractAsyncContextManager
 
-import async_amqp
+import async_amqp  # type: ignore
 
 from vumi2.config import BaseConfig
 
 
 def create_amqp_client(
     config: BaseConfig,
-) -> AsyncContextManager[async_amqp.AmqpProtocol]:
+) -> AbstractAsyncContextManager[async_amqp.AmqpProtocol]:
     if config.amqp_url:
         client = async_amqp.connect_from_url(config.amqp_url)
     else:

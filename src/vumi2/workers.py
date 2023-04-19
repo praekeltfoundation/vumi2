@@ -1,10 +1,10 @@
 import importlib.metadata
 from logging import getLogger
-from typing import Dict, TypeVar
+from typing import TypedDict, TypeVar, get_type_hints
 
 import sentry_sdk
-from async_amqp import AmqpProtocol
-from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN
+from async_amqp import AmqpProtocol  # type: ignore
+from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN  # type: ignore
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart_trio import QuartTrio
@@ -28,8 +28,17 @@ ConnectorsType = TypeVar(
 logger = getLogger(__name__)
 
 
+class HealthCheckResp(TypedDict):
+    health: str
+    components: dict[str, str]
+
+
 class BaseWorker:
-    CONFIG_CLASS = BaseConfig
+    config: BaseConfig
+
+    @classmethod
+    def get_config_class(cls):
+        return get_type_hints(cls)["config"]
 
     def __init__(
         self, nursery: Nursery, amqp_connection: AmqpProtocol, config: BaseConfig
@@ -39,8 +48,8 @@ class BaseWorker:
         )
         self.nursery = nursery
         self.connection = amqp_connection
-        self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
-        self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
+        self.receive_inbound_connectors: dict[str, ReceiveInboundConnector] = {}
+        self.receive_outbound_connectors: dict[str, ReceiveOutboundConnector] = {}
         self.config = config
         self._setup_sentry()
         self.healthchecks = {"amqp": self._amqp_healthcheck}
@@ -65,7 +74,7 @@ class BaseWorker:
         self.http_app.add_url_rule("/health", view_func=self._healthcheck_request)
 
     async def _healthcheck_request(self):
-        response = {"health": "ok", "components": {}}
+        response: HealthCheckResp = {"health": "ok", "components": {}}
         for name, function in self.healthchecks.items():
             result = await function()
             if result["health"] != "ok":

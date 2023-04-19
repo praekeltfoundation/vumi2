@@ -1,7 +1,6 @@
 import contextlib
 import io
 from argparse import ArgumentParser
-from typing import List
 
 from vumi2.cli import (
     build_main_parser,
@@ -62,7 +61,7 @@ async def test_run_worker():
     assert worker.config.amqp.hostname == "localhost"
 
 
-def _get_main_command_output(args: List[str]) -> str:
+def _get_main_command_output(args: list[str]) -> str:
     err = None
     output = io.StringIO()
     try:

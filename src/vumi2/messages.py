@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Optional, Union
 from uuid import uuid4
 
 import cattrs
@@ -89,11 +89,11 @@ class Message:
     to_addr_type: Optional[AddressType] = None
     from_addr_type: Optional[AddressType] = None
 
-    def serialise(self) -> Dict[str, Any]:
+    def serialise(self) -> dict[str, Any]:
         return cattrs.unstructure(self)
 
     @classmethod
-    def deserialise(cls: "Type[Message]", data: Dict[str, Any]) -> "Message":
+    def deserialise(cls: "type[Message]", data: dict[str, Any]) -> "Message":
         return cattrs.structure(data, cls)
 
     def reply(
@@ -161,11 +161,11 @@ class Event:
             # Empty else clause so the linter doesn't complain about nested `if`s.
             pass
 
-    def serialise(self) -> Dict[str, Any]:
+    def serialise(self) -> dict[str, Any]:
         return cattrs.unstructure(self)
 
     @classmethod
-    def deserialise(cls: "Type[Event]", data: Dict[str, Any]) -> "Event":
+    def deserialise(cls: "type[Event]", data: dict[str, Any]) -> "Event":
         return cattrs.structure(data, cls)
 
 

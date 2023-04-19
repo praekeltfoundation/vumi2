@@ -1,12 +1,13 @@
 import json
+from collections.abc import Awaitable
 from logging import getLogger
-from typing import Awaitable, Callable, Dict, Optional, Type, overload
+from typing import Callable, Optional, overload
 
 import trio
-from async_amqp import AmqpProtocol
-from async_amqp.channel import Channel
-from async_amqp.envelope import Envelope
-from async_amqp.properties import Properties
+from async_amqp import AmqpProtocol  # type: ignore
+from async_amqp.channel import Channel  # type: ignore
+from async_amqp.envelope import Envelope  # type: ignore
+from async_amqp.properties import Properties  # type: ignore
 
 from vumi2.async_helpers import maybe_awaitable
 from vumi2.messages import Event, Message, MessageType
@@ -16,6 +17,7 @@ logger = getLogger(__name__)
 
 MessageCallbackType = Callable[[Message], Optional[Awaitable[None]]]
 EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
+_AmqpChType = tuple[Channel, bytes, Envelope, Properties]
 
 
 class Consumer:
@@ -30,7 +32,7 @@ class Consumer:
         connection: AmqpProtocol,
         queue_name: str,
         callback: MessageCallbackType,
-        message_class: Type[Message],
+        message_class: type[Message],
         concurrency: int,
     ) -> None:
         ...
@@ -42,7 +44,7 @@ class Consumer:
         connection: AmqpProtocol,
         queue_name: str,
         callback: EventCallbackType,
-        message_class: Type[Event],
+        message_class: type[Event],
         concurrency: int,
     ) -> None:
         ...
@@ -56,7 +58,9 @@ class Consumer:
         self.callback = callback
         self.message_class = message_class
         self.concurrency = concurrency
-        self.send_channel, self.receive_channel = trio.open_memory_channel(concurrency)
+        self.send_channel, self.receive_channel = trio.open_memory_channel[_AmqpChType](
+            concurrency,
+        )
 
     async def start(self) -> None:
         channel = await self.connection.channel()
@@ -128,8 +132,8 @@ class BaseConnector:
         self.connection = amqp_connection
         self.name = connector_name
         self.concurrency = concurrency
-        self._consumers: Dict[str, Consumer] = {}
-        self._publishers: Dict[str, Publisher] = {}
+        self._consumers: dict[str, Consumer] = {}
+        self._publishers: dict[str, Publisher] = {}
 
     def routing_key(self, message_type: str):
         return f"{self.name}.{message_type}"
@@ -139,13 +143,13 @@ class BaseConnector:
         self,
         message_type: str,
         handler: MessageCallbackType,
-        message_class: Type[Message],
+        message_class: type[Message],
     ) -> None:
         ...
 
     @overload
     async def _setup_consumer(
-        self, message_type: str, handler: EventCallbackType, message_class: Type[Event]
+        self, message_type: str, handler: EventCallbackType, message_class: type[Event]
     ) -> None:
         ...
 

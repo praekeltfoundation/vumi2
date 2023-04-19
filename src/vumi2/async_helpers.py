@@ -1,5 +1,6 @@
+from collections.abc import Awaitable
 from inspect import isawaitable
-from typing import Awaitable, TypeVar, Union, cast
+from typing import TypeVar, Union, cast
 
 _RETURN = TypeVar("_RETURN")
 

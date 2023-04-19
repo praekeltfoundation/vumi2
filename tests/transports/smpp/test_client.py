@@ -1,7 +1,7 @@
 import logging
 
 import pytest
-from smpp.pdu.operations import (
+from smpp.pdu.operations import (  # type: ignore
     BindTransceiver,
     BindTransceiverResp,
     DeliverSM,
@@ -15,7 +15,7 @@ from smpp.pdu.operations import (
     Unbind,
     UnbindResp,
 )
-from smpp.pdu.pdu_types import (
+from smpp.pdu.pdu_types import (  # type: ignore
     CommandStatus,
     DataCoding,
     EsmClass,

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 import cattrs
 from attrs import define
@@ -34,8 +34,8 @@ class InMemorySmppCacheConfig:
 class InMemorySmppCache(BaseSmppCache):
     def __init__(self, config: dict) -> None:
         self.config = cattrs.structure(config, InMemorySmppCacheConfig)
-        self._multipart: Dict[Tuple[int, int], Dict[int, str]] = {}
-        self._smpp_msg_id: Dict[str, Tuple[str, datetime]] = {}
+        self._multipart: dict[tuple[int, int], dict[int, str]] = {}
+        self._smpp_msg_id: dict[str, tuple[str, datetime]] = {}
 
     async def store_multipart(
         self, ref_num: int, tot_num: int, part_num: int, content: str

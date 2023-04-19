@@ -1,12 +1,12 @@
 import re
 from enum import Enum
 from logging import getLogger
-from typing import List, Optional, Tuple
+from typing import Optional
 
 import cattrs
 from attrs import Factory, define
-from smpp.pdu.operations import PDU, DeliverSM, SubmitSM
-from smpp.pdu.pdu_types import (
+from smpp.pdu.operations import PDU, DeliverSM, SubmitSM  # type: ignore
+from smpp.pdu.pdu_types import (  # type: ignore
     AddrNpi,
     AddrTon,
     DataCoding,
@@ -61,7 +61,7 @@ class RegisteredDeliveryConfig:
     delivery_receipt: RegisteredDeliveryReceipt = (
         RegisteredDeliveryReceipt.NO_SMSC_DELIVERY_RECEIPT_REQUESTED
     )
-    sme_originated_acks: List[RegisteredDeliverySmeOriginatedAcks] = Factory(list)
+    sme_originated_acks: list[RegisteredDeliverySmeOriginatedAcks] = Factory(list)
     intermediate_notification: bool = False
 
 
@@ -85,7 +85,7 @@ class SubmitShortMessageProcesserBase:  # pragma: no cover
     async def handle_outbound_message(  # type: ignore
         self,
         message: Message,
-    ) -> List[PDU]:
+    ) -> list[PDU]:
         ...
 
 
@@ -117,7 +117,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
     def _fits_in_one_message(self, content: bytes) -> bool:
         return len(content) <= self._get_msg_length()
 
-    async def handle_outbound_message(self, message: Message) -> List[SubmitSM]:
+    async def handle_outbound_message(self, message: Message) -> list[SubmitSM]:
         """
         Takes an outbound vumi message, and returns the PDUs necessary to send it.
         """
@@ -169,7 +169,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     async def submit_csm_sar_message(
         self, from_addr: str, to_addr: str, message: bytes
-    ) -> List[SubmitSM]:
+    ) -> list[SubmitSM]:
         pdus = []
         ref_num = (
             await self.sequencer.get_next_sequence_number()
@@ -192,7 +192,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     async def submit_csm_udh_message(
         self, from_addr: str, to_addr: str, message: bytes
-    ) -> List[SubmitSM]:
+    ) -> list[SubmitSM]:
         pdus = []
         ref_num = (await self.sequencer.get_next_sequence_number()) % 0xFF
         segments = list(
@@ -248,7 +248,7 @@ class DeliveryReportProcesserBase:  # pragma: no cover
     async def handle_deliver_sm(  # type: ignore
         self,
         pdu: DeliverSM,
-    ) -> Tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Optional[Event]]:
         ...
 
 
@@ -299,7 +299,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_optional_params(
         self, pdu: DeliverSM
-    ) -> Tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Optional[Event]]:
         """
         Check if this is a delivery report using the optional PDU params.
 
@@ -315,7 +315,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_esm_class(
         self, pdu: DeliverSM
-    ) -> Tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Optional[Event]]:
         """
         Check if this is a delivery report by looking at the esm_class.
 
@@ -344,7 +344,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_body(
         self, pdu: DeliverSM
-    ) -> Tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Optional[Event]]:
         """
         Try to decode the body as a delivery report, even if the esm_class doesn't
         say it's a delivery report
@@ -381,7 +381,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             transport_metadata={"smpp_delivery_status": smpp_status},
         )
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Tuple[bool, Optional[Event]]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> tuple[bool, Optional[Event]]:
         """
         Try to handle the pdu as a delivery report. Returns an equivalent Event if
         handled, or None if not.
@@ -449,7 +449,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
 
     def _extract_multipart(
         self, pdu: DeliverSM
-    ) -> Optional[Tuple[int, int, int, bytes]]:
+    ) -> Optional[tuple[int, int, int, bytes]]:
         """
         Tries to extract the multipart data from the PDU, using optional params, or UDH
         CSM or CSM16.
@@ -494,7 +494,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
 
     async def _handle_multipart_message(
         self, pdu: DeliverSM
-    ) -> Tuple[bool, Optional[Message]]:
+    ) -> tuple[bool, Optional[Message]]:
         """
         Tries to handle the message as a multipart message.
 

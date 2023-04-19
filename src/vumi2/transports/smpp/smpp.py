@@ -1,12 +1,12 @@
 from logging import getLogger
 from typing import Optional
 
-from async_amqp import AmqpProtocol
+from async_amqp import AmqpProtocol  # type: ignore
 from attrs import Factory, define
 from trio import MemoryReceiveChannel, Nursery, open_memory_channel, open_tcp_stream
 
 from vumi2.cli import class_from_string
-from vumi2.messages import Event, Message
+from vumi2.messages import Event, Message, MessageType
 from vumi2.workers import BaseConfig, BaseWorker
 
 from .client import EsmeClient
@@ -41,7 +41,7 @@ class SmppTransceiverTransportConfig(BaseConfig):
 
 
 class SmppTransceiverTransport(BaseWorker):
-    CONFIG_CLASS = SmppTransceiverTransportConfig
+    config: SmppTransceiverTransportConfig
 
     def __init__(
         self,
@@ -50,7 +50,6 @@ class SmppTransceiverTransport(BaseWorker):
         config: SmppTransceiverTransportConfig,
     ) -> None:
         super().__init__(nursery, amqp_connection, config)
-        self.config: SmppTransceiverTransportConfig = config
         sequencer_class = class_from_string(config.sequencer_class)
         self.sequencer = sequencer_class(config.sequencer_config)
         submit_sm_processor_class = class_from_string(config.submit_sm_processor_class)
@@ -74,7 +73,7 @@ class SmppTransceiverTransport(BaseWorker):
         self.stream = await open_tcp_stream(
             host=self.config.host, port=self.config.port
         )
-        send_channel, receive_channel = open_memory_channel(0)
+        send_channel, receive_channel = open_memory_channel[MessageType](0)
         self.client = EsmeClient(
             self.nursery,
             self.stream,

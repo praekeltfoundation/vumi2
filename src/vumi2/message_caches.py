@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Optional
 
 from attrs import define
 from cattrs import structure
@@ -26,7 +26,7 @@ class MemoryMessageCacheConfig:
 class MemoryMessageCache(MessageCache):
     def __init__(self, config: dict) -> None:
         self.config = structure(config, MemoryMessageCacheConfig)
-        self.outbounds: Dict[str, Message] = {}
+        self.outbounds: dict[str, Message] = {}
 
     def _remove_expired(self) -> None:
         timestamp = datetime.utcnow()

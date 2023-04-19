@@ -2,6 +2,7 @@ from datetime import datetime
 from uuid import UUID
 
 import pytest
+from cattrs.errors import ClassValidationError
 
 from vumi2.messages import (
     AddressType,
@@ -113,7 +114,7 @@ def test_deserialise_missing_fields():
     """
     Missing fields should raise an exception
     """
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(ClassValidationError) as e_info:
         Message.deserialise({})
     exceptions = e_info.value.exceptions
     missing_fields = ("to_addr", "from_addr", "transport_name", "transport_type")
@@ -243,7 +244,7 @@ def test_event_deserialise_missing_fields():
     """
     Missing fields should raise an exception
     """
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(ClassValidationError) as e_info:
         Event.deserialise({})
     exceptions = e_info.value.exceptions
     missing_fields = ("user_message_id", "event_type")
@@ -256,7 +257,7 @@ def test_event_validate_event_type():
     """
     For each event type, the correct validation should run
     """
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(ClassValidationError) as e_info:
         Event.deserialise(
             {
                 "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
@@ -267,7 +268,7 @@ def test_event_validate_event_type():
     assert isinstance(exception, ValueError)
     assert exception.args[0] == "sent_message_id cannot be null for ack event type"
 
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(ClassValidationError) as e_info:
         Event.deserialise(
             {
                 "user_message_id": "23fdc3d6768443dd9b16455e556243a9",
@@ -278,7 +279,7 @@ def test_event_validate_event_type():
     assert isinstance(exception, ValueError)
     assert exception.args[0] == "nack_reason cannot be null for nack event type"
 
-    with pytest.raises(Exception) as e_info:
+    with pytest.raises(ClassValidationError) as e_info:
         Event.deserialise(
             {
                 "user_message_id": "23fdc3d6768443dd9b16455e556243a9",

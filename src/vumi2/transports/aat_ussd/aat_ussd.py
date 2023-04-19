@@ -2,9 +2,7 @@ import xml.etree.ElementTree as ET
 from logging import getLogger
 from urllib.parse import urlencode, urljoin
 
-from async_amqp import AmqpProtocol
 from attrs import define
-from trio import Nursery
 
 from vumi2.messages import AddressType, Message, Session, TransportType
 from vumi2.transports.httprpc import HttpRpcConfig, HttpRpcTransport, Request
@@ -18,18 +16,9 @@ class AatUssdTransportConfig(HttpRpcConfig):
 
 
 class AatUssdTransport(HttpRpcTransport):
-    CONFIG_CLASS = AatUssdTransportConfig
-    EXPECTED_FIELDS = {"msisdn", "provider"}
+    config: AatUssdTransportConfig
 
-    # So that the type checker knows the type of self.config
-    def __init__(
-        self,
-        nursery: Nursery,
-        amqp_connection: AmqpProtocol,
-        config: AatUssdTransportConfig,
-    ) -> None:
-        super().__init__(nursery, amqp_connection, config)
-        self.config: AatUssdTransportConfig = config
+    EXPECTED_FIELDS = {"msisdn", "provider"}
 
     async def handle_raw_inbound_message(self, message_id: str, r: Request) -> None:
         values = r.args

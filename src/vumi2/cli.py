@@ -1,8 +1,8 @@
 import argparse
 import logging
 import sys
+from collections.abc import Iterable
 from importlib import import_module
-from typing import Iterable, List, Type
 
 import trio
 from attrs import Attribute
@@ -21,7 +21,7 @@ def root_parser() -> argparse.ArgumentParser:
 
 
 def worker_subcommand(
-    parser: argparse.ArgumentParser, worker_cls: Type[BaseWorker]
+    parser: argparse.ArgumentParser, worker_cls: type[BaseWorker]
 ) -> argparse.ArgumentParser:
     """
     This is the worker subcommand, which runs a vumi worker.
@@ -30,7 +30,7 @@ def worker_subcommand(
         name="worker", description="Run a vumi worker", help="Run a vumi worker"
     )
     command.add_argument("worker_class", help="The worker class to run")
-    worker_config_options(worker_cls.CONFIG_CLASS, command)
+    worker_config_options(worker_cls.get_config_class(), command)
     return command
 
 
@@ -54,7 +54,7 @@ def _create_argument_key(*parts: str):
 
 
 def worker_config_options(
-    cls: Type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
+    cls: type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
@@ -76,13 +76,13 @@ def class_from_string(class_path: str):
     return getattr(module, class_name)
 
 
-async def run_worker(worker_cls: Type[BaseWorker], args: List[str]) -> BaseWorker:
+async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorker:
     """
     Runs the worker specified by the worker class
     """
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
-    config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
+    config = load_config(cls=worker_cls.get_config_class(), cli=parsed_args)
     logging.basicConfig(level=config.log_level)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:

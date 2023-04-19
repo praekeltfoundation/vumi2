@@ -14,7 +14,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 trio = "^0.22.0"
 async-amqp = "^0.5.0"
 attrs = "^23.1.0"
@@ -33,6 +33,7 @@ pytest-trio = "^0.8.0"
 pytest-cov = "^4.0.0"
 ruff = "^0.0.261"
 Sphinx = "^6.1.3"
+trio-typing = "^0.8.0"
 
 [tool.poetry.scripts]
 vumi2 = "vumi2.cli:main"
@@ -45,7 +46,8 @@ build-backend = "poetry.core.masonry.api"
 preview = true
 
 [tool.mypy]
-ignore_missing_imports = true
+ignore_missing_imports = false
+check_untyped_defs = true
 
 [tool.pytest.ini_options]
 trio_mode = true
@@ -68,7 +70,7 @@ select = [
     "SIM",         # flake8-simplify
     "PTH",         # flake8-use-pathlib
 ]
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.isort]
 known-first-party = ["vumi2"]
