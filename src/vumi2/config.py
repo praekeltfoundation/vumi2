@@ -1,7 +1,8 @@
 import os
 from argparse import Namespace
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Optional, Type
+from typing import Any, Callable, Optional
 
 import yaml
 from attrs import Attribute, AttrsInstance, Factory, define, fields
@@ -28,7 +29,7 @@ class BaseConfig:
     log_level: str = "INFO"
 
     @classmethod
-    def deserialise(cls, config: Dict[str, Any]) -> "BaseConfig":
+    def deserialise(cls, config: dict[str, Any]) -> "BaseConfig":
         return structure(config, cls)
 
 
@@ -36,9 +37,9 @@ ConfigCallback = Callable[[Attribute, Iterable[str]], Any]
 
 
 def walk_config_class(
-    cls: Type[AttrsInstance], fn: ConfigCallback, *prefix: str
-) -> Dict[str, Any]:
-    result: Dict[str, Any] = {}
+    cls: type[AttrsInstance], fn: ConfigCallback, *prefix: str
+) -> dict[str, Any]:
+    result: dict[str, Any] = {}
 
     for field in fields(cls):
         if field.type and is_attrs(field.type):
@@ -57,7 +58,7 @@ def _create_env_var_key(*parts: str) -> str:
 
 def load_config_from_environment(
     cls=BaseConfig, prefix="", source=os.environ
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Given the config class and a prefix, load the config from the source.
 
@@ -84,7 +85,7 @@ def _create_cli_key(*parts: str) -> str:
 
 def load_config_from_cli(
     source: Namespace, cls=BaseConfig, prefix=""
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Given the parsed command line arguments, the config class, and a prefix, load the
     worker config
@@ -100,12 +101,12 @@ def load_config_from_cli(
     return walk_config_class(cls, load_cli, prefix)
 
 
-def _combine_nested_dictionaries(*args: Dict[Any, Any]):
+def _combine_nested_dictionaries(*args: dict[Any, Any]):
     """
     Takes multiple dictionaries and combines them into a single dictionary, taking into
     account nested dictionaries.
     """
-    result: Dict[Any, Any] = {}
+    result: dict[Any, Any] = {}
     for d in args:
         for k, v in d.items():
             if isinstance(v, dict):
@@ -115,7 +116,7 @@ def _combine_nested_dictionaries(*args: Dict[Any, Any]):
     return result
 
 
-def load_config_from_file(path: Path) -> Dict[str, Any]:
+def load_config_from_file(path: Path) -> dict[str, Any]:
     """
     Loads a config from a yaml file, if it exists, otherwise returns an empty
     dictionary.

@@ -1,7 +1,6 @@
 import re
 from logging import getLogger
 from re import Pattern
-from typing import Dict, List, Tuple, Type
 
 import trio
 from async_amqp.protocol import AmqpProtocol
@@ -18,8 +17,8 @@ logger = getLogger(__name__)
 
 @define
 class ToAddressRouterConfig(BaseConfig):
-    transport_names: List[str] = Factory(list)
-    to_address_mappings: Dict[str, str] = Factory(dict)
+    transport_names: list[str] = Factory(list)
+    to_address_mappings: dict[str, str] = Factory(dict)
     message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
     message_cache_config: dict = Factory(dict)
 
@@ -34,7 +33,7 @@ class ToAddressRouter(BaseWorker):
         config: ToAddressRouterConfig,
     ):
         super().__init__(nursery, amqp_connection, config)
-        message_cache_cls: Type[MessageCache] = class_from_string(
+        message_cache_cls: type[MessageCache] = class_from_string(
             config.message_cache_class
         )
         self.message_cache: MessageCache = message_cache_cls(
@@ -42,7 +41,7 @@ class ToAddressRouter(BaseWorker):
         )
 
     async def setup(self):
-        self.mappings: List[Tuple[str, Pattern]] = []
+        self.mappings: list[tuple[str, Pattern]] = []
 
         for name, pattern in self.config.to_address_mappings.items():
             self.mappings.append((name, re.compile(pattern)))

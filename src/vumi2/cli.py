@@ -1,8 +1,8 @@
 import argparse
 import logging
 import sys
+from collections.abc import Iterable
 from importlib import import_module
-from typing import Iterable, List, Type
 
 import trio
 from attrs import Attribute
@@ -21,7 +21,7 @@ def root_parser() -> argparse.ArgumentParser:
 
 
 def worker_subcommand(
-    parser: argparse.ArgumentParser, worker_cls: Type[BaseWorker]
+    parser: argparse.ArgumentParser, worker_cls: type[BaseWorker]
 ) -> argparse.ArgumentParser:
     """
     This is the worker subcommand, which runs a vumi worker.
@@ -54,7 +54,7 @@ def _create_argument_key(*parts: str):
 
 
 def worker_config_options(
-    cls: Type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
+    cls: type[BaseConfig], parser: argparse.ArgumentParser, prefix=""
 ):
     """
     Adds the config options that are specific to the worker class
@@ -76,7 +76,7 @@ def class_from_string(class_path: str):
     return getattr(module, class_name)
 
 
-async def run_worker(worker_cls: Type[BaseWorker], args: List[str]) -> BaseWorker:
+async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorker:
     """
     Runs the worker specified by the worker class
     """

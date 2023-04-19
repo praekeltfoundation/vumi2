@@ -1,6 +1,6 @@
 from io import BytesIO
 from logging import getLogger
-from typing import TYPE_CHECKING, Dict, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, Union, cast
 
 from smpp.pdu.constants import command_status_name_map, command_status_value_map
 from smpp.pdu.operations import (
@@ -93,7 +93,7 @@ class EsmeClient:
         self.dr_processor = dr_processor
         self.send_message_channel = send_message_channel
         self.buffer = bytearray()
-        self.responses: Dict[int, MemorySendChannel] = {}
+        self.responses: dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
 
     async def start(self) -> None:

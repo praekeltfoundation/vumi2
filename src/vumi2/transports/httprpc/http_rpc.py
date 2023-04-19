@@ -1,5 +1,5 @@
 from logging import getLogger
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 from async_amqp import AmqpProtocol
 from attrs import Factory, define
@@ -35,7 +35,7 @@ class Request:
 class Response:
     data: Union[str, dict]
     code: int
-    headers: Dict[str, str]
+    headers: dict[str, str]
 
 
 class HttpRpcTransport(BaseWorker):
@@ -52,14 +52,14 @@ class HttpRpcTransport(BaseWorker):
         self.config: HttpRpcConfig = config
 
     async def setup(self) -> None:
-        self.requests: Dict[str, Request] = {}
-        self.results: Dict[str, Response] = {}
+        self.requests: dict[str, Request] = {}
+        self.results: dict[str, Response] = {}
         self.connector = await self.setup_receive_outbound_connector(
             self.config.transport_name, self.handle_outbound_message
         )
         self.http_app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
 
-    async def inbound_request(self) -> Tuple[Union[str, dict], int, Dict[str, str]]:
+    async def inbound_request(self) -> tuple[Union[str, dict], int, dict[str, str]]:
         message_id = generate_message_id()
         try:
             with move_on_after(self.config.request_timeout):
@@ -99,8 +99,8 @@ class HttpRpcTransport(BaseWorker):
         )
 
     def ensure_message_fields(
-        self, message: Message, expected_fields: List[str]
-    ) -> List[str]:
+        self, message: Message, expected_fields: list[str]
+    ) -> list[str]:
         missing_fields = []
         for field in expected_fields:
             if not getattr(message, field):

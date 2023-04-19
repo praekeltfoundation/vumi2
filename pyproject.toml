@@ -14,7 +14,7 @@ include = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 trio = "^0.22.0"
 async-amqp = "^0.5.0"
 attrs = "^23.1.0"
@@ -68,7 +68,7 @@ select = [
     "SIM",         # flake8-simplify
     "PTH",         # flake8-use-pathlib
 ]
-target-version = "py38"
+target-version = "py39"
 
 [tool.ruff.isort]
 known-first-party = ["vumi2"]

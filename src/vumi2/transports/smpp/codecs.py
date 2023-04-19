@@ -1,5 +1,4 @@
 import codecs
-from typing import Tuple
 
 GSM0338_CHARSET = (
     "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1bÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
@@ -28,7 +27,7 @@ class Gsm0338Codec(codecs.Codec):
 
     NAME = "gsm0338"
 
-    def encode(self, text: str, errors: str = "strict") -> Tuple[bytes, int]:
+    def encode(self, text: str, errors: str = "strict") -> tuple[bytes, int]:
         """
         Modified from https://stackoverflow.com/a/2453027
         """
@@ -57,7 +56,7 @@ class Gsm0338Codec(codecs.Codec):
                 )
         return (bytes(result), len(result))
 
-    def decode(self, text: bytes, errors: str = "strict") -> Tuple[str, int]:
+    def decode(self, text: bytes, errors: str = "strict") -> tuple[str, int]:
         """
         Modified from https://stackoverflow.com/a/13131694
         """

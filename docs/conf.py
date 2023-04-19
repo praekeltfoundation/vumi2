@@ -1,6 +1,5 @@
 import importlib.metadata
 from datetime import datetime
-from typing import List
 
 from packaging.version import Version
 from packaging.version import parse as parse_version
@@ -26,7 +25,7 @@ else:
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions: List[str] = []
+extensions: list[str] = []
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

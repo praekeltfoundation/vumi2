@@ -1,6 +1,6 @@
 import importlib.metadata
 from logging import getLogger
-from typing import Dict, TypeVar
+from typing import TypeVar
 
 import sentry_sdk
 from async_amqp import AmqpProtocol
@@ -39,8 +39,8 @@ class BaseWorker:
         )
         self.nursery = nursery
         self.connection = amqp_connection
-        self.receive_inbound_connectors: Dict[str, ReceiveInboundConnector] = {}
-        self.receive_outbound_connectors: Dict[str, ReceiveOutboundConnector] = {}
+        self.receive_inbound_connectors: dict[str, ReceiveInboundConnector] = {}
+        self.receive_outbound_connectors: dict[str, ReceiveOutboundConnector] = {}
         self.config = config
         self._setup_sentry()
         self.healthchecks = {"amqp": self._amqp_healthcheck}

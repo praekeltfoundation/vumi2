@@ -1,6 +1,7 @@
 import json
+from collections.abc import Awaitable
 from logging import getLogger
-from typing import Awaitable, Callable, Dict, Optional, Type, overload
+from typing import Callable, Optional, overload
 
 import trio
 from async_amqp import AmqpProtocol
@@ -30,7 +31,7 @@ class Consumer:
         connection: AmqpProtocol,
         queue_name: str,
         callback: MessageCallbackType,
-        message_class: Type[Message],
+        message_class: type[Message],
         concurrency: int,
     ) -> None:
         ...
@@ -42,7 +43,7 @@ class Consumer:
         connection: AmqpProtocol,
         queue_name: str,
         callback: EventCallbackType,
-        message_class: Type[Event],
+        message_class: type[Event],
         concurrency: int,
     ) -> None:
         ...
@@ -128,8 +129,8 @@ class BaseConnector:
         self.connection = amqp_connection
         self.name = connector_name
         self.concurrency = concurrency
-        self._consumers: Dict[str, Consumer] = {}
-        self._publishers: Dict[str, Publisher] = {}
+        self._consumers: dict[str, Consumer] = {}
+        self._publishers: dict[str, Publisher] = {}
 
     def routing_key(self, message_type: str):
         return f"{self.name}.{message_type}"
@@ -139,13 +140,13 @@ class BaseConnector:
         self,
         message_type: str,
         handler: MessageCallbackType,
-        message_class: Type[Message],
+        message_class: type[Message],
     ) -> None:
         ...
 
     @overload
     async def _setup_consumer(
-        self, message_type: str, handler: EventCallbackType, message_class: Type[Event]
+        self, message_type: str, handler: EventCallbackType, message_class: type[Event]
     ) -> None:
         ...
 
