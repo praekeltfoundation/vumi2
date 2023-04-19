@@ -10,7 +10,7 @@ from vumi2.transports import AatUssdTransport
 
 @pytest.fixture
 def config():
-    return AatUssdTransport.CONFIG_CLASS(
+    return AatUssdTransport.get_config_class()(
         http_bind="localhost",
         base_url="http://www.example.org",
         web_path="/api/aat/ussd",

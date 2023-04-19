@@ -16,7 +16,7 @@ class FailingHealthcheckWorker(BaseWorker):
 
 @pytest.fixture
 def config():
-    return BaseWorker.CONFIG_CLASS.deserialise({})
+    return BaseWorker.get_config_class().deserialise({})
 
 
 async def test_sentry(amqp_connection, config, nursery):

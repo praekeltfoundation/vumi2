@@ -30,7 +30,7 @@ def worker_subcommand(
         name="worker", description="Run a vumi worker", help="Run a vumi worker"
     )
     command.add_argument("worker_class", help="The worker class to run")
-    worker_config_options(worker_cls.CONFIG_CLASS, command)
+    worker_config_options(worker_cls.get_config_class(), command)
     return command
 
 
@@ -82,7 +82,7 @@ async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorke
     """
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
-    config = load_config(cls=worker_cls.CONFIG_CLASS, cli=parsed_args)
+    config = load_config(cls=worker_cls.get_config_class(), cli=parsed_args)
     logging.basicConfig(level=config.log_level)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:

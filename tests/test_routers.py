@@ -3,7 +3,7 @@ from trio import open_memory_channel
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
 
-TEST_CONFIG = ToAddressRouter.CONFIG_CLASS.deserialise(
+TEST_CONFIG = ToAddressRouter.get_config_class().deserialise(
     {
         "transport_names": ["test1", "test2"],
         "to_address_mappings": {

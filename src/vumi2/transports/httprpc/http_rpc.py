@@ -1,12 +1,11 @@
 from logging import getLogger
 from typing import Union
 
-from async_amqp import AmqpProtocol
 from attrs import Factory, define
 from quart import request
 from quart.datastructures import Headers
 from trio import Event as TrioEvent
-from trio import Nursery, move_on_after
+from trio import move_on_after
 from werkzeug.datastructures import MultiDict
 
 from vumi2.messages import Event, EventType, Message, generate_message_id
@@ -39,17 +38,7 @@ class Response:
 
 
 class HttpRpcTransport(BaseWorker):
-    CONFIG_CLASS = HttpRpcConfig
-
-    # So that the type checker knows the type of self.config
-    def __init__(
-        self,
-        nursery: Nursery,
-        amqp_connection: AmqpProtocol,
-        config: HttpRpcConfig,
-    ) -> None:
-        super().__init__(nursery, amqp_connection, config)
-        self.config: HttpRpcConfig = config
+    config: HttpRpcConfig
 
     async def setup(self) -> None:
         self.requests: dict[str, Request] = {}

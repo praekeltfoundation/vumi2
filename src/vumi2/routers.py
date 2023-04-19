@@ -24,7 +24,7 @@ class ToAddressRouterConfig(BaseConfig):
 
 
 class ToAddressRouter(BaseWorker):
-    CONFIG_CLASS = ToAddressRouterConfig
+    config: ToAddressRouterConfig
 
     def __init__(
         self,

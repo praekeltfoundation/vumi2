@@ -1,6 +1,6 @@
 import importlib.metadata
 from logging import getLogger
-from typing import TypeVar
+from typing import TypeVar, get_type_hints
 
 import sentry_sdk
 from async_amqp import AmqpProtocol
@@ -29,7 +29,11 @@ logger = getLogger(__name__)
 
 
 class BaseWorker:
-    CONFIG_CLASS = BaseConfig
+    config: BaseConfig
+
+    @classmethod
+    def get_config_class(cls):
+        return get_type_hints(cls)["config"]
 
     def __init__(
         self, nursery: Nursery, amqp_connection: AmqpProtocol, config: BaseConfig

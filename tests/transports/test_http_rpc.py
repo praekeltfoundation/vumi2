@@ -10,7 +10,7 @@ from vumi2.transports import HttpRpcTransport
 
 @pytest.fixture
 def config():
-    return HttpRpcTransport.CONFIG_CLASS(http_bind="localhost", request_timeout=5)
+    return HttpRpcTransport.get_config_class()(http_bind="localhost", request_timeout=5)
 
 
 class OkTransport(HttpRpcTransport):

@@ -41,7 +41,7 @@ class SmppTransceiverTransportConfig(BaseConfig):
 
 
 class SmppTransceiverTransport(BaseWorker):
-    CONFIG_CLASS = SmppTransceiverTransportConfig
+    config: SmppTransceiverTransportConfig
 
     def __init__(
         self,
@@ -50,7 +50,6 @@ class SmppTransceiverTransport(BaseWorker):
         config: SmppTransceiverTransportConfig,
     ) -> None:
         super().__init__(nursery, amqp_connection, config)
-        self.config: SmppTransceiverTransportConfig = config
         sequencer_class = class_from_string(config.sequencer_class)
         self.sequencer = sequencer_class(config.sequencer_config)
         submit_sm_processor_class = class_from_string(config.submit_sm_processor_class)
