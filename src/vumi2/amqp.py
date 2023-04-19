@@ -1,6 +1,6 @@
 from contextlib import AbstractAsyncContextManager
 
-import async_amqp
+import async_amqp  # type: ignore
 
 from vumi2.config import BaseConfig
 

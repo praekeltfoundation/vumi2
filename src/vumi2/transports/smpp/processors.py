@@ -5,8 +5,8 @@ from typing import Optional
 
 import cattrs
 from attrs import Factory, define
-from smpp.pdu.operations import PDU, DeliverSM, SubmitSM
-from smpp.pdu.pdu_types import (
+from smpp.pdu.operations import PDU, DeliverSM, SubmitSM  # type: ignore
+from smpp.pdu.pdu_types import (  # type: ignore
     AddrNpi,
     AddrTon,
     DataCoding,

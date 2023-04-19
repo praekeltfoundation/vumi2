@@ -3,8 +3,8 @@ from logging import getLogger
 from typing import TypeVar, get_type_hints
 
 import sentry_sdk
-from async_amqp import AmqpProtocol
-from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN
+from async_amqp import AmqpProtocol  # type: ignore
+from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN  # type: ignore
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart_trio import QuartTrio

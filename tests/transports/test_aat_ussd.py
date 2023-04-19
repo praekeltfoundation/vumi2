@@ -4,8 +4,12 @@ from xml.etree import ElementTree as ET
 import pytest
 from trio import open_memory_channel
 
-from vumi2.messages import EventType, Message, Session, TransportType
+from vumi2.messages import EventType, Message, MessageType, Session, TransportType
 from vumi2.transports import AatUssdTransport
+
+
+def msg_ch_pair(bufsize: int):
+    return open_memory_channel[MessageType](bufsize)
 
 
 @pytest.fixture
@@ -53,7 +57,7 @@ def assert_outbound_message_response(
 
 
 async def test_inbound_start_session(transport: AatUssdTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -98,7 +102,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
 
 
 async def test_close_session(transport: AatUssdTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -147,7 +151,7 @@ async def test_missing_fields(transport: AatUssdTransport):
 
 
 async def test_inbound_session_resume(transport: AatUssdTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -186,7 +190,7 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
 
 
 async def test_outbound_not_reply(transport: AatUssdTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -212,7 +216,7 @@ async def test_outbound_not_reply(transport: AatUssdTransport):
 
 
 async def test_outbound_no_content(transport: AatUssdTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)

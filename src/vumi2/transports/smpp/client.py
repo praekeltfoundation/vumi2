@@ -2,8 +2,11 @@ from io import BytesIO
 from logging import getLogger
 from typing import TYPE_CHECKING, Optional, Union, cast
 
-from smpp.pdu.constants import command_status_name_map, command_status_value_map
-from smpp.pdu.operations import (
+from smpp.pdu.constants import (  # type: ignore
+    command_status_name_map,
+    command_status_value_map,
+)
+from smpp.pdu.operations import (  # type: ignore
     BindTransceiver,
     DeliverSM,
     DeliverSMResp,
@@ -15,8 +18,8 @@ from smpp.pdu.operations import (
     Unbind,
     UnbindResp,
 )
-from smpp.pdu.pdu_encoding import PDUEncoder
-from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus
+from smpp.pdu.pdu_encoding import PDUEncoder  # type: ignore
+from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus  # type: ignore
 from trio import (
     MemorySendChannel,
     Nursery,
@@ -231,7 +234,7 @@ class EsmeClient:
             await self.stream.send_all(self.encoder.encode(pdu))
             return None
 
-        send_channel, receive_channel = open_memory_channel(0)
+        send_channel, receive_channel = open_memory_channel[PDU](0)
         self.responses[pdu.seqNum] = send_channel
         await self.stream.send_all(self.encoder.encode(pdu))
         async for response in receive_channel:

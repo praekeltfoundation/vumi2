@@ -4,8 +4,12 @@ import pytest
 from quart_trio.testing.connections import TestHTTPConnection as QuartTestHTTPConnection
 from trio import open_memory_channel
 
-from vumi2.messages import EventType, Message, TransportType
+from vumi2.messages import EventType, Message, MessageType, TransportType
 from vumi2.transports import HttpRpcTransport
+
+
+def msg_ch_pair(bufsize: int):
+    return open_memory_channel[MessageType](bufsize)
 
 
 @pytest.fixture
@@ -34,7 +38,7 @@ async def transport(nursery, amqp_connection, config):
 
 
 async def test_inbound(transport: OkTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -61,7 +65,7 @@ async def test_inbound(transport: OkTransport):
 
 
 async def test_missing_fields_nack(transport: OkTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -89,7 +93,7 @@ async def test_missing_fields_nack(transport: OkTransport):
 
 
 async def test_missing_request_nack(transport: OkTransport):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -119,7 +123,7 @@ async def test_missing_request_nack(transport: OkTransport):
 
 
 async def test_timeout(transport: OkTransport, mock_clock):
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)
@@ -145,7 +149,7 @@ async def test_client_disconnect(transport: OkTransport):
     """
     Transport should clean up so that we don't have memory leaks
     """
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def inbound_consumer(msg):
         await send_channel.send(msg)

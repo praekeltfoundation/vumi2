@@ -4,10 +4,10 @@ from logging import getLogger
 from typing import Callable, Optional, overload
 
 import trio
-from async_amqp import AmqpProtocol
-from async_amqp.channel import Channel
-from async_amqp.envelope import Envelope
-from async_amqp.properties import Properties
+from async_amqp import AmqpProtocol  # type: ignore
+from async_amqp.channel import Channel  # type: ignore
+from async_amqp.envelope import Envelope  # type: ignore
+from async_amqp.properties import Properties  # type: ignore
 
 from vumi2.async_helpers import maybe_awaitable
 from vumi2.messages import Event, Message, MessageType
@@ -17,6 +17,7 @@ logger = getLogger(__name__)
 
 MessageCallbackType = Callable[[Message], Optional[Awaitable[None]]]
 EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
+_AmqpChType = tuple[Channel, bytes, Envelope, Properties]
 
 
 class Consumer:
@@ -57,7 +58,9 @@ class Consumer:
         self.callback = callback
         self.message_class = message_class
         self.concurrency = concurrency
-        self.send_channel, self.receive_channel = trio.open_memory_channel(concurrency)
+        self.send_channel, self.receive_channel = trio.open_memory_channel[_AmqpChType](
+            concurrency,
+        )
 
     async def start(self) -> None:
         channel = await self.connection.channel()

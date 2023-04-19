@@ -1,8 +1,8 @@
 import logging
 
 import pytest
-from smpp.pdu.operations import DeliverSM
-from smpp.pdu.pdu_types import (
+from smpp.pdu.operations import DeliverSM  # type: ignore
+from smpp.pdu.pdu_types import (  # type: ignore
     AddrNpi,
     AddrTon,
     DataCoding,

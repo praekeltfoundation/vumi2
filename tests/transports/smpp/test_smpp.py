@@ -1,7 +1,11 @@
 import logging
 
 from pytest import fixture
-from smpp.pdu.operations import BindTransceiverResp, DeliverSM, SubmitSMResp
+from smpp.pdu.operations import (  # type: ignore
+    BindTransceiverResp,
+    DeliverSM,
+    SubmitSMResp,
+)
 from trio import Event, Nursery, open_nursery
 
 from vumi2.connectors import ReceiveOutboundConnector

@@ -3,7 +3,7 @@ from logging import getLogger
 from re import Pattern
 
 import trio
-from async_amqp.protocol import AmqpProtocol
+from async_amqp.protocol import AmqpProtocol  # type: ignore
 from attrs import Factory, define
 
 from vumi2.cli import class_from_string
