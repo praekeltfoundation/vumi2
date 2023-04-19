@@ -14,6 +14,10 @@ TEST_CONFIG = ToAddressRouter.get_config_class().deserialise(
 )
 
 
+def msg_ch_pair(bufsize: int):
+    return open_memory_channel[MessageType](bufsize)
+
+
 async def ignore_message(_: MessageType) -> None:
     return
 
@@ -65,7 +69,7 @@ async def test_to_addr_router_event(amqp_connection, nursery):
         event_type=EventType.ACK,
         sent_message_id=outbound.message_id,
     )
-    send_channel, receive_channel = open_memory_channel(1)
+    send_channel, receive_channel = msg_ch_pair(1)
 
     async def consumer(msg):
         with send_channel:
@@ -103,8 +107,8 @@ async def test_to_addr_router_inbound(amqp_connection, nursery):
         transport_name="test",
         transport_type=TransportType.SMS,
     )
-    send_channel1, receive_channel1 = open_memory_channel(1)
-    send_channel2, receive_channel2 = open_memory_channel(1)
+    send_channel1, receive_channel1 = msg_ch_pair(1)
+    send_channel2, receive_channel2 = msg_ch_pair(1)
 
     async def inbound_consumer1(msg):
         with send_channel1:
@@ -157,8 +161,8 @@ async def test_to_addr_router_outbound(amqp_connection, nursery):
         transport_name="test2",
         transport_type=TransportType.SMS,
     )
-    send_channel1, receive_channel1 = open_memory_channel(1)
-    send_channel2, receive_channel2 = open_memory_channel(1)
+    send_channel1, receive_channel1 = msg_ch_pair(1)
+    send_channel2, receive_channel2 = msg_ch_pair(1)
 
     async def outbound_consumer1(msg):
         with send_channel1:

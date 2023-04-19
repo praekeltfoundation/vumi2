@@ -47,6 +47,7 @@ preview = true
 
 [tool.mypy]
 ignore_missing_imports = false
+check_untyped_defs = true
 
 [tool.pytest.ini_options]
 trio_mode = true

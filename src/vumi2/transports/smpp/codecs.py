@@ -27,12 +27,12 @@ class Gsm0338Codec(codecs.Codec):
 
     NAME = "gsm0338"
 
-    def encode(self, text: str, errors: str = "strict") -> tuple[bytes, int]:
+    def encode(self, input: str, errors: str = "strict") -> tuple[bytes, int]:
         """
         Modified from https://stackoverflow.com/a/2453027
         """
         result = []
-        for position, char in enumerate(text):
+        for position, char in enumerate(input):
             idx = GSM0338_CHARSET_MAP.get(char)
             if idx is not None:
                 result.append(idx)
@@ -44,7 +44,7 @@ class Gsm0338Codec(codecs.Codec):
                 continue
             if errors == "strict":
                 raise UnicodeEncodeError(
-                    self.NAME, char, position, position + 1, repr(text)
+                    self.NAME, char, position, position + 1, repr(input)
                 )
             elif errors == "ignore":
                 continue
@@ -56,11 +56,11 @@ class Gsm0338Codec(codecs.Codec):
                 )
         return (bytes(result), len(result))
 
-    def decode(self, text: bytes, errors: str = "strict") -> tuple[str, int]:
+    def decode(self, input: bytes, errors: str = "strict") -> tuple[str, int]:
         """
         Modified from https://stackoverflow.com/a/13131694
         """
-        res = iter(text)
+        res = iter(input)
         result = []
         for position, char in enumerate(res):
             try:
@@ -72,7 +72,7 @@ class Gsm0338Codec(codecs.Codec):
             except IndexError as e:
                 if errors == "strict":
                     raise UnicodeDecodeError(
-                        self.NAME, bytes(char), position, position + 1, repr(text)
+                        self.NAME, bytes(char), position, position + 1, repr(input)
                     ) from e
                 elif errors == "ignore":
                     continue

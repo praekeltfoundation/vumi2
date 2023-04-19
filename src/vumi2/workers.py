@@ -1,6 +1,6 @@
 import importlib.metadata
 from logging import getLogger
-from typing import TypeVar, get_type_hints
+from typing import TypedDict, TypeVar, get_type_hints
 
 import sentry_sdk
 from async_amqp import AmqpProtocol  # type: ignore
@@ -26,6 +26,11 @@ ConnectorsType = TypeVar(
 )
 
 logger = getLogger(__name__)
+
+
+class HealthCheckResp(TypedDict):
+    health: str
+    components: dict[str, str]
 
 
 class BaseWorker:
@@ -69,7 +74,7 @@ class BaseWorker:
         self.http_app.add_url_rule("/health", view_func=self._healthcheck_request)
 
     async def _healthcheck_request(self):
-        response = {"health": "ok", "components": {}}
+        response: HealthCheckResp = {"health": "ok", "components": {}}
         for name, function in self.healthchecks.items():
             result = await function()
             if result["health"] != "ok":
