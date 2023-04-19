@@ -24,6 +24,7 @@ sentry-sdk = "^1.9.3"
 quart-trio = "^0.10.0"
 hypercorn = "^0.14.3"
 "smpp.pdu3" = "^0.6"
+httpx = "^0.24.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"
@@ -65,6 +66,7 @@ filterwarnings = [
     # We can't do anything about these warnings until upstream updates.
     "ignore::trio.TrioDeprecationWarning:quart_trio.app",
     "ignore::trio.TrioDeprecationWarning:anyio._backends._trio",
+    "ignore::trio.TrioDeprecationWarning:hypercorn.trio",
 ]
 
 [tool.coverage.report]
