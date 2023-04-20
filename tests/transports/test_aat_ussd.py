@@ -7,6 +7,8 @@ from trio import open_memory_channel
 from vumi2.messages import EventType, Message, MessageType, Session, TransportType
 from vumi2.transports import AatUssdTransport
 
+from ..helpers import aclose_with_timeout
+
 
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
@@ -24,8 +26,9 @@ def config():
 @pytest.fixture
 async def transport(nursery, amqp_connection, config):
     transport = AatUssdTransport(nursery, amqp_connection, config)
-    await transport.setup()
-    return transport
+    async with aclose_with_timeout(transport):
+        await transport.setup()
+        yield transport
 
 
 def create_callback_url(to_addr: str):

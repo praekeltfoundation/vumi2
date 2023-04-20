@@ -16,6 +16,7 @@ from vumi2.transports.smpp.smpp import (
     SmppTransceiverTransportConfig,
 )
 
+from ...helpers import aclose_with_timeout
 from .helpers import TcpFakeSmsc
 
 
@@ -36,7 +37,9 @@ async def transport(nursery, amqp_connection, tcp_smsc):
     port that tcp_smsc is listening on.
     """
     config = SmppTransceiverTransportConfig(port=tcp_smsc.port)
-    return SmppTransceiverTransport(nursery, amqp_connection, config)
+    transport = SmppTransceiverTransport(nursery, amqp_connection, config)
+    async with aclose_with_timeout(transport):
+        yield transport
 
 
 async def test_startup(transport, tcp_smsc, nursery: Nursery):

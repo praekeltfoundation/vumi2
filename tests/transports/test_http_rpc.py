@@ -7,6 +7,8 @@ from trio import open_memory_channel
 from vumi2.messages import EventType, Message, MessageType, TransportType
 from vumi2.transports import HttpRpcTransport
 
+from ..helpers import aclose_with_timeout
+
 
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
@@ -33,8 +35,9 @@ class OkTransport(HttpRpcTransport):
 @pytest.fixture
 async def transport(nursery, amqp_connection, config):
     transport = OkTransport(nursery, amqp_connection, config)
-    await transport.setup()
-    return transport
+    async with aclose_with_timeout(transport):
+        await transport.setup()
+        yield transport
 
 
 async def test_inbound(transport: OkTransport):

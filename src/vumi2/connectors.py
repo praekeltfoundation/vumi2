@@ -8,6 +8,7 @@ from async_amqp import AmqpProtocol  # type: ignore
 from async_amqp.channel import Channel  # type: ignore
 from async_amqp.envelope import Envelope  # type: ignore
 from async_amqp.properties import Properties  # type: ignore
+from trio.abc import AsyncResource
 
 from vumi2.async_helpers import maybe_awaitable
 from vumi2.messages import Event, Message, MessageType
@@ -20,7 +21,7 @@ EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
 _AmqpChType = tuple[Channel, bytes, Envelope, Properties]
 
 
-class Consumer:
+class Consumer(AsyncResource):
     exchange_name = "vumi"
     exchange_type = "direct"
     durable = True
@@ -61,9 +62,12 @@ class Consumer:
         self.send_channel, self.receive_channel = trio.open_memory_channel[_AmqpChType](
             concurrency,
         )
+        self._active_consumers = 0
+        self._closing = False
+        self._closed = trio.Event()
 
     async def start(self) -> None:
-        channel = await self.connection.channel()
+        self.channel = channel = await self.connection.channel()
         await channel.basic_qos(prefetch_count=self.concurrency)
         await channel.exchange_declare(
             exchange_name=self.exchange_name,
@@ -73,28 +77,49 @@ class Consumer:
         await channel.queue_declare(self.queue_name, durable=self.durable)
         await channel.queue_bind(self.queue_name, self.exchange_name, self.queue_name)
         await channel.basic_consume(self.queue_message, queue_name=self.queue_name)
-        for _ in range(self.concurrency):
-            self.nursery.start_soon(self.consume_message)
+        async with self.receive_channel:
+            for _ in range(self.concurrency):
+                self._active_consumers += 1
+                receive_channel = self.receive_channel.clone()
+                self.nursery.start_soon(self.consume_messages, receive_channel)
+
+    async def aclose(self):
+        if not self._closing:
+            self._closing = True
+            self.send_channel.close()
+        await self._closed.wait()
+        if self.channel.is_open:
+            await self.channel.close()
 
     async def queue_message(
         self, channel: Channel, body: bytes, envelope: Envelope, properties: Properties
     ) -> None:
-        await self.send_channel.send((channel, body, envelope, properties))
+        if not self._closing:
+            await self.send_channel.send((channel, body, envelope, properties))
 
-    async def consume_message(self) -> None:
-        async for channel, body, envelope, _ in self.receive_channel:
-            try:
-                msg = self.message_class.deserialise(json.loads(body))
-                await maybe_awaitable(self.callback(msg))
-                await channel.basic_client_ack(envelope.delivery_tag)
-            except Exception as e:
-                logger.exception(e)
-                await channel.basic_client_nack(
-                    delivery_tag=envelope.delivery_tag, requeue=False
-                )
+    async def consume_message(self, channel, body, envelope) -> None:
+        try:
+            msg = self.message_class.deserialise(json.loads(body))
+            await maybe_awaitable(self.callback(msg))
+            await channel.basic_client_ack(envelope.delivery_tag)
+        except Exception as e:
+            logger.exception(e)
+            await channel.basic_client_nack(
+                delivery_tag=envelope.delivery_tag, requeue=False
+            )
+
+    async def consume_messages(self, receive_channel) -> None:
+        try:
+            async with receive_channel:
+                async for channel, body, envelope, _ in receive_channel:
+                    await self.consume_message(channel, body, envelope)
+        finally:
+            self._active_consumers -= 1
+            if self._active_consumers == 0:
+                self._closed.set()
 
 
-class Publisher:
+class Publisher(AsyncResource):
     exchange_name = "vumi"
     exchange_type = "direct"
     durable = True
@@ -107,6 +132,10 @@ class Publisher:
     async def start(self) -> None:
         self.channel = await self.connection.channel()
 
+    async def aclose(self):
+        if self.channel.is_open:
+            await self.channel.close()
+
     async def publish_raw(self, data: bytes) -> None:
         await self.channel.basic_publish(
             payload=data,
@@ -116,7 +145,7 @@ class Publisher:
         )
 
 
-class BaseConnector:
+class BaseConnector(AsyncResource):
     """
     A connector combines the publishers and consumers for various message types together
     """
@@ -175,6 +204,14 @@ class BaseConnector:
     async def _publish_message(self, message_type: str, message: MessageType) -> None:
         publisher = self._publishers[message_type]
         await publisher.publish_raw(json.dumps(message.serialise()).encode())
+
+    async def aclose(self):
+        async with trio.open_nursery() as nursery:
+            for consumer in self._consumers.values():
+                nursery.start_soon(consumer.aclose)
+            for publisher in self._publishers.values():
+                nursery.start_soon(publisher.aclose)
+            # The nursery will block until all publishers and consumers are closed.
 
 
 class ReceiveInboundConnector(BaseConnector):

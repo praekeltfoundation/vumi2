@@ -8,7 +8,8 @@ from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN  # type: ignor
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart_trio import QuartTrio
-from trio import Nursery
+from trio import Nursery, open_nursery
+from trio.abc import AsyncResource
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
@@ -33,7 +34,7 @@ class HealthCheckResp(TypedDict):
     components: dict[str, str]
 
 
-class BaseWorker:
+class BaseWorker(AsyncResource):
     config: BaseConfig
 
     @classmethod
@@ -55,6 +56,7 @@ class BaseWorker:
         self.healthchecks = {"amqp": self._amqp_healthcheck}
         if config.http_bind is not None:
             self._setup_http(config.http_bind)
+        self._resources_to_close: set[AsyncResource] = set()
 
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
@@ -98,6 +100,15 @@ class BaseWorker:
             result["health"] = "down"
         return result
 
+    def add_resource_to_close(self, resource: AsyncResource) -> None:
+        self._resources_to_close.add(resource)
+
+    async def aclose(self):
+        async with open_nursery() as nursery:
+            for resource in self._resources_to_close:
+                nursery.start_soon(resource.aclose)
+            # The nursery will block until all resources are closed.
+
     async def setup(self):
         pass
 
@@ -118,6 +129,7 @@ class BaseWorker:
             connector_name,
             self.config.worker_concurrency,
         )
+        self.add_resource_to_close(connector)
         await connector.setup(
             inbound_handler=inbound_handler, event_handler=event_handler
         )
@@ -138,6 +150,7 @@ class BaseWorker:
             connector_name,
             self.config.worker_concurrency,
         )
+        self.add_resource_to_close(connector)
         await connector.setup(outbound_handler=outbound_handler)
         self.receive_outbound_connectors[connector_name] = connector
         return connector

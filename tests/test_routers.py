@@ -1,7 +1,10 @@
+import pytest
 from trio import open_memory_channel
 
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
+
+from .helpers import aclose_with_timeout
 
 TEST_CONFIG = ToAddressRouter.get_config_class().deserialise(
     {
@@ -14,6 +17,13 @@ TEST_CONFIG = ToAddressRouter.get_config_class().deserialise(
 )
 
 
+@pytest.fixture
+async def to_addr_router(nursery, amqp_connection):
+    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
+    async with aclose_with_timeout(router):
+        yield router
+
+
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
@@ -22,42 +32,39 @@ async def ignore_message(_: MessageType) -> None:
     return
 
 
-async def test_to_addr_router_setup(amqp_connection, nursery):
+async def test_to_addr_router_setup(to_addr_router):
     """
     Sets up all the consumers and publishers according to the config
     """
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    await router.setup()
+    await to_addr_router.setup()
     receive_inbound_connectors = ["test1", "test2"]
     receive_outbound_connectors = ["app1", "app2"]
-    assert set(router.receive_inbound_connectors.keys()) == set(
+    assert set(to_addr_router.receive_inbound_connectors.keys()) == set(
         receive_inbound_connectors
     )
-    assert set(router.receive_outbound_connectors.keys()) == set(
+    assert set(to_addr_router.receive_outbound_connectors.keys()) == set(
         receive_outbound_connectors
     )
 
 
-async def test_to_addr_router_event_no_routing(amqp_connection, nursery):
+async def test_to_addr_router_event_no_routing(to_addr_router):
     """
     Events that don't have an outbound in the store should be ignored
     """
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    await router.setup()
+    await to_addr_router.setup()
     event = Event(
         user_message_id="1",
         event_type=EventType.ACK,
         sent_message_id="1",
     )
-    await router.handle_event(event)
+    await to_addr_router.handle_event(event)
 
 
-async def test_to_addr_router_event(amqp_connection, nursery):
+async def test_to_addr_router_event(to_addr_router):
     """
     Events that have an outbound in the store should be routed
     """
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    await router.setup()
+    await to_addr_router.setup()
     outbound = Message(
         to_addr="+27820001001",
         from_addr="12345",
@@ -75,26 +82,25 @@ async def test_to_addr_router_event(amqp_connection, nursery):
         with send_channel:
             await send_channel.send(msg)
 
-    await router.setup_receive_inbound_connector(
+    await to_addr_router.setup_receive_inbound_connector(
         connector_name="app1",
         inbound_handler=consumer,
         event_handler=consumer,
     )
 
-    await router.handle_outbound_message(outbound)
-    await router.handle_event(event)
+    await to_addr_router.handle_outbound_message(outbound)
+    await to_addr_router.handle_event(event)
 
     async with receive_channel:
         received_event = await receive_channel.receive()
     assert event == received_event
 
 
-async def test_to_addr_router_inbound(amqp_connection, nursery):
+async def test_to_addr_router_inbound(to_addr_router):
     """
     Should be routed according to the to address
     """
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    await router.setup()
+    await to_addr_router.setup()
     msg1 = Message(
         to_addr="12345",
         from_addr="54321",
@@ -118,17 +124,17 @@ async def test_to_addr_router_inbound(amqp_connection, nursery):
         with send_channel2:
             await send_channel2.send(msg)
 
-    await router.setup_receive_inbound_connector(
+    await to_addr_router.setup_receive_inbound_connector(
         connector_name="app1",
         inbound_handler=inbound_consumer1,
         event_handler=ignore_message,
     )
-    await router.setup_receive_inbound_connector(
+    await to_addr_router.setup_receive_inbound_connector(
         connector_name="app2",
         inbound_handler=inbound_consumer2,
         event_handler=ignore_message,
     )
-    transport_connector = await router.setup_receive_outbound_connector(
+    transport_connector = await to_addr_router.setup_receive_outbound_connector(
         connector_name="test1", outbound_handler=ignore_message
     )
     await transport_connector.publish_inbound(msg1)
@@ -143,12 +149,11 @@ async def test_to_addr_router_inbound(amqp_connection, nursery):
     assert msg2 == received_msg2
 
 
-async def test_to_addr_router_outbound(amqp_connection, nursery):
+async def test_to_addr_router_outbound(to_addr_router):
     """
     Should be routed according to the transport_name
     """
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    await router.setup()
+    await to_addr_router.setup()
     msg1 = Message(
         to_addr="12345",
         from_addr="54321",
@@ -172,13 +177,13 @@ async def test_to_addr_router_outbound(amqp_connection, nursery):
         with send_channel2:
             await send_channel2.send(msg)
 
-    await router.setup_receive_outbound_connector(
+    await to_addr_router.setup_receive_outbound_connector(
         connector_name="test1", outbound_handler=outbound_consumer1
     )
-    await router.setup_receive_outbound_connector(
+    await to_addr_router.setup_receive_outbound_connector(
         connector_name="test2", outbound_handler=outbound_consumer2
     )
-    app_connector = await router.setup_receive_inbound_connector(
+    app_connector = await to_addr_router.setup_receive_inbound_connector(
         connector_name="app1",
         inbound_handler=ignore_message,
         event_handler=ignore_message,
