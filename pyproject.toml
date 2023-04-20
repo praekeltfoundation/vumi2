@@ -56,6 +56,8 @@ filterwarnings = [
     # We can't do anything about these warnings until upstream updates.
     "ignore::trio.TrioDeprecationWarning:quart_trio.app",
     "ignore::trio.TrioDeprecationWarning:anyio._backends._trio",
+    # We'll stop ignoring this once we can properly close consumers in tests.
+    "ignore::UserWarning:tests.conftest:25",
 ]
 
 [tool.coverage.report]
