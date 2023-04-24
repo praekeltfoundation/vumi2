@@ -11,9 +11,14 @@ This project uses [poetry](https://python-poetry.org/docs/#installation) for pac
 
 Ensure you're also running at least python 3.7, `python --version`.
 
-Then you can install the dependancies
+Then you can install the dependencies
 ```bash
 ~ poetry install
+```
+
+If you're using an editor that supports [LSP](https://microsoft.github.io/language-server-protocol/) (VS Code, for example), you may want to install the optional `lsp` dependency group:
+```bash
+~ poetry install --with lsp
 ```
 
 You will also need an AMQP broker (eg. [RabbitMQ](https://www.rabbitmq.com/)) installed and running to be able to run a local worker, or to run the local tests.
