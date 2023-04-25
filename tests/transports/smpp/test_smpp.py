@@ -1,6 +1,6 @@
 import logging
 
-from pytest import fixture
+import pytest
 from smpp.pdu.operations import (  # type: ignore
     BindTransceiverResp,
     DeliverSM,
@@ -11,16 +11,12 @@ from trio import Event, Nursery, open_nursery
 from vumi2.connectors import ReceiveOutboundConnector
 from vumi2.messages import EventType, Message, TransportType
 from vumi2.transports.smpp.client import EsmeClient
-from vumi2.transports.smpp.smpp import (
-    SmppTransceiverTransport,
-    SmppTransceiverTransportConfig,
-)
+from vumi2.transports.smpp.smpp import SmppTransceiverTransport
 
-from ...helpers import aclose_with_timeout
 from .helpers import TcpFakeSmsc
 
 
-@fixture
+@pytest.fixture
 async def tcp_smsc(nursery):
     """
     Creates a TCP-based FakeSmsc server listening on an arbitrary port.
@@ -30,15 +26,10 @@ async def tcp_smsc(nursery):
     return server
 
 
-@fixture
-async def transport(nursery, amqp_connection, tcp_smsc):
-    """
-    An SMPP transciever transport, with default config except connecting to the
-    port that tcp_smsc is listening on.
-    """
-    config = SmppTransceiverTransportConfig(port=tcp_smsc.port)
-    transport = SmppTransceiverTransport(nursery, amqp_connection, config)
-    async with aclose_with_timeout(transport):
+@pytest.fixture
+async def transport(worker_factory, tcp_smsc):
+    config = {"port": tcp_smsc.port}
+    async with worker_factory(SmppTransceiverTransport, config) as transport:
         yield transport
 
 

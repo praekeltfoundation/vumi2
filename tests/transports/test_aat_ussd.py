@@ -7,26 +7,19 @@ from trio import open_memory_channel
 from vumi2.messages import EventType, Message, MessageType, Session, TransportType
 from vumi2.transports import AatUssdTransport
 
-from ..helpers import aclose_with_timeout
-
 
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
 
 @pytest.fixture
-def config():
-    return AatUssdTransport.get_config_class()(
-        http_bind="localhost",
-        base_url="http://www.example.org",
-        web_path="/api/aat/ussd",
-    )
-
-
-@pytest.fixture
-async def transport(nursery, amqp_connection, config):
-    transport = AatUssdTransport(nursery, amqp_connection, config)
-    async with aclose_with_timeout(transport):
+async def transport(worker_factory):
+    config = {
+        "http_bind": "localhost",
+        "base_url": "http://www.example.org",
+        "web_path": "/api/aat/ussd",
+    }
+    async with worker_factory(AatUssdTransport, config) as transport:
         await transport.setup()
         yield transport
 

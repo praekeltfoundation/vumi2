@@ -7,16 +7,9 @@ from trio import open_memory_channel
 from vumi2.messages import EventType, Message, MessageType, TransportType
 from vumi2.transports import HttpRpcTransport
 
-from ..helpers import aclose_with_timeout
-
 
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
-
-
-@pytest.fixture
-def config():
-    return HttpRpcTransport.get_config_class()(http_bind="localhost", request_timeout=5)
 
 
 class OkTransport(HttpRpcTransport):
@@ -33,9 +26,9 @@ class OkTransport(HttpRpcTransport):
 
 
 @pytest.fixture
-async def transport(nursery, amqp_connection, config):
-    transport = OkTransport(nursery, amqp_connection, config)
-    async with aclose_with_timeout(transport):
+async def transport(worker_factory):
+    config = {"http_bind": "localhost", "request_timeout": 5}
+    async with worker_factory(OkTransport, config) as transport:
         await transport.setup()
         yield transport
 
