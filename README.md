@@ -11,7 +11,7 @@ This project uses [poetry](https://python-poetry.org/docs/#installation) for pac
 
 Ensure you're also running at least python 3.7, `python --version`.
 
-Then you can install the dependancies
+Then you can install the dependencies
 ```bash
 ~ poetry install
 ```
@@ -45,3 +45,32 @@ This project uses [sphinx](https://www.sphinx-doc.org/) to generate the document
 ~ make html
 ```
 The built documentation will be in `docs/_build/html`
+
+## Editor configuration
+
+If you'd like your editor to handle linting and/or formatting for you, here's how to set it up.
+
+### Visual Studio Code
+
+1. Install the Python and Ruff extensions
+1. In settings, check the "Python > Linting: Mypy Enabled" box
+1. In settings, set the "Python > Formatting: Provider" to "black"
+1. If you want to have formatting automatically apply, in settings, check the "Editor: Format On Save" checkbox
+
+Alternatively, add the following to your `settings.json`:
+```json
+{
+    "python.linting.mypyEnabled": true,
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": true,
+}
+```
+
+### Editors with LSP support
+
+If you're using an editor that supports [LSP](https://microsoft.github.io/language-server-protocol/), you can install the optional `lsp` dependency group:
+```bash
+~ poetry install --with lsp
+```
+
+Configuring LSP depends on your editor. In most cases, the default configuration for the relevant plugin or extension should be suitable.
