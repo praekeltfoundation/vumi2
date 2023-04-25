@@ -10,6 +10,8 @@ async def amqp_connection(monkeypatch):
 
 
 def pytest_configure(config):
-    config.addinivalue_line(
-        "markers", "worker_config(dict): use a custom worker config for this test"
-    )
+    for marker in [
+        "worker_class(BaseWorker): use a custom worker class for this test",
+        "worker_config(dict): use a custom worker config for this test",
+    ]:
+        config.addinivalue_line("markers", marker)

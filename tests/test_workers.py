@@ -5,6 +5,8 @@ import sentry_sdk
 
 from vumi2.workers import BaseWorker
 
+from .helpers import from_marker
+
 
 class FailingHealthcheckWorker(BaseWorker):
     async def setup(self):
@@ -16,10 +18,7 @@ class FailingHealthcheckWorker(BaseWorker):
 
 @pytest.fixture
 def config(request):
-    cfg_dict = {"http_bind": "localhost"}
-    cfg_marker = request.node.get_closest_marker("worker_config")
-    if cfg_marker is not None:
-        cfg_dict = cfg_marker.args[0]
+    cfg_dict = from_marker(request, "worker_config", {"http_bind": "localhost"})
     return BaseWorker.get_config_class().deserialise(cfg_dict)
 
 

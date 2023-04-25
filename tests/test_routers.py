@@ -4,24 +4,27 @@ from trio import open_memory_channel
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
 
-from .helpers import aclose_with_timeout
+from .helpers import worker_with_cleanup
 
-TEST_CONFIG = ToAddressRouter.get_config_class().deserialise(
-    {
-        "transport_names": ["test1", "test2"],
-        "to_address_mappings": {
-            "app1": r"^1",
-            "app2": r"^2",
-        },
-    }
-)
+TEST_CONFIG = {
+    "transport_names": ["test1", "test2"],
+    "to_address_mappings": {
+        "app1": r"^1",
+        "app2": r"^2",
+    },
+}
 
 
 @pytest.fixture
-async def to_addr_router(nursery, amqp_connection):
-    router = ToAddressRouter(nursery, amqp_connection, TEST_CONFIG)
-    async with aclose_with_timeout(router):
-        yield router
+async def to_addr_router(request, nursery, amqp_connection):
+    async with worker_with_cleanup(
+        request,
+        nursery,
+        amqp_connection,
+        ToAddressRouter,
+        TEST_CONFIG,
+    ) as worker:
+        yield worker
 
 
 def msg_ch_pair(bufsize: int):
