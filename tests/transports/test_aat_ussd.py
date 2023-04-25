@@ -71,7 +71,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={
@@ -116,7 +116,7 @@ async def test_close_session(transport: AatUssdTransport):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={
@@ -145,7 +145,7 @@ async def test_close_session(transport: AatUssdTransport):
 
 
 async def test_missing_fields(transport: AatUssdTransport):
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     response = await client.get(transport.config.web_path)
     assert response.status_code == 400
     assert await response.json == {
@@ -165,7 +165,7 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={

@@ -42,13 +42,14 @@ async def test_sentry(amqp_connection, config, nursery):
 async def test_http_server(amqp_connection, config, nursery):
     config.http_bind = "localhost"
     worker = BaseWorker(nursery, amqp_connection, config)
-    assert worker.http_app is not None
+    assert worker.http is not None
+    assert worker.http.app is not None
 
 
 async def test_healthcheck(amqp_connection, config, nursery):
     config.http_bind = "localhost"
     worker = BaseWorker(nursery, amqp_connection, config)
-    client = worker.http_app.test_client()
+    client = worker.http.app.test_client()
     response = await client.get("/health")
     data = await response.json
     assert data["health"] == "ok"
@@ -59,7 +60,7 @@ async def test_down_healthcheck(amqp_connection, config, nursery):
     config.http_bind = "localhost"
     worker = FailingHealthcheckWorker(nursery, amqp_connection, config)
     await worker.setup()
-    client = worker.http_app.test_client()
+    client = worker.http.app.test_client()
     response = await client.get("/health")
     data = await response.json
     assert data["health"] == "down"

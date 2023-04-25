@@ -52,7 +52,7 @@ async def test_inbound(transport: OkTransport):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         await connection.send_complete()
         inbound = await receive_channel.receive()
@@ -137,7 +137,7 @@ async def test_timeout(transport: OkTransport, mock_clock):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         await connection.send_complete()
         await receive_channel.receive()
@@ -163,7 +163,7 @@ async def test_client_disconnect(transport: OkTransport):
         event_handler=inbound_consumer,
     )
 
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         # cast to get access to _client_send private method
         connection = cast(QuartTestHTTPConnection, connection)

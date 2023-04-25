@@ -46,7 +46,7 @@ class HttpRpcTransport(BaseWorker):
         self.connector = await self.setup_receive_outbound_connector(
             self.config.transport_name, self.handle_outbound_message
         )
-        self.http_app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
+        self.http.app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
 
     async def inbound_request(self) -> tuple[Union[str, dict], int, dict[str, str]]:
         message_id = generate_message_id()
