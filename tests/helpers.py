@@ -6,6 +6,10 @@ from async_amqp.exceptions import ChannelClosed  # type: ignore
 from trio import fail_after
 from trio.abc import AsyncResource
 
+from vumi2.amqp import create_amqp_client
+from vumi2.config import load_config
+from vumi2.connectors import Consumer
+
 
 async def delete_amqp_queues(amqp_connection: AmqpProtocol, queues: set[str]) -> None:
     """
@@ -20,6 +24,27 @@ async def delete_amqp_queues(amqp_connection: AmqpProtocol, queues: set[str]) ->
             warn(e.message, stacklevel=2)
             async with amqp_connection.new_channel() as channel:
                 await channel.queue_delete(queue)
+
+
+@asynccontextmanager
+async def amqp_connection_with_cleanup(monkeypatch):
+    """
+    Create an amqp client that cleans up after itself.
+    """
+    queues = set()
+    _orig_start_consumer = Consumer.start
+
+    async def _start_consumer(self) -> None:
+        queues.add(self.queue_name)
+        await _orig_start_consumer(self)
+
+    monkeypatch.setattr(Consumer, "start", _start_consumer)
+    config = load_config()
+    async with create_amqp_client(config) as amqp_connection:
+        try:
+            yield amqp_connection
+        finally:
+            await delete_amqp_queues(amqp_connection, queues)
 
 
 @asynccontextmanager
