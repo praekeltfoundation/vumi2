@@ -46,11 +46,11 @@ This project uses [sphinx](https://www.sphinx-doc.org/) to generate the document
 ```
 The built documentation will be in `docs/_build/html`
 
-### Editor configuration
+## Editor configuration
 
 If you'd like your editor to handle linting and/or formatting for you, here's how to set it up.
 
-#### Visual Studio Code
+### Visual Studio Code
 
 1. Install the Python and Ruff extensions
 1. In settings, check the "Python > Linting: Mypy Enabled" box
@@ -66,7 +66,7 @@ Alternatively, add the following to your `settings.json`:
 }
 ```
 
-#### Editors with LSP support
+### Editors with LSP support
 
 If you're using an editor that supports [LSP](https://microsoft.github.io/language-server-protocol/), you can install the optional `lsp` dependency group:
 ```bash
