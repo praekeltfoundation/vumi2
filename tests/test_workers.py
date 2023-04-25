@@ -15,23 +15,35 @@ class FailingHealthcheckWorker(BaseWorker):
 
 
 @pytest.fixture
-def config():
-    return BaseWorker.get_config_class().deserialise({})
+def config(request):
+    cfg_dict = {"http_bind": "localhost"}
+    cfg_marker = request.node.get_closest_marker("worker_config")
+    if cfg_marker is not None:
+        cfg_dict = cfg_marker.args[0]
+    return BaseWorker.get_config_class().deserialise(cfg_dict)
 
 
-async def test_sentry(amqp_connection, config, nursery):
+@pytest.mark.worker_config({})
+async def test_sentry_unconfigured(amqp_connection, config, nursery):
+    """
+    When sentry_dsn isn't configured, sentry isn't set up.
+    """
     assert sentry_sdk.Hub.current.client is None
-
     BaseWorker(nursery, amqp_connection, config)
     assert sentry_sdk.Hub.current.client is None
 
+
+@pytest.mark.worker_config({"sentry_dsn": "http://key@example.org/0"})
+async def test_sentry_configured(amqp_connection, config, nursery):
+    """
+    When sentry_dsn is configured, sentry is set up at worker creation time.
+    """
+    assert sentry_sdk.Hub.current.client is None
     try:
-        sentry_dsn = "http://key@example.org/0"
-        config.sentry_dsn = sentry_dsn
         BaseWorker(nursery, amqp_connection, config)
         client = sentry_sdk.Hub.current.client
         assert client is not None
-        assert client.dsn == sentry_dsn
+        assert client.dsn == "http://key@example.org/0"
         version = importlib.metadata.distribution("vumi2").version
         assert client.options["release"] == version
     finally:
@@ -39,15 +51,29 @@ async def test_sentry(amqp_connection, config, nursery):
         sentry_sdk.init()
 
 
-async def test_http_server(amqp_connection, config, nursery):
-    config.http_bind = "localhost"
+@pytest.mark.worker_config({})
+async def test_http_server_unconfigured(amqp_connection, config, nursery):
+    """
+    When http_bind isn't configured, the worker http server isn't set up.
+    """
+    worker = BaseWorker(nursery, amqp_connection, config)
+    assert not hasattr(worker, "http")
+
+
+@pytest.mark.worker_config({"http_bind": "localhost"})
+async def test_http_server_configured(amqp_connection, config, nursery):
+    """
+    When http_bind is configured, the worker http server is set up and
+    endpoints may be configured.
+    """
     worker = BaseWorker(nursery, amqp_connection, config)
     assert worker.http is not None
-    assert worker.http.app is not None
+    worker.http.app.add_url_rule("/hi", view_func=lambda: ("hello", 200))
+    response = await worker.http.app.test_client().get("/hi")
+    assert await response.data == b"hello"
 
 
 async def test_healthcheck(amqp_connection, config, nursery):
-    config.http_bind = "localhost"
     worker = BaseWorker(nursery, amqp_connection, config)
     client = worker.http.app.test_client()
     response = await client.get("/health")
@@ -57,7 +83,6 @@ async def test_healthcheck(amqp_connection, config, nursery):
 
 
 async def test_down_healthcheck(amqp_connection, config, nursery):
-    config.http_bind = "localhost"
     worker = FailingHealthcheckWorker(nursery, amqp_connection, config)
     await worker.setup()
     client = worker.http.app.test_client()
