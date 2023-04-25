@@ -79,6 +79,7 @@ class WorkerFactory:
     """
     Factory for test workers. Returned by the `worker_factory` pytest fixture.
     """
+
     request: FixtureRequest
     nursery: Nursery
     amqp: AmqpProtocol
