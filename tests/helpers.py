@@ -4,6 +4,7 @@ from warnings import warn
 
 from async_amqp import AmqpProtocol  # type: ignore
 from async_amqp.exceptions import ChannelClosed  # type: ignore
+from attrs import define
 from pytest import FixtureRequest, MonkeyPatch
 from trio import Nursery, fail_after
 from trio.abc import AsyncResource
@@ -73,27 +74,24 @@ def from_marker(request: FixtureRequest, mark_name: str, default: T) -> T:
     return default
 
 
-def worker_with_config(
-    request: FixtureRequest,
-    nursery: Nursery,
-    amqp: AmqpProtocol,
-    default_class: type[BaseWorker],
-    default_config: dict,
-):
-    worker_class = from_marker(request, "worker_class", default_class)
-    config_dict = from_marker(request, "worker_config", default_config)
-    config = worker_class.get_config_class().deserialise(config_dict)
-    return worker_class(nursery, amqp, config)
+@define
+class WorkerFactory:
+    """
+    Factory for test workers. Returned by the `worker_factory` pytest fixture.
+    """
+    request: FixtureRequest
+    nursery: Nursery
+    amqp: AmqpProtocol
 
+    def __call__(self, default_class: type[BaseWorker], default_config: dict):
+        worker_class = from_marker(self.request, "worker_class", default_class)
+        config_dict = from_marker(self.request, "worker_config", default_config)
+        config = worker_class.get_config_class().deserialise(config_dict)
+        return worker_class(self.nursery, self.amqp, config)
 
-@asynccontextmanager
-async def worker_with_cleanup(
-    request: FixtureRequest,
-    nursery: Nursery,
-    amqp: AmqpProtocol,
-    default_class: type[BaseWorker],
-    default_config: dict,
-):
-    worker = worker_with_config(request, nursery, amqp, default_class, default_config)
-    async with aclose_with_timeout(worker):
-        yield worker
+    @asynccontextmanager
+    async def with_cleanup(self, default_class: type[BaseWorker], default_config: dict):
+        timeout = from_marker(self.request, "worker_cleanup_timeout", 1)
+        worker = self(default_class, default_config)
+        async with aclose_with_timeout(worker, timeout=timeout) as worker:
+            yield worker
