@@ -13,6 +13,7 @@ from trio.abc import AsyncResource
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
+    ConnectorCollection,
     EventCallbackType,
     MessageCallbackType,
     ReceiveInboundConnector,
@@ -56,7 +57,8 @@ class BaseWorker(AsyncResource):
         self.healthchecks = {"amqp": self._amqp_healthcheck}
         if config.http_bind is not None:
             self._setup_http(config.http_bind)
-        self._resources_to_close: set[AsyncResource] = set()
+        self._connectors = ConnectorCollection()
+        self.resources_to_close: list[AsyncResource] = [self._connectors]
 
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
@@ -100,12 +102,9 @@ class BaseWorker(AsyncResource):
             result["health"] = "down"
         return result
 
-    def add_resource_to_close(self, resource: AsyncResource) -> None:
-        self._resources_to_close.add(resource)
-
     async def aclose(self):
         async with open_nursery() as nursery:
-            for resource in self._resources_to_close:
+            for resource in self.resources_to_close:
                 nursery.start_soon(resource.aclose)
             # The nursery will block until all resources are closed.
 
@@ -129,7 +128,7 @@ class BaseWorker(AsyncResource):
             connector_name,
             self.config.worker_concurrency,
         )
-        self.add_resource_to_close(connector)
+        self._connectors.add(connector)
         await connector.setup(
             inbound_handler=inbound_handler, event_handler=event_handler
         )
@@ -150,7 +149,7 @@ class BaseWorker(AsyncResource):
             connector_name,
             self.config.worker_concurrency,
         )
-        self.add_resource_to_close(connector)
+        self._connectors.add(connector)
         await connector.setup(outbound_handler=outbound_handler)
         self.receive_outbound_connectors[connector_name] = connector
         return connector

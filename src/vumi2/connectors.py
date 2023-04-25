@@ -145,7 +145,7 @@ class Publisher(AsyncResource):
         )
 
 
-class BaseConnector(AsyncResource):
+class BaseConnector:
     """
     A connector combines the publishers and consumers for various message types together
     """
@@ -205,13 +205,29 @@ class BaseConnector(AsyncResource):
         publisher = self._publishers[message_type]
         await publisher.publish_raw(json.dumps(message.serialise()).encode())
 
-    async def aclose(self):
+    async def aclose_consumers(self):
+        """
+        Cleanly close all consumers.
+
+        To avoid problems with consumers that publish replies or events,
+        this should be called before closing publishers on any
+        connector.
+        """
         async with trio.open_nursery() as nursery:
             for consumer in self._consumers.values():
                 nursery.start_soon(consumer.aclose)
+
+    async def aclose_publishers(self):
+        """
+        Cleanly close all publishers.
+
+        To avoid problems with consumers that publish replies or events,
+        this should only be called after closing consumers on all
+        connectors.
+        """
+        async with trio.open_nursery() as nursery:
             for publisher in self._publishers.values():
                 nursery.start_soon(publisher.aclose)
-            # The nursery will block until all publishers and consumers are closed.
 
 
 class ReceiveInboundConnector(BaseConnector):
@@ -237,3 +253,23 @@ class ReceiveOutboundConnector(BaseConnector):
 
     async def publish_event(self, event: Event):
         await self._publish_message("event", event)
+
+
+class ConnectorCollection(AsyncResource):
+    """
+    A collection of connectors that must all be closed together.
+    """
+
+    def __init__(self):
+        self.connectors: set[BaseConnector] = set()
+
+    def add(self, connector: BaseConnector) -> None:
+        self.connectors.add(connector)
+
+    async def aclose(self):
+        async with trio.open_nursery() as nursery:
+            for connector in self.connectors:
+                nursery.start_soon(connector.aclose_consumers)
+        async with trio.open_nursery() as nursery:
+            for connector in self.connectors:
+                nursery.start_soon(connector.aclose_publishers)
