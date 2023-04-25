@@ -16,7 +16,7 @@ class FailingHealthcheckWorker(BaseWorker):
         return {"health": "down"}
 
 
-@pytest.fixture
+@pytest.fixture()
 def config(request):
     cfg_dict = from_marker(request, "worker_config", {"http_bind": "localhost"})
     return BaseWorker.get_config_class().deserialise(cfg_dict)

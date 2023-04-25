@@ -74,7 +74,7 @@ def test_extract_pdu():
     assert packet_with_extra == bytearray.fromhex("010203")
 
 
-@pytest.fixture
+@pytest.fixture()
 async def stream():
     """
     A trio memory stream pair. Done as a fixture so that the same stream can easily
@@ -85,59 +85,59 @@ async def stream():
     return (client, server)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def client_stream(stream):
     """The client part of the trio stream"""
     return stream[0]
 
 
-@pytest.fixture
+@pytest.fixture()
 async def server_stream(stream):
     """The server part of the trio stream"""
     return stream[1]
 
 
-@pytest.fixture
+@pytest.fixture()
 async def sequencer():
     return InMemorySequencer({})
 
 
-@pytest.fixture
+@pytest.fixture()
 async def smpp_cache():
     return InMemorySmppCache({})
 
 
-@pytest.fixture
+@pytest.fixture()
 async def submit_sm_processor(sequencer):
     return SubmitShortMessageProcessor({}, sequencer)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def sm_processor(smpp_cache):
     return ShortMessageProcessor({}, smpp_cache)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def dr_processor(smpp_cache):
     return DeliveryReportProcesser({}, smpp_cache)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def message_channel():
     return open_memory_channel(1)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def send_message_channel(message_channel):
     return message_channel[0]
 
 
-@pytest.fixture
+@pytest.fixture()
 async def receive_message_channel(message_channel):
     return message_channel[1]
 
 
-@pytest.fixture
+@pytest.fixture()
 async def client(
     nursery,
     client_stream,
@@ -163,7 +163,7 @@ async def client(
     )
 
 
-@pytest.fixture
+@pytest.fixture()
 async def smsc(server_stream) -> FakeSmsc:
     """A FakeSmsc"""
     return FakeSmsc(server_stream)
@@ -422,7 +422,7 @@ async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
     """
     Unbind should respond, then raise an exception
     """
-    with pytest.raises(SmscUnbind):
+    with pytest.raises(SmscUnbind):  # noqa: PT012 (Leaving the nursery raises.)
         async with open_autocancel_nursery() as nursery:
             client.nursery = nursery
             await smsc.start_and_bind(client)

@@ -13,7 +13,7 @@ TEST_CONFIG = {
 }
 
 
-@pytest.fixture
+@pytest.fixture()
 async def to_addr_router(worker_factory):
     async with worker_factory(ToAddressRouter, TEST_CONFIG) as worker:
         yield worker

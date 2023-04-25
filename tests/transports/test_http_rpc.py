@@ -25,7 +25,7 @@ class OkTransport(HttpRpcTransport):
         )
 
 
-@pytest.fixture
+@pytest.fixture()
 async def transport(worker_factory):
     config = {"http_bind": "localhost", "request_timeout": 5}
     async with worker_factory(OkTransport, config) as transport:

@@ -2,10 +2,10 @@ from contextlib import asynccontextmanager
 from typing import TypeVar
 from warnings import warn
 
+import pytest
 from async_amqp import AmqpProtocol  # type: ignore
 from async_amqp.exceptions import ChannelClosed  # type: ignore
 from attrs import define
-from pytest import FixtureRequest, MonkeyPatch
 from trio import Nursery, fail_after
 from trio.abc import AsyncResource
 
@@ -31,7 +31,7 @@ async def delete_amqp_queues(amqp_connection: AmqpProtocol, queues: set[str]) ->
 
 
 @asynccontextmanager
-async def amqp_connection_with_cleanup(monkeypatch: MonkeyPatch):
+async def amqp_connection_with_cleanup(monkeypatch: pytest.MonkeyPatch):
     """
     Create an amqp client that cleans up after itself.
     """
@@ -67,7 +67,7 @@ async def aclose_with_timeout(resource: AsyncResource, timeout=1):
 T = TypeVar("T")
 
 
-def from_marker(request: FixtureRequest, mark_name: str, default: T) -> T:
+def from_marker(request: pytest.FixtureRequest, mark_name: str, default: T) -> T:
     marker = request.node.get_closest_marker(mark_name)
     if marker is not None:
         return marker.args[0]
@@ -80,7 +80,7 @@ class WorkerFactory:
     Factory for test workers. Returned by the `worker_factory` pytest fixture.
     """
 
-    request: FixtureRequest
+    request: pytest.FixtureRequest
     nursery: Nursery
     amqp: AmqpProtocol
 

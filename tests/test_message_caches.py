@@ -6,7 +6,7 @@ from vumi2.message_caches import MemoryMessageCache
 from vumi2.messages import Message, TransportType
 
 
-@pytest.fixture
+@pytest.fixture()
 def memory_message_cache():
     return MemoryMessageCache({})
 
