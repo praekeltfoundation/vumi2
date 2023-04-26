@@ -55,6 +55,13 @@ async def amqp_with_cleanup(monkeypatch: pytest.MonkeyPatch):
             yield amqp
         finally:
             await delete_amqp_queues(amqp, queues)
+            # NOTE: At the time of writing, async_amqp (v0.5.3, with no
+            # apparent public repo or issue tracker) doesn't properly wait for
+            # the connection close handshake before closing its TCP connection.
+            # As a result, we randomly see "client unexpectedly closed TCP
+            # connection" in rabbitmq logs. There's not much we can do about
+            # that, but it doesn't affect the queue and channel cleanup we do
+            # here and in the connector code.
 
 
 @asynccontextmanager
