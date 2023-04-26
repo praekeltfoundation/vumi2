@@ -19,7 +19,7 @@ async def transport(worker_factory):
         "base_url": "http://www.example.org",
         "web_path": "/api/aat/ussd",
     }
-    async with worker_factory(AatUssdTransport, config) as transport:
+    async with worker_factory.with_cleanup(AatUssdTransport, config) as transport:
         await transport.setup()
         yield transport
 

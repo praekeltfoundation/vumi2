@@ -15,7 +15,7 @@ TEST_CONFIG = {
 
 @pytest.fixture()
 async def to_addr_router(worker_factory):
-    async with worker_factory(ToAddressRouter, TEST_CONFIG) as worker:
+    async with worker_factory.with_cleanup(ToAddressRouter, TEST_CONFIG) as worker:
         yield worker
 
 

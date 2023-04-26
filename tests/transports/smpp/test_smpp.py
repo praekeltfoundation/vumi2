@@ -30,8 +30,8 @@ async def tcp_smsc(nursery):
 @pytest.fixture()
 async def transport(worker_factory, tcp_smsc):
     config = {"port": tcp_smsc.port}
-    async with worker_factory(SmppTransceiverTransport, config) as transport:
-        yield transport
+    async with worker_factory.with_cleanup(SmppTransceiverTransport, config) as tx:
+        yield tx
 
 
 @pytest.fixture()
