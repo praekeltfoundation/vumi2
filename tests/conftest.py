@@ -1,17 +1,29 @@
 import pytest
 
-from .helpers import WorkerFactory, amqp_connection_with_cleanup
+from .helpers import (
+    ConnectorFactory,
+    WorkerFactory,
+    aclose_with_timeout,
+    amqp_with_cleanup,
+)
 
 
 @pytest.fixture()
 async def amqp_connection(monkeypatch):
-    async with amqp_connection_with_cleanup(monkeypatch) as amqp_connection:
-        yield amqp_connection
+    async with amqp_with_cleanup(monkeypatch) as amqp:
+        yield amqp
 
 
 @pytest.fixture()
 def worker_factory(request, nursery, amqp_connection):
     return WorkerFactory(request, nursery, amqp_connection)
+
+
+@pytest.fixture()
+async def connector_factory(nursery, amqp_connection):
+    cf = ConnectorFactory(nursery, amqp_connection)
+    async with aclose_with_timeout(cf):
+        yield cf
 
 
 def pytest_configure(config):

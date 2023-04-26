@@ -55,7 +55,7 @@ async def test_to_addr_router_event_no_routing(to_addr_router):
     await to_addr_router.handle_event(event)
 
 
-async def test_to_addr_router_event(to_addr_router):
+async def test_to_addr_router_event(to_addr_router, connector_factory):
     """
     Events that have an outbound in the store should be routed
     """
@@ -71,27 +71,15 @@ async def test_to_addr_router_event(to_addr_router):
         event_type=EventType.ACK,
         sent_message_id=outbound.message_id,
     )
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def consumer(msg):
-        with send_channel:
-            await send_channel.send(msg)
-
-    await to_addr_router.setup_receive_inbound_connector(
-        connector_name="app1",
-        inbound_handler=consumer,
-        event_handler=consumer,
-    )
+    ri_app1 = await connector_factory.setup_ri("app1")
 
     await to_addr_router.handle_outbound_message(outbound)
     await to_addr_router.handle_event(event)
 
-    async with receive_channel:
-        received_event = await receive_channel.receive()
-    assert event == received_event
+    assert event == await ri_app1.consume_event()
 
 
-async def test_to_addr_router_inbound(to_addr_router):
+async def test_to_addr_router_inbound(to_addr_router, connector_factory):
     """
     Should be routed according to the to address
     """
@@ -108,43 +96,18 @@ async def test_to_addr_router_inbound(to_addr_router):
         transport_name="test",
         transport_type=TransportType.SMS,
     )
-    send_channel1, receive_channel1 = msg_ch_pair(1)
-    send_channel2, receive_channel2 = msg_ch_pair(1)
+    ri_app1 = await connector_factory.setup_ri("app1")
+    ri_app2 = await connector_factory.setup_ri("app2")
+    ro_test1 = await connector_factory.setup_ro("test1")
 
-    async def inbound_consumer1(msg):
-        with send_channel1:
-            await send_channel1.send(msg)
+    await ro_test1.publish_inbound(msg1)
+    await ro_test1.publish_inbound(msg2)
 
-    async def inbound_consumer2(msg):
-        with send_channel2:
-            await send_channel2.send(msg)
-
-    await to_addr_router.setup_receive_inbound_connector(
-        connector_name="app1",
-        inbound_handler=inbound_consumer1,
-        event_handler=ignore_message,
-    )
-    await to_addr_router.setup_receive_inbound_connector(
-        connector_name="app2",
-        inbound_handler=inbound_consumer2,
-        event_handler=ignore_message,
-    )
-    transport_connector = await to_addr_router.setup_receive_outbound_connector(
-        connector_name="test1", outbound_handler=ignore_message
-    )
-    await transport_connector.publish_inbound(msg1)
-    await transport_connector.publish_inbound(msg2)
-
-    async with receive_channel1:
-        received_msg1 = await receive_channel1.receive()
-    assert msg1 == received_msg1
-
-    async with receive_channel2:
-        received_msg2 = await receive_channel2.receive()
-    assert msg2 == received_msg2
+    assert msg1 == await ri_app1.consume_inbound()
+    assert msg2 == await ri_app2.consume_inbound()
 
 
-async def test_to_addr_router_outbound(to_addr_router):
+async def test_to_addr_router_outbound(to_addr_router, connector_factory):
     """
     Should be routed according to the transport_name
     """
@@ -161,35 +124,12 @@ async def test_to_addr_router_outbound(to_addr_router):
         transport_name="test2",
         transport_type=TransportType.SMS,
     )
-    send_channel1, receive_channel1 = msg_ch_pair(1)
-    send_channel2, receive_channel2 = msg_ch_pair(1)
+    ri_app1 = await connector_factory.setup_ri("app1")
+    ro_test1 = await connector_factory.setup_ro("test1")
+    ro_test2 = await connector_factory.setup_ro("test2")
 
-    async def outbound_consumer1(msg):
-        with send_channel1:
-            await send_channel1.send(msg)
+    await ri_app1.publish_outbound(msg1)
+    await ri_app1.publish_outbound(msg2)
 
-    async def outbound_consumer2(msg):
-        with send_channel2:
-            await send_channel2.send(msg)
-
-    await to_addr_router.setup_receive_outbound_connector(
-        connector_name="test1", outbound_handler=outbound_consumer1
-    )
-    await to_addr_router.setup_receive_outbound_connector(
-        connector_name="test2", outbound_handler=outbound_consumer2
-    )
-    app_connector = await to_addr_router.setup_receive_inbound_connector(
-        connector_name="app1",
-        inbound_handler=ignore_message,
-        event_handler=ignore_message,
-    )
-    await app_connector.publish_outbound(msg1)
-    await app_connector.publish_outbound(msg2)
-
-    async with receive_channel1:
-        received_msg1 = await receive_channel1.receive()
-    assert msg1 == received_msg1
-
-    async with receive_channel2:
-        received_msg2 = await receive_channel2.receive()
-    assert msg2 == received_msg2
+    assert msg1 == await ro_test1.consume_outbound()
+    assert msg2 == await ro_test2.consume_outbound()
