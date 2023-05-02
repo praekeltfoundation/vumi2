@@ -1,25 +1,35 @@
 import pytest
 
-from vumi2.amqp import create_amqp_client
-from vumi2.config import load_config
-from vumi2.connectors import Consumer
+from .helpers import (
+    ConnectorFactory,
+    WorkerFactory,
+    aclose_with_timeout,
+    amqp_with_cleanup,
+)
 
-from .helpers import delete_amqp_queues
 
-
-@pytest.fixture(scope="function")
+@pytest.fixture()
 async def amqp_connection(monkeypatch):
-    queues = set()
-    _orig_start_consumer = Consumer.start
+    async with amqp_with_cleanup(monkeypatch) as amqp:
+        yield amqp
 
-    async def _start_consumer(self) -> None:
-        queues.add(self.queue_name)
-        await _orig_start_consumer(self)
 
-    monkeypatch.setattr(Consumer, "start", _start_consumer)
-    config = load_config()
-    async with create_amqp_client(config) as amqp_connection:
-        try:
-            yield amqp_connection
-        finally:
-            await delete_amqp_queues(amqp_connection, queues)
+@pytest.fixture()
+def worker_factory(request, nursery, amqp_connection):
+    return WorkerFactory(request, nursery, amqp_connection)
+
+
+@pytest.fixture()
+async def connector_factory(nursery, amqp_connection):
+    cf = ConnectorFactory(nursery, amqp_connection)
+    async with aclose_with_timeout(cf):
+        yield cf
+
+
+def pytest_configure(config):
+    for marker in [
+        "worker_class(BaseWorker): use a custom worker class for this test",
+        "worker_config(dict): use a custom worker config for this test",
+        "worker_cleanup_timeout(float): worker cleanup timeout in seconds",
+    ]:
+        config.addinivalue_line("markers", marker)

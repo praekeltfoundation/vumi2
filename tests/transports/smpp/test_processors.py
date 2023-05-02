@@ -26,29 +26,29 @@ from vumi2.transports.smpp.sequencers import InMemorySequencer
 from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 
-@pytest.fixture
+@pytest.fixture()
 async def sequencer() -> InMemorySequencer:
     return InMemorySequencer({})
 
 
-@pytest.fixture
+@pytest.fixture()
 async def smpp_cache() -> InMemorySmppCache:
     return InMemorySmppCache({})
 
 
-@pytest.fixture
+@pytest.fixture()
 async def submit_sm_processor(
     sequencer: InMemorySequencer,
 ) -> SubmitShortMessageProcessor:
     return SubmitShortMessageProcessor({}, sequencer)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def dr_processer(smpp_cache) -> DeliveryReportProcesser:
     return DeliveryReportProcesser({}, smpp_cache)
 
 
-@pytest.fixture
+@pytest.fixture()
 async def sm_processer(smpp_cache: InMemorySmppCache) -> ShortMessageProcessor:
     return ShortMessageProcessor(
         {"data_coding_overrides": {"OCTET_UNSPECIFIED": "ascii"}}, smpp_cache
@@ -93,7 +93,7 @@ async def test_submit_sm_outbound_blank_vumi_message(
     assert pdu.params["short_message"] == b""
 
 
-@pytest.fixture
+@pytest.fixture()
 async def submit_sm_processor_custom_config(
     sequencer: InMemorySequencer,
 ) -> SubmitShortMessageProcessor:

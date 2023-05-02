@@ -65,8 +65,6 @@ filterwarnings = [
     # We can't do anything about these warnings until upstream updates.
     "ignore::trio.TrioDeprecationWarning:quart_trio.app",
     "ignore::trio.TrioDeprecationWarning:anyio._backends._trio",
-    # We'll stop ignoring this once we can properly close consumers in tests.
-    "ignore::UserWarning:tests.conftest:25",
 ]
 
 [tool.coverage.report]
@@ -81,6 +79,7 @@ select = [
     "B",           # flake8-bugbear
     "C4",          # flake8-comprehensions
     "PIE",         # flake8-pie
+    "PT",          # flake8-pytest-style
     "SIM",         # flake8-simplify
     "PTH",         # flake8-use-pathlib
 ]

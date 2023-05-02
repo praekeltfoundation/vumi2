@@ -59,6 +59,8 @@ async def test_run_worker():
         ],
     )
     assert worker.config.amqp.hostname == "localhost"
+    # When we're done, the worker should be closed.
+    assert worker._closed
 
 
 def _get_main_command_output(args: list[str]) -> str:

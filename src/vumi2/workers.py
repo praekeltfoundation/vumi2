@@ -3,15 +3,17 @@ from logging import getLogger
 from typing import TypedDict, TypeVar, get_type_hints
 
 import sentry_sdk
+import trio
 from async_amqp import AmqpProtocol  # type: ignore
 from async_amqp.protocol import CLOSED, CLOSING, CONNECTING, OPEN  # type: ignore
 from hypercorn import Config as HypercornConfig
-from hypercorn.trio import serve as hypercorn_serve
+from hypercorn.trio import serve as hc_serve
 from quart_trio import QuartTrio
-from trio import Nursery
+from trio.abc import AsyncResource
 
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
+    ConnectorCollection,
     EventCallbackType,
     MessageCallbackType,
     ReceiveInboundConnector,
@@ -33,7 +35,28 @@ class HealthCheckResp(TypedDict):
     components: dict[str, str]
 
 
-class BaseWorker:
+class WorkerHttp(AsyncResource):
+    def __init__(self, http_bind: str, backlog: int):
+        self.app = QuartTrio(__name__)
+        self.config = HypercornConfig()
+        self.config.bind = [http_bind]
+        self.config.backlog = backlog
+        self._shutdown = trio.Event()
+        self._closed = trio.Event()
+
+    async def _run(self):
+        await hc_serve(self.app, self.config, shutdown_trigger=self._shutdown.wait)
+        self._closed.set()
+
+    def start(self, nursery: trio.Nursery) -> None:
+        nursery.start_soon(self._run)
+
+    async def aclose(self):
+        self._shutdown.set()
+        await self._closed.wait()
+
+
+class BaseWorker(AsyncResource):
     config: BaseConfig
 
     @classmethod
@@ -41,7 +64,7 @@ class BaseWorker:
         return get_type_hints(cls)["config"]
 
     def __init__(
-        self, nursery: Nursery, amqp_connection: AmqpProtocol, config: BaseConfig
+        self, nursery: trio.Nursery, amqp_connection: AmqpProtocol, config: BaseConfig
     ) -> None:
         logger.info(
             "Starting %s worker with config %s", self.__class__.__name__, config
@@ -50,6 +73,9 @@ class BaseWorker:
         self.connection = amqp_connection
         self.receive_inbound_connectors: dict[str, ReceiveInboundConnector] = {}
         self.receive_outbound_connectors: dict[str, ReceiveOutboundConnector] = {}
+        self._connectors = ConnectorCollection()
+        self.resources_to_close: list[AsyncResource] = [self._connectors]
+        self._closed = False
         self.config = config
         self._setup_sentry()
         self.healthchecks = {"amqp": self._amqp_healthcheck}
@@ -66,12 +92,10 @@ class BaseWorker:
         )
 
     def _setup_http(self, http_bind: str) -> None:
-        self.http_app = QuartTrio(__name__)
-        http_config = HypercornConfig()
-        http_config.bind = [http_bind]
-        http_config.backlog = self.config.worker_concurrency
-        self.nursery.start_soon(hypercorn_serve, self.http_app, http_config)
-        self.http_app.add_url_rule("/health", view_func=self._healthcheck_request)
+        self.http = WorkerHttp(http_bind, self.config.worker_concurrency)
+        self.resources_to_close.append(self.http)
+        self.http.start(self.nursery)
+        self.http.app.add_url_rule("/health", view_func=self._healthcheck_request)
 
     async def _healthcheck_request(self):
         response: HealthCheckResp = {"health": "ok", "components": {}}
@@ -98,6 +122,13 @@ class BaseWorker:
             result["health"] = "down"
         return result
 
+    async def aclose(self):
+        async with trio.open_nursery() as nursery:
+            for resource in self.resources_to_close:
+                nursery.start_soon(resource.aclose)
+        # The nursery will block until all resources are closed.
+        self._closed = True
+
     async def setup(self):
         pass
 
@@ -118,6 +149,7 @@ class BaseWorker:
             connector_name,
             self.config.worker_concurrency,
         )
+        self._connectors.add(connector)
         await connector.setup(
             inbound_handler=inbound_handler, event_handler=event_handler
         )
@@ -138,6 +170,7 @@ class BaseWorker:
             connector_name,
             self.config.worker_concurrency,
         )
+        self._connectors.add(connector)
         await connector.setup(outbound_handler=outbound_handler)
         self.receive_outbound_connectors[connector_name] = connector
         return connector

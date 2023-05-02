@@ -12,11 +12,6 @@ def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
 
-@pytest.fixture
-def config():
-    return HttpRpcTransport.get_config_class()(http_bind="localhost", request_timeout=5)
-
-
 class OkTransport(HttpRpcTransport):
     async def handle_raw_inbound_message(self, message_id, request):
         await self.connector.publish_inbound(
@@ -30,80 +25,53 @@ class OkTransport(HttpRpcTransport):
         )
 
 
-@pytest.fixture
-async def transport(nursery, amqp_connection, config):
-    transport = OkTransport(nursery, amqp_connection, config)
-    await transport.setup()
-    return transport
+@pytest.fixture()
+async def transport(worker_factory):
+    config = {"http_bind": "localhost", "request_timeout": 5}
+    async with worker_factory.with_cleanup(OkTransport, config) as transport:
+        await transport.setup()
+        yield transport
 
 
-async def test_inbound(transport: OkTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
+@pytest.fixture()
+async def ri_http_rpc(connector_factory):
+    # connector_factory handles the necessary cleanup.
+    return await connector_factory.setup_ri("http_rpc")
 
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
 
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+async def test_inbound(transport: OkTransport, ri_http_rpc):
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         await connection.send_complete()
-        inbound = await receive_channel.receive()
+        inbound = await ri_http_rpc.consume_inbound()
         reply = inbound.reply("test")
-        await ri_connector.publish_outbound(reply)
+        await ri_http_rpc.publish_outbound(reply)
         response = await connection.receive()
         assert response == b"test"
 
-    event = await receive_channel.receive()
+    event = await ri_http_rpc.consume_event()
     assert event.event_type == EventType.ACK
     assert event.user_message_id == reply.message_id
     assert event.sent_message_id == reply.message_id
 
 
-async def test_missing_fields_nack(transport: OkTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
+async def test_missing_fields_nack(transport: OkTransport, ri_http_rpc):
     outbound = Message(
         to_addr="",
         from_addr="",
         transport_name="",
         transport_type=TransportType.HTTP_API,
     )
-    await ri_connector.publish_outbound(outbound)
+    await ri_http_rpc.publish_outbound(outbound)
 
-    with receive_channel:
-        event = await receive_channel.receive()
+    event = await ri_http_rpc.consume_event()
     assert event.event_type == EventType.NACK
     assert event.user_message_id == outbound.message_id
     assert event.sent_message_id == outbound.message_id
     assert event.nack_reason == "Missing fields: in_reply_to, content"
 
 
-async def test_missing_request_nack(transport: OkTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
+async def test_missing_request_nack(transport: OkTransport, ri_http_rpc):
     outbound = Message(
         to_addr="",
         from_addr="",
@@ -112,32 +80,20 @@ async def test_missing_request_nack(transport: OkTransport):
         in_reply_to="invalid",
         content="test",
     )
-    await ri_connector.publish_outbound(outbound)
+    await ri_http_rpc.publish_outbound(outbound)
 
-    with receive_channel:
-        event = await receive_channel.receive()
+    event = await ri_http_rpc.consume_event()
     assert event.event_type == EventType.NACK
     assert event.user_message_id == outbound.message_id
     assert event.sent_message_id == outbound.message_id
     assert event.nack_reason == "No matching request"
 
 
-async def test_timeout(transport: OkTransport, mock_clock):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+async def test_timeout(transport: OkTransport, mock_clock, ri_http_rpc):
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         await connection.send_complete()
-        await receive_channel.receive()
+        await ri_http_rpc.consume_inbound()
         mock_clock.jump(transport.config.request_timeout)
         response = await connection.as_response()
         assert response.status_code == 504
@@ -145,27 +101,16 @@ async def test_timeout(transport: OkTransport, mock_clock):
     assert transport.results == {}
 
 
-async def test_client_disconnect(transport: OkTransport):
+async def test_client_disconnect(transport: OkTransport, ri_http_rpc):
     """
     Transport should clean up so that we don't have memory leaks
     """
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     async with client.request(path="/http_rpc") as connection:
         # cast to get access to _client_send private method
         connection = cast(QuartTestHTTPConnection, connection)
         await connection.send_complete()
-        await receive_channel.receive()
+        await ri_http_rpc.consume_inbound()
         await connection.disconnect()
         # It seems like the test client doesn't clean this up properly
         await connection._client_send.aclose()

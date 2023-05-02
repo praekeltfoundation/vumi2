@@ -12,20 +12,22 @@ def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
 
-@pytest.fixture
-def config():
-    return AatUssdTransport.get_config_class()(
-        http_bind="localhost",
-        base_url="http://www.example.org",
-        web_path="/api/aat/ussd",
-    )
+@pytest.fixture()
+async def transport(worker_factory):
+    config = {
+        "http_bind": "localhost",
+        "base_url": "http://www.example.org",
+        "web_path": "/api/aat/ussd",
+    }
+    async with worker_factory.with_cleanup(AatUssdTransport, config) as transport:
+        await transport.setup()
+        yield transport
 
 
-@pytest.fixture
-async def transport(nursery, amqp_connection, config):
-    transport = AatUssdTransport(nursery, amqp_connection, config)
-    await transport.setup()
-    return transport
+@pytest.fixture()
+async def ri_http_rpc(connector_factory):
+    # connector_factory handles the necessary cleanup.
+    return await connector_factory.setup_ri("http_rpc")
 
 
 def create_callback_url(to_addr: str):
@@ -56,19 +58,8 @@ def assert_outbound_message_response(
         }
 
 
-async def test_inbound_start_session(transport: AatUssdTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+async def test_inbound_start_session(transport: AatUssdTransport, ri_http_rpc):
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={
@@ -78,7 +69,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         },
     ) as connection:
         await connection.send_complete()
-        inbound = await receive_channel.receive()
+        inbound = await ri_http_rpc.consume_inbound()
 
         assert inbound.to_addr == "*1234#"
         assert inbound.from_addr == "+27820001001"
@@ -86,7 +77,7 @@ async def test_inbound_start_session(transport: AatUssdTransport):
         assert inbound.session_event == Session.NEW
 
         reply = inbound.reply("Test response")
-        await ri_connector.publish_outbound(reply)
+        await ri_http_rpc.publish_outbound(reply)
 
         response = await connection.receive()
         assert_outbound_message_response(
@@ -96,24 +87,13 @@ async def test_inbound_start_session(transport: AatUssdTransport):
             continue_session=True,
         )
 
-    ack = await receive_channel.receive()
+    ack = await ri_http_rpc.consume_event()
     assert ack.event_type == EventType.ACK
     assert ack.user_message_id == reply.message_id
 
 
-async def test_close_session(transport: AatUssdTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+async def test_close_session(transport: AatUssdTransport, ri_http_rpc):
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={
@@ -123,10 +103,10 @@ async def test_close_session(transport: AatUssdTransport):
         },
     ) as connection:
         await connection.send_complete()
-        inbound = await receive_channel.receive()
+        inbound = await ri_http_rpc.consume_inbound()
 
         reply = inbound.reply("Test response", Session.CLOSE)
-        await ri_connector.publish_outbound(reply)
+        await ri_http_rpc.publish_outbound(reply)
 
         response = await connection.receive()
         assert_outbound_message_response(
@@ -136,13 +116,13 @@ async def test_close_session(transport: AatUssdTransport):
             continue_session=False,
         )
 
-    ack = await receive_channel.receive()
+    ack = await ri_http_rpc.consume_event()
     assert ack.event_type == EventType.ACK
     assert ack.user_message_id == reply.message_id
 
 
 async def test_missing_fields(transport: AatUssdTransport):
-    client = transport.http_app.test_client()
+    client = transport.http.app.test_client()
     response = await client.get(transport.config.web_path)
     assert response.status_code == 400
     assert await response.json == {
@@ -150,19 +130,8 @@ async def test_missing_fields(transport: AatUssdTransport):
     }
 
 
-async def test_inbound_session_resume(transport: AatUssdTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
-    client = transport.http_app.test_client()
+async def test_inbound_session_resume(transport: AatUssdTransport, ri_http_rpc):
+    client = transport.http.app.test_client()
     async with client.request(
         transport.config.web_path,
         query_string={
@@ -173,7 +142,7 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
         },
     ) as connection:
         await connection.send_complete()
-        inbound = await receive_channel.receive()
+        inbound = await ri_http_rpc.consume_inbound()
 
         assert inbound.to_addr == "*1234#"
         assert inbound.from_addr == "+27820001001"
@@ -182,51 +151,29 @@ async def test_inbound_session_resume(transport: AatUssdTransport):
         assert inbound.session_event == Session.RESUME
 
         reply = inbound.reply("Test response")
-        await ri_connector.publish_outbound(reply)
+        await ri_http_rpc.publish_outbound(reply)
 
-    ack = await receive_channel.receive()
+    ack = await ri_http_rpc.consume_event()
     assert ack.event_type == EventType.ACK
     assert ack.user_message_id == reply.message_id
 
 
-async def test_outbound_not_reply(transport: AatUssdTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
+async def test_outbound_not_reply(transport: AatUssdTransport, ri_http_rpc):
     outbound = Message(
         to_addr="+27820001001",
         from_addr="*1234#",
         transport_name="aat_ussd",
         transport_type=TransportType.USSD,
     )
-    await ri_connector.publish_outbound(outbound)
+    await ri_http_rpc.publish_outbound(outbound)
 
-    event = await receive_channel.receive()
+    event = await ri_http_rpc.consume_event()
     assert event.event_type == EventType.NACK
     assert event.nack_reason == "Outbound message is not a reply"
     assert event.user_message_id == outbound.message_id
 
 
-async def test_outbound_no_content(transport: AatUssdTransport):
-    send_channel, receive_channel = msg_ch_pair(1)
-
-    async def inbound_consumer(msg):
-        await send_channel.send(msg)
-
-    ri_connector = await transport.setup_receive_inbound_connector(
-        connector_name="http_rpc",
-        inbound_handler=inbound_consumer,
-        event_handler=inbound_consumer,
-    )
-
+async def test_outbound_no_content(transport: AatUssdTransport, ri_http_rpc):
     outbound = Message(
         to_addr="+27820001001",
         from_addr="*1234#",
@@ -234,9 +181,9 @@ async def test_outbound_no_content(transport: AatUssdTransport):
         transport_type=TransportType.USSD,
         in_reply_to="testid",
     )
-    await ri_connector.publish_outbound(outbound)
+    await ri_http_rpc.publish_outbound(outbound)
 
-    event = await receive_channel.receive()
+    event = await ri_http_rpc.consume_event()
     assert event.event_type == EventType.NACK
     assert event.nack_reason == "Outbound message has no content"
     assert event.user_message_id == outbound.message_id
