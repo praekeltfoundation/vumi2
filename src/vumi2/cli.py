@@ -86,10 +86,10 @@ async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorke
     logging.basicConfig(level=config.log_level)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:
-            worker = worker_cls(
+            async with worker_cls(
                 nursery=nursery, amqp_connection=amqp_connection, config=config
-            )
-            nursery.start_soon(worker.setup)
+            ) as worker:
+                await worker.setup()
             return worker
 
 
