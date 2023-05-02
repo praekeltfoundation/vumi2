@@ -30,6 +30,14 @@ class FailingHealthcheckWorker(BaseWorker):
 
 
 class AcloseWorker(BaseWorker):
+    """
+    A worker with a pair of connectors for use in shutdown/aclose tests.
+
+    In order for tests to control message handling, each consumer sends
+    its message/event to a memory channel (for the test to receive) and
+    waits for a response on another channel.
+    """
+
     async def setup(self):
         # Make sure we haven't added this to the base class since these tests
         # were written.
