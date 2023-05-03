@@ -13,7 +13,14 @@ from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import MultiDict
 
 from vumi2.applications import JunebugMessageApi
-from vumi2.messages import Event, EventType, Message, TransportType, generate_message_id
+from vumi2.messages import (
+    DeliveryStatus,
+    Event,
+    EventType,
+    Message,
+    TransportType,
+    generate_message_id,
+)
 
 
 @define
@@ -87,6 +94,10 @@ async def handle_inbound(worker: JunebugMessageApi, msg: Message):
         yield
 
 
+async def store_ehi(worker: JunebugMessageApi, message_id, url, auth_token):
+    await worker.state_cache.store_event_http_info(message_id, url, auth_token)
+
+
 @asynccontextmanager
 async def handle_event(worker: JunebugMessageApi, ev: Event):
     async with open_nursery() as nursery:
@@ -156,6 +167,8 @@ async def test_inbound_message_amqp(jma_worker, jma_ro, http_server):
         req = await http_server.receive_req()
         await http_server.send_rsp(RspInfo())
 
+    assert req.path == "message"
+    assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["content"] == "hello"
     assert req.body_json["to"] == "123"
 
@@ -234,7 +247,7 @@ async def test_send_message_auth_token(worker_factory, http_server):
     assert req.headers["Authorization"] == "Token my-token"
 
 
-async def test_event_not_message_id(jma_worker, http_server, caplog):
+async def test_event_no_message_id(jma_worker, http_server, caplog):
     """
     If we receive an event but don't have anything stored for the
     message_id it refers to, we log it and move on.
@@ -248,264 +261,137 @@ async def test_event_not_message_id(jma_worker, http_server, caplog):
     assert "Cannot find event URL, missing user_message_id" in warn.getMessage()
 
 
-## Test cases from the original junebug codebase. The plan is to reimplement
-## these for vumi2 as we add the associated functionality to JunebugMessageApi.
+async def test_forward_ack(jma_worker, http_server):
+    """
+    An ack event referencing an outbound message we know about is
+    forwarded over HTTP.
+    """
+    await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
+    ev = mkev("msg-21", EventType.ACK)
 
-#     @inlineCallbacks
-#     def test_forward_ack_http(self):
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo())
 
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': self.url,
-#                 'message_id': "msg-21",
-#             })
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["event_type"] == "submitted"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
 
-#         yield self.worker.consume_ack(event)
-#         [req] = self.logging_api.requests
 
-#         self.assert_request(
-#             req,
-#             method='POST',
-#             headers={'content-type': ['application/json']},
-#             body=api_from_event(self.worker.channel_id, event))
-#         yield self.assert_event_stored(event)
+async def test_forward_ack_basic_auth_url(jma_worker, http_server):
+    """
+    If an event's URL has credentials in it, we use them for basic auth
+    when forwarding over HTTP.
+    """
+    url = f"{http_server.bind}/event".replace("http://", "http://foo:bar@")
+    await store_ehi(jma_worker, "msg-21", url, None)
+    ev = mkev("msg-21", EventType.ACK)
 
-#     @inlineCallbacks
-#     def test_forward_ack_http_with_token_auth(self):
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo())
 
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': '{}/auth/'.format(self.url),
-#                 'event_auth_token': 'the-auth-token',
-#                 'message_id': "msg-21",
-#             })
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    basic = b64encode(b"foo:bar").decode()  # base64 is all bytes, not strs.
+    assert req.headers["Authorization"] == f"Basic {basic}"
+    assert req.body_json["event_type"] == "submitted"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
 
-#         yield self.worker.consume_ack(event)
-#         [req] = self.logging_api.requests
 
-#         self.assertEqual(req, {
-#             'Authorization': ['Token the-auth-token']
-#         })
-#         yield self.assert_event_stored(event)
+async def test_forward_ack_auth_token(jma_worker, http_server):
+    """
+    If an event has an auth token associated with it, we use that when
+    forwarding over HTTP.
+    """
+    url = f"{http_server.bind}/event"
+    await store_ehi(jma_worker, "msg-21", url, "my-event-token")
+    ev = mkev("msg-21", EventType.ACK)
 
-#     @inlineCallbacks
-#     def test_forward_ack_http_with_basic_auth(self):
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo())
 
-#         # Inject the auth parameters
-#         url = self.url.replace('http://', 'http://foo:bar@') + '/auth/'
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': url,
-#                 'message_id': "msg-21",
-#             })
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.headers["Authorization"] == "Token my-event-token"
+    assert req.body_json["event_type"] == "submitted"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
 
-#         yield self.worker.consume_ack(event)
-#         [req] = self.logging_api.requests
 
-#         self.assertEqual(req, {
-#             'Authorization': ['Basic %s' % (b64encode('foo:bar'),)]
-#         })
-#         yield self.assert_event_stored(event)
+async def test_forward_ack_bad_response(jma_worker, http_server, caplog):
+    """
+    If forwarding an ack results in an HTTP error, the error and event
+    are logged.
+    """
+    await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
+    ev = mkev("msg-21", EventType.ACK)
 
-#     @inlineCallbacks
-#     def test_forward_ack_bad_response(self):
-#         self.patch_logger()
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=500))
 
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
+    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
+    assert "Error sending event, received HTTP code 500" in err.getMessage()
 
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': "{}/bad/".format(self.url),
-#                 'message_id': "msg-21",
-#             })
 
-#         yield self.worker.consume_ack(event)
+async def test_forward_nack(jma_worker, http_server):
+    """
+    A nack event referencing an outbound message we know about is
+    forwarded over HTTP.
+    """
+    await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
+    ev = mkev("msg-21", EventType.NACK, nack_reason="KaBooM!")
 
-#         self.assert_was_logged(repr(event))
-#         self.assert_was_logged('500')
-#         self.assert_was_logged('test-error-response')
-#         yield self.assert_event_stored(event)
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo())
 
-#     @inlineCallbacks
-#     def test_forward_ack_no_message(self):
-#         self.patch_logger()
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["event_type"] == "rejected"
+    assert req.body_json["event_details"] == {"reason": "KaBooM!"}
+    assert req.body_json["channel_id"] == "jma-test"
 
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
 
-#         yield self.worker.consume_ack(event)
+async def test_forward_dr(jma_worker, http_server):
+    """
+    A delivery report event referencing an outbound message we know
+    about is forwarded over HTTP.
+    """
+    await store_ehi(jma_worker, "m-21", f"{http_server.bind}/event", None)
+    ev = mkev("m-21", EventType.DELIVERY_REPORT, delivery_status=DeliveryStatus.PENDING)
 
-#         self.assertEqual(self.logging_api.requests, [])
-#         yield self.assert_event_stored(event)
+    with fail_after(2):
+        async with handle_event(jma_worker, ev):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo())
 
-#     @inlineCallbacks
-#     def test_forward_nack_http(self):
-#         event = TransportEvent(
-#             event_type='nack',
-#             user_message_id='msg-21',
-#             nack_reason='too many foos',
-#             timestamp='2015-09-22 15:39:44.827794')
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["event_type"] == "delivery_pending"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
 
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': self.url,
-#                 'message_id': "msg-21",
-#             })
 
-#         yield self.worker.consume_nack(event)
-#         [req] = self.logging_api.requests
+# TODO: Tests for outbound messages. In the original junebug codebase, those
+#       are part of the API rather than the worker.
 
-#         self.assert_request(
-#             req,
-#             method='POST',
-#             headers={'content-type': ['application/json']},
-#             body=api_from_event(self.worker.channel_id, event))
-#         yield self.assert_event_stored(event)
+## Test cases from the original junebug worker codebase. The ones that are left
+## are for things we may not want/need anymore.
 
-#     @inlineCallbacks
-#     def test_forward_nack_bad_response(self):
-#         self.patch_logger()
-
-#         event = TransportEvent(
-#             event_type='nack',
-#             user_message_id='msg-21',
-#             nack_reason='too many foos',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': '{}/bad/'.format(self.url),
-#                 'message_id': "msg-21",
-#             })
-
-#         yield self.worker.consume_nack(event)
-
-#         self.assert_was_logged(repr(event))
-#         self.assert_was_logged('500')
-#         self.assert_was_logged('test-error-response')
-#         yield self.assert_event_stored(event)
-
-#     @inlineCallbacks
-#     def test_forward_nack_no_message(self):
-#         self.patch_logger()
-
-#         event = TransportEvent(
-#             event_type='nack',
-#             user_message_id='msg-21',
-#             nack_reason='too many foos',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         yield self.worker.consume_nack(event)
-
-#         self.assertEqual(self.logging_api.requests, [])
-#         yield self.assert_event_stored(event)
-
-#     @inlineCallbacks
-#     def test_forward_dr_http(self):
-#         event = TransportEvent(
-#             event_type='delivery_report',
-#             user_message_id='msg-21',
-#             delivery_status='pending',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': self.url,
-#                 'message_id': "msg-21",
-#             })
-
-#         yield self.worker.consume_delivery_report(event)
-#         [req] = self.logging_api.requests
-
-#         self.assert_request(
-#             req,
-#             method='POST',
-#             headers={'content-type': ['application/json']},
-#             body=api_from_event(self.worker.channel_id, event))
-#         yield self.assert_event_stored(event)
-
-#     @inlineCallbacks
-#     def test_forward_dr_bad_response(self):
-#         self.patch_logger()
-
-#         event = TransportEvent(
-#             event_type='delivery_report',
-#             user_message_id='msg-21',
-#             delivery_status='pending',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': '{}/bad/'.format(self.url),
-#                 'message_id': "msg-21",
-#             })
-
-#         yield self.worker.consume_delivery_report(event)
-
-#         self.assert_was_logged(repr(event))
-#         self.assert_was_logged('500')
-#         self.assert_was_logged('test-error-response')
-#         yield self.assert_event_stored(event)
-
-#     @inlineCallbacks
-#     def test_forward_dr_no_message(self):
-#         self.patch_logger()
-
-#         event = TransportEvent(
-#             event_type='delivery_report',
-#             user_message_id='msg-21',
-#             delivery_status='pending',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         yield self.worker.consume_delivery_report(event)
-
-#         self.assertEqual(self.logging_api.requests, [])
-#         yield self.assert_event_stored(event)
-
-#     @inlineCallbacks
-#     def test_forward_event_bad_event(self):
-#         self.patch_logger()
-
-#         event = TransportEvent(
-#             event_type='ack',
-#             user_message_id='msg-21',
-#             sent_message_id='msg-21',
-#             timestamp='2015-09-22 15:39:44.827794')
-
-#         event['event_type'] = 'bad'
-
-#         yield self.worker.outbounds.store_message(
-#             self.worker.channel_id, {
-#                 'event_url': self.url,
-#                 'message_id': "msg-21",
-#             })
-
-#         yield self.worker._forward_event(event)
-
-#         self.assertEqual(self.logging_api.requests, [])
-#         self.assert_was_logged("Discarding unrecognised event %r" % (event,))
+## Various message statistics. We don't seem to use these for rate limiting or
+## anything, so unless we're querying them somewhere we probably don't need
+## them.
 
 #     @inlineCallbacks
 #     def test_outbound_message_rates(self):
@@ -631,69 +517,6 @@ async def test_event_not_message_id(jma_worker, http_server, caplog):
 
 #         self.assertEqual((yield worker.message_rate.get_messages_per_second(
 #             'testtransport', 'delivery_pending', 1.0)), 1.0)
-
-#     @inlineCallbacks
-#     def test_teardown_without_startup(self):
-#         '''If the teardown method is called before the worker was started up
-#         correctly, the teardown should still succeed.'''
-#         worker = yield self.get_worker(start=False)
-
-#         self.assertEqual(getattr(worker, 'redis', None), None)
-
-#         yield worker.teardown_application()
-
-## Things we probably don't need anymore:
-
-#     @inlineCallbacks
-#     def setUp(self):
-#         self.logging_api = RequestLoggingApi()
-#         self.logging_api.setup()
-#         self.addCleanup(self.logging_api.teardown)
-#         self.url = self.logging_api.url
-
-#         self.worker = yield self.get_worker()
-#         connection_pool = HTTPConnectionPool(reactor, persistent=False)
-#         treq._utils.set_global_pool(connection_pool)
-
-#     @inlineCallbacks
-#     def get_worker(self, config=None, start=True):
-#         '''Get a new MessageForwardingWorker with the provided config'''
-#         if config is None:
-#             config = {}
-
-#         self.app_helper = ApplicationHelper(MessageForwardingWorker)
-#         yield self.app_helper.setup()
-#         self.addCleanup(self.app_helper.cleanup)
-
-#         persistencehelper = PersistenceHelper()
-#         yield persistencehelper.setup()
-#         self.addCleanup(persistencehelper.cleanup)
-
-#         config = conjoin(persistencehelper.mk_config({
-#             'transport_name': 'testtransport',
-#             'mo_message_url': self.url.decode('utf-8'),
-#             'inbound_ttl': 60,
-#             'outbound_ttl': 60 * 60 * 24 * 2,
-#             'metric_window': 1.0,
-#         }), config)
-
-#         worker = yield self.app_helper.get_application(config, start=start)
-#         returnValue(worker)
-
-#     @inlineCallbacks
-#     def assert_event_stored(self, event):
-#         key = '%s:outbound_messages:%s' % (
-#             self.worker.config['transport_name'], 'msg-21')
-#         event_json = yield self.worker.redis.hget(key, event['event_id'])
-#         self.assertEqual(event_json, event.to_json())
-
-#     @inlineCallbacks
-#     def test_channel_id(self):
-#         worker = yield self.get_worker({'transport_name': 'foo'})
-#         self.assertEqual(worker.channel_id, 'foo')
-
-
-## Test cases for features we may not want or need anymore.
 
 ## Message/event forwarding over AMQP. Do we actually use this anywhere?
 
