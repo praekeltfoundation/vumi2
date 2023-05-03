@@ -159,5 +159,3 @@ class JunebugMessageApi(BaseWorker):
                 LOG_EV_HTTP_ERR,
                 {"code": resp.status_code, "body": resp.text, "event": ev},
             )
-
-        # TODO: Look up message_id and post event.
