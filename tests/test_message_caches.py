@@ -1,8 +1,7 @@
-from datetime import datetime, timedelta
-
 import pytest
+import trio
 
-from vumi2.message_caches import MemoryMessageCache
+from vumi2.message_caches import MemoryMessageCache, TimeoutDict
 from vumi2.messages import Message, TransportType
 
 
@@ -11,42 +10,66 @@ def memory_message_cache():
     return MemoryMessageCache({})
 
 
-def create_outbound(timestamp: datetime) -> Message:
+def create_outbound() -> Message:
     return Message(
         to_addr="+27820001001",
         from_addr="12345",
         transport_name="bulk_sms",
         transport_type=TransportType.SMS,
-        timestamp=timestamp,
     )
+
+
+async def test_timeoutdict_mutablemapping_api(autojump_clock):
+    """
+    TimeoutDict.__iter__ and TimeoutDict.__len__ need to be implemented
+    for MutableMapping, but we don't actually use them anywhere.
+
+    The autojump_clock fixture injects a fake clock that skips ahead
+    when there aren't any active tasks, so we can sleep as long as we
+    like without any real-world time passing.
+    """
+    td: TimeoutDict[str] = TimeoutDict(timeout=5)
+    assert len(td) == 0
+    assert list(iter(td)) == []
+
+    td["a"] = "1"
+    await trio.sleep(2)
+    td["b"] = "2"
+
+    assert len(td) == 2
+    assert list(iter(td)) == ["a", "b"]
+
+    await trio.sleep(4)
+    assert len(td) == 1
+    assert list(iter(td)) == ["b"]
 
 
 async def test_memory_cache_and_fetch(memory_message_cache: MemoryMessageCache):
     """
     Caching a message and then fetching it later should return the same message
     """
-    outbound = create_outbound(datetime.utcnow())
+    outbound = create_outbound()
     await memory_message_cache.store_outbound(outbound)
     returned_outbound = await memory_message_cache.fetch_outbound(outbound.message_id)
     assert outbound == returned_outbound
 
 
-async def test_memory_timeout(memory_message_cache: MemoryMessageCache):
+async def test_memory_timeout(memory_message_cache: MemoryMessageCache, autojump_clock):
     """
     Messages that are older than the configered timeout should be removed from the cache
     """
-    expired_outbound = create_outbound(
-        datetime.utcnow() - timedelta(seconds=memory_message_cache.config.timeout + 1)
-    )
-    keep_outbound = create_outbound(datetime.utcnow())
+    oldmsg = create_outbound()
+    await memory_message_cache.store_outbound(oldmsg)
+    await trio.sleep(memory_message_cache.config.timeout - 1)
 
-    await memory_message_cache.store_outbound(expired_outbound)
-    await memory_message_cache.store_outbound(keep_outbound)
+    newmsg = create_outbound()
+    await memory_message_cache.store_outbound(newmsg)
 
-    assert (
-        await memory_message_cache.fetch_outbound(expired_outbound.message_id) is None
-    )
-    assert (
-        await memory_message_cache.fetch_outbound(keep_outbound.message_id)
-        == keep_outbound
-    )
+    # Neither message has expired yet, although oldmsg is close.
+    assert await memory_message_cache.fetch_outbound(oldmsg.message_id) == oldmsg
+    assert await memory_message_cache.fetch_outbound(newmsg.message_id) == newmsg
+
+    # Wait until oldmsg expires, leaving only newmsg.
+    await trio.sleep(2)
+    assert await memory_message_cache.fetch_outbound(oldmsg.message_id) is None
+    assert await memory_message_cache.fetch_outbound(newmsg.message_id) == newmsg

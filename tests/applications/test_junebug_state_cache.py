@@ -2,33 +2,7 @@ import trio
 
 from vumi2.applications.junebug_message_api.junebug_state_cache import (
     MemoryJunebugStateCache,
-    TimeoutDict,
 )
-
-
-async def test_timeoutdict_mutablemapping_api(autojump_clock):
-    """
-    TimeoutDict.__iter__ and TimeoutDict.__len__ need to be implemented
-    for MutableMapping, but we don't actually use them anywhere.
-
-    The autojump_clock fixture injects a fake clock that skips ahead
-    when there aren't any active tasks, so we can sleep as long as we
-    like without any real-world time passing.
-    """
-    td: TimeoutDict[str] = TimeoutDict(timeout=5)
-    assert len(td) == 0
-    assert list(iter(td)) == []
-
-    td["a"] = "1"
-    await trio.sleep(2)
-    td["b"] = "2"
-
-    assert len(td) == 2
-    assert list(iter(td)) == ["a", "b"]
-
-    await trio.sleep(4)
-    assert len(td) == 1
-    assert list(iter(td)) == ["b"]
 
 
 async def test_store_fetch_delete():
