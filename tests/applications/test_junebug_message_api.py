@@ -261,6 +261,29 @@ async def test_event_no_message_id(jma_worker, http_server, caplog):
     assert "Cannot find event URL, missing user_message_id" in warn.getMessage()
 
 
+async def test_forward_ack_amqp(jma_worker, jma_ro, http_server):
+    """
+    An ack event referencing an outbound message we know about is
+    forwarded over HTTP.
+
+    This test sends the inbound message over AMQP rather than calling
+    the handler directly.
+    """
+    await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
+    ev = mkev("msg-21", EventType.ACK)
+
+    with fail_after(2):
+        await jma_ro.publish_event(ev)
+        req = await http_server.receive_req()
+        await http_server.send_rsp(RspInfo())
+
+    assert req.path == "event"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["event_type"] == "submitted"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
+
+
 async def test_forward_ack(jma_worker, http_server):
     """
     An ack event referencing an outbound message we know about is
