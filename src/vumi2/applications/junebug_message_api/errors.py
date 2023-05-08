@@ -1,0 +1,19 @@
+from http import HTTPStatus
+
+
+# FIXME: Do we need this base class?
+class JunebugApiError(Exception):
+    name = "JunebugError"
+    description = "Generic Junebug Error"
+    status = HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+class ApiUsageError(JunebugApiError):
+    name = "ApiUsageError"
+    description = "api usage error"
+    status = HTTPStatus.BAD_REQUEST
+
+
+class JsonDecodeError(ApiUsageError):
+    name = "JsonDecodeError"
+    description = "json decode error"

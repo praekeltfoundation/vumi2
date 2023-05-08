@@ -1,14 +1,30 @@
+import json
+from http import HTTPStatus
 from logging import getLogger
-from typing import Optional
+from typing import Optional, Union
 
 from attrs import define, field
 from httpx import AsyncClient
+from quart import request
+from trio import move_on_after
 
 from vumi2.cli import class_from_string
-from vumi2.messages import DeliveryStatus, Event, EventType, Message
+from vumi2.messages import (
+    Event,
+    Message,
+    TransportType,
+    generate_message_id,
+)
 from vumi2.workers import BaseConfig, BaseWorker
 
 from . import junebug_state_cache
+from .errors import JsonDecodeError, JunebugApiError
+from .messages import (
+    JunebugOutboundMessage,
+    junebug_event_from_ev,
+    junebug_inbound_from_msg,
+    junebug_outbound_from_msg,
+)
 
 LOG_MSG_HTTP_ERR = (
     "Error sending message, received HTTP code %(code)s"
@@ -23,46 +39,6 @@ LOG_EV_URL_MISSING = "Cannot find event URL, missing user_message_id: %(event)s"
 logger = getLogger(__name__)
 
 
-def junebug_from_msg(message: Message) -> dict:
-    vumi_dict = message.serialise()
-    msg = {
-        "to": vumi_dict["to_addr"],
-        "from": vumi_dict["from_addr"],
-        "group": vumi_dict["group"],
-        "message_id": vumi_dict["message_id"],
-        "channel_id": vumi_dict["transport_name"],
-        "timestamp": vumi_dict["timestamp"],
-        "reply_to": vumi_dict["in_reply_to"],
-        "content": vumi_dict["content"],
-        "channel_data": vumi_dict["helper_metadata"],
-    }
-    msg["channel_data"]["session_event"] = vumi_dict["session_event"]
-    return msg
-
-
-def junebug_from_ev(event: Event, channel_id: str) -> dict:
-    vumi_dict = event.serialise()
-    ev = {
-        "channel_id": channel_id,
-        "timestamp": vumi_dict["timestamp"],
-        "event_details": {},
-        "event_type": None,
-    }
-    if event.event_type == EventType.ACK:
-        ev["event_type"] = "submitted"
-    elif event.event_type == EventType.NACK:
-        ev["event_type"] = "rejected"
-        ev["event_details"] = {"reason": event.nack_reason}
-    elif event.event_type == EventType.DELIVERY_REPORT:
-        ev["event_type"] = {
-            DeliveryStatus.PENDING: "delivery_pending",
-            DeliveryStatus.FAILED: "delivery_failed",
-            DeliveryStatus.DELIVERED: "delivery_succeeded",
-            None: None,
-        }[event.delivery_status]
-    return ev
-
-
 @define(kw_only=True)
 class JunebugMessageApiConfig(BaseConfig):
     connector_name: str
@@ -75,6 +51,11 @@ class JunebugMessageApiConfig(BaseConfig):
 
     base_url_path: str = ""
 
+    transport_type: TransportType = TransportType.SMS
+
+    # If None, all outbound messages must be replies or have a from address
+    default_from_addr: Optional[str] = None
+
     state_cache_class: str = f"{junebug_state_cache.__name__}.MemoryJunebugStateCache"
     state_cache_config: dict = field(factory=dict)
 
@@ -83,8 +64,10 @@ class JunebugMessageApiConfig(BaseConfig):
     # # Maximum time (seconds) a mo_message_url is allowed to take to process an event
     # event_url_timeout: int = 10
 
+    request_timeout: int = 4 * 60
+
     def url(self, path: str) -> str:
-        return f"{self.base_url_path}{path}"
+        return "/".join([self.base_url_path.rstrip("/"), path.lstrip("/")])
 
 
 class JunebugMessageApi(BaseWorker):
@@ -108,15 +91,18 @@ class JunebugMessageApi(BaseWorker):
             self.handle_inbound_message,
             self.handle_event,
         )
-        # sm_url = self.config.url("/messages")
-        # self.http_app.add_url_rule(sm_url, view_func=self.http_send_message)
+        self.http.app.add_url_rule(
+            self.config.url("/messages"),
+            view_func=self.http_send_message,
+            methods=["POST"],
+        )
 
     async def handle_inbound_message(self, message: Message) -> None:
         """
         Send the vumi message as an HTTP request to the configured URL.
         """
         logger.debug("Consuming inbound message %s", message)
-        msg = junebug_from_msg(message)
+        msg = junebug_inbound_from_msg(message, message.transport_name)
 
         headers = {}
         if self.config.mo_message_url_auth_token is not None:
@@ -144,7 +130,7 @@ class JunebugMessageApi(BaseWorker):
             logger.warning(LOG_EV_URL_MISSING, {"event": event})
             return
 
-        ev = junebug_from_ev(event, self.config.connector_name)
+        ev = junebug_event_from_ev(event, self.config.connector_name)
 
         headers = {}
         if event_hi.auth_token is not None:
@@ -159,3 +145,45 @@ class JunebugMessageApi(BaseWorker):
                 LOG_EV_HTTP_ERR,
                 {"code": resp.status_code, "body": resp.text, "event": ev},
             )
+
+    async def http_send_message(self) -> tuple[Union[str, dict], int, dict[str, str]]:
+        _message_id = generate_message_id()
+        try:
+            with move_on_after(self.config.request_timeout):
+                try:
+                    msg_dict = json.loads(await request.get_data(as_text=True))
+                except json.JSONDecodeError as e:
+                    raise JsonDecodeError(str(e)) from e
+                jom = JunebugOutboundMessage.deserialise(
+                    msg_dict, default_from=self.config.default_from_addr
+                )
+
+                # TODO: Store event info.
+                # TODO: Look up reply_to info.
+
+                msg = jom.to_vumi(
+                    self.config.connector_name, self.config.transport_type
+                )
+                await self.connector.publish_outbound(msg)
+
+                # TODO: Special handling of outbound messages?
+                rmsg = junebug_outbound_from_msg(msg, self.config.connector_name)
+                return self._response("message submitted", rmsg, HTTPStatus.CREATED)
+        except JunebugApiError as e:
+            err = {"type": e.name, "message": str(e)}
+            return self._response(e.description, {"errors": [err]}, e.status)
+
+    def _response(
+        self,
+        description: str,
+        data: dict,
+        status=HTTPStatus.OK,
+    ) -> tuple[str, int, dict[str, str]]:
+        headers = {"Content-Type": "application/json"}
+        body = {
+            "status": status.value,
+            "code": status.phrase,
+            "description": description,
+            "result": data,
+        }
+        return json.dumps(body), status.value, headers
