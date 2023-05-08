@@ -154,16 +154,20 @@ class JunebugMessageApi(BaseWorker):
                     msg_dict = json.loads(await request.get_data(as_text=True))
                 except json.JSONDecodeError as e:
                     raise JsonDecodeError(str(e)) from e
+
                 jom = JunebugOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-
-                # TODO: Store event info.
                 # TODO: Look up reply_to info.
-
                 msg = jom.to_vumi(
                     self.config.connector_name, self.config.transport_type
                 )
+
+                if jom.event_url is not None:
+                    await self.state_cache.store_event_http_info(
+                        msg.message_id, jom.event_url, jom.event_auth_token
+                    )
+
                 await self.connector.publish_outbound(msg)
 
                 # TODO: Special handling of outbound messages?

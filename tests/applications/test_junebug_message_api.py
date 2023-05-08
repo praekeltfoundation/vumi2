@@ -14,6 +14,7 @@ from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import MultiDict
 
 from vumi2.applications import JunebugMessageApi
+from vumi2.applications.junebug_message_api.junebug_state_cache import EventHttpInfo
 from vumi2.messages import (
     DeliveryStatus,
     Event,
@@ -99,6 +100,10 @@ async def store_ehi(worker: JunebugMessageApi, message_id, url, auth_token):
     await worker.state_cache.store_event_http_info(message_id, url, auth_token)
 
 
+async def fetch_ehi(worker: JunebugMessageApi, message_id):
+    return await worker.state_cache.fetch_event_http_info(message_id)
+
+
 @asynccontextmanager
 async def handle_event(worker: JunebugMessageApi, ev: Event):
     async with open_nursery() as nursery:
@@ -163,6 +168,15 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
         event_type=event_type,
         **fields,
     )
+
+
+def mkoutbound(content: str, to="+1234", from_addr="+23456", **kw) -> dict:
+    return {
+        "content": content,
+        "to": to,
+        "from": from_addr,
+        **kw,
+    }
 
 
 def parse_send_message_response(resp: bytes) -> dict:
@@ -427,8 +441,10 @@ async def test_forward_dr(jma_worker, http_server):
 async def test_send_outbound(jma_worker, jma_ro):
     """
     An outbound message received over HTTP is forwarded over AMQP.
+
+    We don't store anything if event_url is unset.
     """
-    body = {"to": "+1234", "content": "foo", "from": "+23456"}
+    body = mkoutbound("foo")
     with fail_after(2):
         response = await post_outbound(jma_worker, body)
         outbound = await jma_ro.consume_outbound()
@@ -456,7 +472,82 @@ async def test_send_outbound(jma_worker, jma_ro):
     assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
 
-    # TODO: Store outbound?
+    assert await fetch_ehi(jma_worker, outbound.message_id) is None
+
+
+async def test_send_outbound_event_url(jma_worker, jma_ro, http_server):
+    """
+    An outbound message with event_url set stores event info.
+    """
+    body = mkoutbound("foo", event_url=f"{http_server.bind}/event")
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+        outbound = await jma_ro.consume_outbound()
+
+    assert parse_send_message_response(response) == {
+        "status": 201,
+        "code": "Created",
+        "description": "message submitted",
+        "result": {
+            "to": "+1234",
+            "from": "+23456",
+            "group": None,
+            "reply_to": None,
+            "channel_id": "jma-test",
+            "channel_data": {},
+            "content": "foo",
+        },
+    }
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "+23456"
+    assert outbound.group is None
+    assert outbound.in_reply_to is None
+    assert outbound.transport_name == "jma-test"
+    assert outbound.helper_metadata == {}
+    assert outbound.content == "foo"
+
+    ehi = await fetch_ehi(jma_worker, outbound.message_id)
+    assert ehi == EventHttpInfo(f"{http_server.bind}/event", None)
+
+
+async def test_send_outbound_event_auth(jma_worker, jma_ro, http_server):
+    """
+    An outbound message with event_url and event_auth_token set stores event info.
+    """
+    token = "token"  # noqa: S105 (This is a fake token.)
+    body = mkoutbound(
+        "foo", event_url=f"{http_server.bind}/event", event_auth_token=token
+    )
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+        outbound = await jma_ro.consume_outbound()
+
+    assert parse_send_message_response(response) == {
+        "status": 201,
+        "code": "Created",
+        "description": "message submitted",
+        "result": {
+            "to": "+1234",
+            "from": "+23456",
+            "group": None,
+            "reply_to": None,
+            "channel_id": "jma-test",
+            "channel_data": {},
+            "content": "foo",
+        },
+    }
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "+23456"
+    assert outbound.group is None
+    assert outbound.in_reply_to is None
+    assert outbound.transport_name == "jma-test"
+    assert outbound.helper_metadata == {}
+    assert outbound.content == "foo"
+
+    ehi = await fetch_ehi(jma_worker, outbound.message_id)
+    assert ehi == EventHttpInfo(f"{http_server.bind}/event", "token")
 
 
 async def test_send_outbound_invalid_json(jma_worker):
@@ -480,38 +571,6 @@ async def test_send_outbound_invalid_json(jma_worker):
         "description": "json decode error",
         "result": {"errors": [expected_err]},
     }
-
-
-#     @inlineCallbacks
-#     def test_send_message(self):
-#         '''Sending a message should place the message on the queue for the
-#         channel'''
-#         properties = self.create_channel_properties()
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'foo', 'from': None})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': None,
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': 'foo',
-#             }, ignore=['timestamp', 'message_id'])
-
-#         [message] = self.get_dispatched_messages('test-channel.outbound')
-#         message_id = (yield resp.json())['result']['message_id']
-#         self.assertEqual(message['message_id'], message_id)
-
-#         event_url = yield self.api.outbounds.load_event_url(
-#             'test-channel', message['message_id'])
-#         self.assertEqual(event_url, None)
 
 
 ## Test cases from the original junebug api codebase.
@@ -548,52 +607,6 @@ async def test_send_outbound_invalid_json(jma_worker):
 #         event_url = yield self.api.outbounds.load_event_url(
 #             'test-channel', message['message_id'])
 #         self.assertEqual(event_url, None)
-
-#     @inlineCallbacks
-#     def test_send_message_message_rate(self):
-#         '''Sending a message should increment the message rate counter'''
-#         clock = yield self.patch_message_rate_clock()
-#         channel = Channel(
-#             (yield self.get_redis()), (yield self.create_channel_config()),
-#             self.create_channel_properties(), id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-
-#         yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'foo', 'from': None})
-#         clock.advance(channel.config.metric_window)
-
-#         rate = yield self.api.message_rate.get_messages_per_second(
-#             'test-channel', 'outbound', channel.config.metric_window)
-#         self.assertEqual(rate, 1.0 / channel.config.metric_window)
-
-#     @inlineCallbacks
-#     def test_send_message_event_url(self):
-#         '''Sending a message with a specified event url should store the event
-#         url for sending events in the future'''
-#         properties = self.create_channel_properties()
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'foo', 'from': None,
-#             'event_url': 'http://test.org'})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': None,
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': 'foo',
-#             }, ignore=['timestamp', 'message_id'])
-
-#         event_url = yield self.api.outbounds.load_event_url(
-#             'test-channel', (yield resp.json())['result']['message_id'])
-#         self.assertEqual(event_url, 'http://test.org')
 
 #     @inlineCallbacks
 #     def test_send_message_event_auth_token(self):
