@@ -56,6 +56,10 @@ class JunebugMessageApiConfig(BaseConfig):
     # If None, all outbound messages must be replies or have a from address
     default_from_addr: Optional[str] = None
 
+    # If True, outbound messages with both `to` and `reply_to` set will be sent
+    # as non-reply messages if the `reply_to` message can't be found.
+    allow_expired_replies: bool = False
+
     state_cache_class: str = f"{junebug_state_cache.__name__}.MemoryJunebugStateCache"
     state_cache_config: dict = field(factory=dict)
 
@@ -177,10 +181,13 @@ class JunebugMessageApi(BaseWorker):
 
     async def build_outbound(self, jom: JunebugOutboundMessage) -> Message:
         if (msg_id := jom.reply_to) is not None:
-            inbound = await self.state_cache.fetch_inbound(msg_id)
-            if inbound is None:
+            if (inbound := await self.state_cache.fetch_inbound(msg_id)) is not None:
+                return jom.reply_to_vumi(inbound)
+            if jom.to is None or not self.config.allow_expired_replies:
                 raise MessageNotFound(f"Inbound message with id {msg_id} not found")
-            return jom.reply_to_vumi(inbound)
+            # If we get here, we're allowed to send expired replies as new
+            # messages and we have a to address to send this one to. That means
+            # we can safely treat this as a non-reply.
         return jom.to_vumi(self.config.connector_name, self.config.transport_type)
 
     def _response(
