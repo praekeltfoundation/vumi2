@@ -17,3 +17,12 @@ class ApiUsageError(JunebugApiError):
 class JsonDecodeError(ApiUsageError):
     name = "JsonDecodeError"
     description = "json decode error"
+
+
+class MessageNotFound(ApiUsageError):
+    name = "MessageNotFound"
+    description = "message not found"
+
+
+class InvalidBody(ApiUsageError):
+    name = "invalid_body"

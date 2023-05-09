@@ -96,6 +96,14 @@ async def handle_inbound(worker: JunebugMessageApi, msg: Message):
         yield
 
 
+async def store_inbound(worker: JunebugMessageApi, msg: Message):
+    await worker.state_cache.store_inbound(msg)
+
+
+async def fetch_inbound(worker: JunebugMessageApi, message_id: str):
+    return await worker.state_cache.fetch_inbound(message_id)
+
+
 async def store_ehi(worker: JunebugMessageApi, message_id, url, auth_token):
     await worker.state_cache.store_event_http_info(message_id, url, auth_token)
 
@@ -153,7 +161,7 @@ def mkmsg(content: str, to_addr="123", from_addr="456") -> Message:
     return Message(
         to_addr=to_addr,
         from_addr=from_addr,
-        transport_name="blah",
+        transport_name="jma-test",
         transport_type=TransportType.SMS,
         message_id=generate_message_id(),
         content=content,
@@ -171,12 +179,11 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
 
 
 def mkoutbound(content: str, to="+1234", from_addr="+23456", **kw) -> dict:
-    return {
-        "content": content,
-        "to": to,
-        "from": from_addr,
-        **kw,
-    }
+    return {"content": content, "to": to, "from": from_addr, **kw}
+
+
+def mkreply(content: str, reply_to: str, **kw) -> dict:
+    return {"content": content, "reply_to": reply_to, **kw}
 
 
 def parse_send_message_response(resp: bytes) -> dict:
@@ -204,6 +211,8 @@ async def test_inbound_message_amqp(jma_worker, jma_ro, http_server):
     assert req.body_json["content"] == "hello"
     assert req.body_json["to"] == "123"
 
+    assert await fetch_inbound(jma_worker, msg.message_id) == msg
+
 
 async def test_inbound_message(jma_worker, http_server):
     """
@@ -221,6 +230,8 @@ async def test_inbound_message(jma_worker, http_server):
     assert req.body_json["content"] == "hello"
     assert req.body_json["to"] == "123"
 
+    assert await fetch_inbound(jma_worker, msg.message_id) == msg
+
 
 async def test_send_message_bad_response(jma_worker, http_server, caplog):
     """
@@ -236,6 +247,8 @@ async def test_send_message_bad_response(jma_worker, http_server, caplog):
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert "Error sending message, received HTTP code 500" in err.getMessage()
+
+    assert await fetch_inbound(jma_worker, msg.message_id) == msg
 
 
 async def test_send_message_basic_auth_url(worker_factory, http_server):
@@ -573,197 +586,138 @@ async def test_send_outbound_invalid_json(jma_worker):
     }
 
 
+async def test_send_outbound_group(jma_worker, jma_ro):
+    """
+    An outbound group message received over HTTP is forwarded over AMQP.
+    """
+    body = mkoutbound("foo", group="my-group")
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+        outbound = await jma_ro.consume_outbound()
+
+    assert parse_send_message_response(response) == {
+        "status": 201,
+        "code": "Created",
+        "description": "message submitted",
+        "result": {
+            "to": "+1234",
+            "from": "+23456",
+            "group": "my-group",
+            "reply_to": None,
+            "channel_id": "jma-test",
+            "channel_data": {},
+            "content": "foo",
+        },
+    }
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "+23456"
+    assert outbound.group == "my-group"
+    assert outbound.in_reply_to is None
+    assert outbound.transport_name == "jma-test"
+    assert outbound.helper_metadata == {}
+    assert outbound.content == "foo"
+
+
+async def test_send_outbound_reply(jma_worker, jma_ro):
+    """
+    An outbound reply message received over HTTP is forwarded over AMQP
+    if the original message can be found.
+    """
+    inbound = mkmsg("inbound")
+    await store_inbound(jma_worker, inbound)
+    body = mkreply("foo", reply_to=inbound.message_id)
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+        outbound = await jma_ro.consume_outbound()
+
+    assert parse_send_message_response(response) == {
+        "status": 201,
+        "code": "Created",
+        "description": "message submitted",
+        "result": {
+            "to": "456",
+            "from": "123",
+            "group": None,
+            "reply_to": inbound.message_id,
+            "channel_id": "jma-test",
+            "channel_data": {"session_event": "resume"},
+            "content": "foo",
+        },
+    }
+
+    assert outbound.to_addr == "456"
+    assert outbound.from_addr == "123"
+    assert outbound.group is None
+    assert outbound.in_reply_to == inbound.message_id
+    assert outbound.transport_name == "jma-test"
+    assert outbound.helper_metadata == {}
+    assert outbound.content == "foo"
+
+
+async def test_send_outbound_reply_no_stored_inbound(jma_worker):
+    """
+    An outbound reply message received over HTTP cannot be forwarded
+    over AMQP if the original message cannot be found.
+    """
+    body = mkreply("foo", reply_to="no-such-message")
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+
+    expected_err = {
+        "message": "Inbound message with id no-such-message not found",
+        "type": "MessageNotFound",
+    }
+    assert json.loads(response) == {
+        "status": 400,
+        "code": "Bad Request",
+        "description": "message not found",
+        "result": {"errors": [expected_err]},
+    }
+
+
+async def test_send_outbound_no_to_or_reply(jma_worker, jma_ro):
+    """
+    An outbound reply message received over HTTP is forwarded over AMQP
+    if the original message can be found.
+    """
+    with fail_after(2):
+        response = await post_outbound(jma_worker, {"content": "going nowhere"})
+
+    expected_err = {
+        "message": 'Either "to" or "reply_to" must be specified',
+        "type": "ApiUsageError",
+    }
+    assert json.loads(response) == {
+        "status": 400,
+        "code": "Bad Request",
+        "description": "api usage error",
+        "result": {"errors": [expected_err]},
+    }
+
+
+async def test_send_outbound_extra_field(jma_worker, jma_ro):
+    """
+    An outbound reply message received over HTTP is forwarded over AMQP
+    if the original message can be found.
+    """
+    body = mkoutbound("too much", foo="extra")
+    with fail_after(2):
+        response = await post_outbound(jma_worker, body)
+
+    expected_err = {
+        "message": "Additional properties are not allowed (u'foo' was unexpected)",
+        "type": "invalid_body",
+    }
+    assert json.loads(response) == {
+        "status": 400,
+        "code": "Bad Request",
+        "description": "api usage error",
+        "result": {"errors": [expected_err]},
+    }
+
+
 ## Test cases from the original junebug api codebase.
-
-#     @inlineCallbacks
-#     def test_send_group_message(self):
-#         '''Sending a group message should place the message on the queue for the
-#         channel'''
-#         properties = self.create_channel_properties()
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'foo', 'from': None,
-#             'group': 'the-group'})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': 'the-group',
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': 'foo',
-#             }, ignore=['timestamp', 'message_id'])
-
-#         [message] = self.get_dispatched_messages('test-channel.outbound')
-#         message_id = (yield resp.json())['result']['message_id']
-#         self.assertEqual(message['message_id'], message_id)
-#         self.assertEqual(message['group'], 'the-group')
-
-#         event_url = yield self.api.outbounds.load_event_url(
-#             'test-channel', message['message_id'])
-#         self.assertEqual(event_url, None)
-
-#     @inlineCallbacks
-#     def test_send_message_event_auth_token(self):
-#         '''Sending a message with a specified event url and auth token should
-#         store the auth token for sending events in the future'''
-#         properties = self.create_channel_properties()
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'foo', 'from': None,
-#             'event_url': 'http://test.org', 'event_auth_token': 'the_token'})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': None,
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': 'foo',
-#             }, ignore=['timestamp', 'message_id'])
-
-#         event_auth_token = yield self.api.outbounds.load_event_auth_token(
-#             'test-channel', (yield resp.json())['result']['message_id'])
-#         self.assertEqual(event_auth_token, 'the_token')
-
-#     @inlineCallbacks
-#     def test_send_message_reply(self):
-#         '''Sending a reply message should fetch the relevant inbound message,
-#         use it to construct a reply message, and place the reply message on the
-#         queue for the channel'''
-#         channel = Channel(
-#             redis_manager=(yield self.get_redis()),
-#             config=(yield self.create_channel_config()),
-#             properties=self.create_channel_properties(),
-#             id='test-channel')
-
-#         yield channel.save()
-#         yield channel.start(self.service)
-
-#         in_msg = TransportUserMessage(
-#             from_addr='+2789',
-#             to_addr='+1234',
-#             transport_name='test-channel',
-#             transport_type='_',
-#             transport_metadata={'foo': 'bar'})
-
-#         yield self.api.inbounds.store_vumi_message('test-channel', in_msg)
-#         expected = in_msg.reply(content='testcontent')
-#         expected = api_from_message(expected)
-
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'reply_to': in_msg['message_id'],
-#             'content': 'testcontent',
-#         })
-
-#         yield self.assert_response(
-#             resp, http.CREATED,
-#             'message submitted',
-#             omit(expected, 'timestamp', 'message_id'),
-#             ignore=['timestamp', 'message_id'])
-
-#         [message] = self.get_dispatched_messages('test-channel.outbound')
-#         message_id = (yield resp.json())['result']['message_id']
-#         self.assertEqual(message['message_id'], message_id)
-
-#     @inlineCallbacks
-#     def test_send_message_no_to_or_reply_to(self):
-#         channel = Channel(
-#             redis_manager=(yield self.get_redis()),
-#             config=(yield self.create_channel_config()),
-#             properties=self.create_channel_properties(),
-#             id='test-channel')
-
-#         yield channel.save()
-#         yield channel.start(self.service)
-
-#         resp = yield self.post(
-#             '/channels/{}/messages/'.format(channel.id),
-#             {'from': None, 'content': None})
-#         yield self.assert_response(
-#             resp, http.BAD_REQUEST, 'api usage error', {
-#                 'errors': [{
-#                     'message': 'Either "to" or "reply_to" must be specified',
-#                     'type': 'ApiUsageError',
-#                 }]
-#             })
-
-#     @inlineCallbacks
-#     def test_send_message_no_destination(self):
-#         '''Sending a message on a channel endpoint without a destination should
-#         raise a ApiUsageError
-#         '''
-#         properties = self.create_channel_properties()
-#         del properties['mo_url']
-#         channel = Channel(
-#             redis_manager=(yield self.get_redis()),
-#             config=(yield self.create_channel_config()),
-#             properties=properties,
-#             id='test-channel')
-
-#         yield channel.save()
-#         yield channel.start(self.service)
-
-#         resp = yield self.post(
-#             '/channels/{}/messages/'.format(channel.id),
-#             {'from': None, 'content': 'test message', 'to': '+1234'})
-#         yield self.assert_response(
-#             resp, http.BAD_REQUEST, 'api usage error', {
-#                 'errors': [{
-#                     'message': 'This channel has no "mo_url" or "amqp_queue"',
-#                     'type': 'ApiUsageError',
-#                 }]
-#             })
-
-#     @inlineCallbacks
-#     def test_send_message_additional_properties(self):
-#         '''Additional properties should result in an error being returned.'''
-#         resp = yield self.post(
-#             '/channels/foo-bar/messages/', {
-#                 'from': None, 'content': None, 'to': '', 'foo': 'bar'})
-#         yield self.assert_response(
-#             resp, http.BAD_REQUEST, 'api usage error', {
-#                 'errors': [{
-#                     'message': "Additional properties are not allowed (u'foo' "
-#                     "was unexpected)",
-#                     'type': 'invalid_body',
-#                     'schema_path': ['additionalProperties'],
-#                 }]
-#             })
-
-#     @inlineCallbacks
-#     def test_send_message_both_to_and_reply_to(self):
-
-#         properties = self.create_channel_properties(character_limit=100)
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'from': None,
-#             'to': '+1234',
-#             'reply_to': '2e8u9ua8',
-#             'content': None,
-#         })
-#         yield self.assert_response(
-#             resp, http.BAD_REQUEST, 'message not found', {
-#                 'errors': [{
-#                     'message': 'Inbound message with id 2e8u9ua8 not found',
-#                     'type': 'MessageNotFound',
-#                 }]
-#             })
 
 #     @inlineCallbacks
 #     def test_send_message_both_to_and_reply_to_allowing_expiry(self):
@@ -2391,9 +2345,6 @@ async def test_send_outbound_invalid_json(jma_worker):
 #                 'events': event_dicts,
 #             })
 
-
-# TODO: Tests for outbound messages. In the original junebug codebase, those
-#       are part of the API rather than the worker.
 
 ## Test cases from the original junebug worker codebase. The ones that are left
 ## are for things we may not want/need anymore.

@@ -18,7 +18,7 @@ from vumi2.messages import (
 from vumi2.workers import BaseConfig, BaseWorker
 
 from . import junebug_state_cache
-from .errors import JsonDecodeError, JunebugApiError
+from .errors import JsonDecodeError, JunebugApiError, MessageNotFound
 from .messages import (
     JunebugOutboundMessage,
     junebug_event_from_ev,
@@ -103,6 +103,7 @@ class JunebugMessageApi(BaseWorker):
         """
         logger.debug("Consuming inbound message %s", message)
         msg = junebug_inbound_from_msg(message, message.transport_name)
+        await self.state_cache.store_inbound(message)
 
         headers = {}
         if self.config.mo_message_url_auth_token is not None:
@@ -158,10 +159,7 @@ class JunebugMessageApi(BaseWorker):
                 jom = JunebugOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-                # TODO: Look up reply_to info.
-                msg = jom.to_vumi(
-                    self.config.connector_name, self.config.transport_type
-                )
+                msg = await self.build_outbound(jom)
 
                 if jom.event_url is not None:
                     await self.state_cache.store_event_http_info(
@@ -176,6 +174,14 @@ class JunebugMessageApi(BaseWorker):
         except JunebugApiError as e:
             err = {"type": e.name, "message": str(e)}
             return self._response(e.description, {"errors": [err]}, e.status)
+
+    async def build_outbound(self, jom: JunebugOutboundMessage) -> Message:
+        if (msg_id := jom.reply_to) is not None:
+            inbound = await self.state_cache.fetch_inbound(msg_id)
+            if inbound is None:
+                raise MessageNotFound(f"Inbound message with id {msg_id} not found")
+            return jom.reply_to_vumi(inbound)
+        return jom.to_vumi(self.config.connector_name, self.config.transport_type)
 
     def _response(
         self,

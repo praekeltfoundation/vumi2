@@ -12,7 +12,7 @@ from vumi2.messages import (
     TransportType,
 )
 
-from .errors import ApiUsageError
+from .errors import ApiUsageError, InvalidBody
 
 
 def junebug_inbound_from_msg(message: Message, channel_id: str) -> dict:
@@ -146,38 +146,60 @@ class JunebugOutboundMessage:
     ) -> "JunebugOutboundMessage":
         if data.get("from") is None:
             data["from"] = default_from
-        return cattrs.structure(data, cls)
+        try:
+            return cattrs.structure(data, cls)
+        except cattrs.BaseValidationError as bve:
+            # cattrs collects all validation errors in an exception group, even
+            # if we only have one. Ideally we'd report everything it gives us,
+            # but for not let's assume there's only one and reraise that. At
+            # the same time, we translate cattrs validation errors into the
+            # format we expect the API to return.
+            try:
+                raise bve.exceptions[0] from bve
+            except cattrs.ForbiddenExtraKeysError as feke:
+                fmsg = f"u'{list(feke.extra_fields)[0]}' was unexpected"
+                errmsg = f"Additional properties are not allowed ({fmsg})"
+                raise InvalidBody(errmsg) from bve
 
-    def to_vumi(
-        self,
-        transport_name: str,
-        transport_type: TransportType,
-    ) -> Message:
-        if self.to is None:
-            raise ValueError("Must look up addresses from 'reply_to' before sending")
-        if self.from_addr is None:
-            raise ApiUsageError('Missing "from" address')
-
+    def _shared_vumi_fields(self):
         helper_metadata: dict[str, Any] = {**self.channel_data}
-        message = {
-            "to_addr": self.to,
-            "from_addr": self.from_addr,
-            "content": self.content,
-            "transport_name": transport_name,
-            "transport_type": transport_type,
-            "helper_metadata": helper_metadata,
-        }
-        if self.group is not None:
-            message["group"] = self.group
+        fields = {"helper_metadata": helper_metadata}
 
         for cd_field in ["continue_session", "session_event"]:
             if (value := helper_metadata.pop(cd_field, None)) is not None:
-                message[cd_field] = value
+                fields[cd_field] = value
+
+        return fields
+
+    def to_vumi(self, transport_name: str, transport_type: TransportType) -> Message:
+        """
+        Build a vumi outbound message that isn't a reply.
+
+        The caller must ensure that both `to` and `from_addr` are not None.
+        """
+        message = {
+            "to_addr": self.to,
+            "from_addr": self.from_addr,
+            "group": self.group,
+            "content": self.content,
+            "transport_name": transport_name,
+            "transport_type": transport_type,
+            **self._shared_vumi_fields(),
+        }
 
         return Message.deserialise(message)
 
+    def reply_to_vumi(self, in_msg: Message) -> Message:
+        """
+        Build a vumi outbound message that's a reply to the given inbound message.
+        """
+        return in_msg.reply(self.content, **self._shared_vumi_fields())
+
 
 st_hook = make_dict_structure_fn(
-    JunebugOutboundMessage, cattrs.global_converter, from_addr=override(rename="from")
+    JunebugOutboundMessage,
+    cattrs.global_converter,
+    from_addr=override(rename="from"),
+    _cattrs_forbid_extra_keys=True,
 )
 cattrs.register_structure_hook(JunebugOutboundMessage, st_hook)
