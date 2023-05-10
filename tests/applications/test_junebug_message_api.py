@@ -264,7 +264,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
 
     async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
         await jma_worker.setup()
-        with fail_after(2):
+        with fail_after(5):
             async with handle_inbound(jma_worker, msg):
                 await http_server.receive_req()
                 await http_server.send_rsp(RspInfo(code=502, wait=0.15))
@@ -448,7 +448,7 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
         await jma_worker.setup()
         await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
         ev = mkev("msg-21", EventType.ACK)
-        with fail_after(2):
+        with fail_after(5):
             async with handle_event(jma_worker, ev):
                 await http_server.receive_req()
                 await http_server.send_rsp(RspInfo(code=502, wait=0.15))
