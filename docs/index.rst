@@ -13,6 +13,7 @@ Welcome to vumi2's documentation!
    config
    routers
    transports
+   applications
    message_caches
 
 
