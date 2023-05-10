@@ -9,7 +9,7 @@ from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart import request
 from quart_trio import QuartTrio
-from trio import fail_after, open_memory_channel, open_nursery
+from trio import fail_after, open_memory_channel, open_nursery, sleep
 from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import MultiDict
 
@@ -39,6 +39,7 @@ class ReqInfo:
 class RspInfo:
     code: int = 200
     body: str = ""
+    wait: float = 0
 
 
 @define
@@ -79,6 +80,7 @@ class HttpServer:
         await self._send_req.send(req)
         rsp = await self._recv_rsp.receive()
         print(f"HTTP rsp: {rsp}")
+        await sleep(rsp.wait)
         return rsp.body, rsp.code
 
     async def receive_req(self) -> ReqInfo:
@@ -250,6 +252,29 @@ async def test_inbound_bad_response(jma_worker, http_server, caplog):
     assert await fetch_inbound(jma_worker, msg.message_id) == msg
 
 
+async def test_inbound_too_slow(worker_factory, http_server, caplog):
+    """
+    If an inbound message times out, the error and message are logged.
+
+    Using an autojump clock here seems to break the AMQP client, so we
+    have to use wall-clock time instead.
+    """
+    config = mk_config(http_server, mo_message_url_timeout=0.1)
+    msg = mkmsg("hello")
+
+    async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
+        await jma_worker.setup()
+        with fail_after(2):
+            async with handle_inbound(jma_worker, msg):
+                await http_server.receive_req()
+                await http_server.send_rsp(RspInfo(code=502, wait=0.15))
+
+    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
+    assert "Timed out sending message after 0.1 seconds." in err.getMessage()
+
+    assert await fetch_inbound(jma_worker, msg.message_id) == msg
+
+
 async def test_inbound_basic_auth_url(worker_factory, http_server):
     """
     If mo_message_url has credentials in it, those get sent as an
@@ -408,6 +433,28 @@ async def test_forward_ack_bad_response(jma_worker, http_server, caplog):
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert "Error sending event, received HTTP code 500" in err.getMessage()
+
+
+async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
+    """
+    If forwarding an ack times out, the error and message are logged.
+
+    Using an autojump clock here seems to break the AMQP client, so we
+    have to use wall-clock time instead.
+    """
+    config = mk_config(http_server, event_url_timeout=0.1)
+
+    async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
+        await jma_worker.setup()
+        await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event", None)
+        ev = mkev("msg-21", EventType.ACK)
+        with fail_after(2):
+            async with handle_event(jma_worker, ev):
+                await http_server.receive_req()
+                await http_server.send_rsp(RspInfo(code=502, wait=0.15))
+
+    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
+    assert "Timed out sending event after 0.1 seconds." in err.getMessage()
 
 
 async def test_forward_nack(jma_worker, http_server):

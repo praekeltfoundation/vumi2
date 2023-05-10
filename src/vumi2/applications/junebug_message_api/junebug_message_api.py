@@ -30,9 +30,15 @@ LOG_MSG_HTTP_ERR = (
     "Error sending message, received HTTP code %(code)s"
     " with body %(body)s. Message: %(message)s"
 )
+LOG_MSG_HTTP_TIMEOUT = (
+    "Timed out sending message after %(timeout)s seconds. Message: %(message)s"
+)
 LOG_EV_HTTP_ERR = (
     "Error sending event, received HTTP code %(code)s"
     " with body %(body)s. Event: %(event)s"
+)
+LOG_EV_HTTP_TIMEOUT = (
+    "Timed out sending event after %(timeout)s seconds. Event: %(event)s"
 )
 LOG_EV_URL_MISSING = "Cannot find event URL, missing user_message_id: %(event)s"
 
@@ -41,34 +47,44 @@ logger = getLogger(__name__)
 
 @define(kw_only=True)
 class JunebugMessageApiConfig(BaseConfig):
+    # AMQP connector name. This is also used as `transport_name` for non-reply
+    # outbound messages and `channel_id` for events.
     connector_name: str
 
-    # The URL to send HTTP POST requests to for MO messages
+    # The URL to send HTTP POST requests to for inbound messages.
     mo_message_url: str
 
-    # Authorization Token to use for the mo_message_url
+    # Authorization token to use for inbound message HTTP requests.
     mo_message_url_auth_token: Optional[str] = None
 
+    # Base URL path for outbound message HTTP requests. This has "/messages"
+    # appended to it. For compatibility with existing Junebug API clients, set
+    # it to "/channels/<channel_id>".
     base_url_path: str = ""
 
+    # This is a required `Message` field, so we need to set it for non-reply
+    # outbound messages.
     transport_type: TransportType = TransportType.SMS
 
-    # If None, all outbound messages must be replies or have a from address
+    # If None, all outbound messages must be replies or have a from address.
     default_from_addr: Optional[str] = None
 
     # If True, outbound messages with both `to` and `reply_to` set will be sent
     # as non-reply messages if the `reply_to` message can't be found.
     allow_expired_replies: bool = False
 
+    # State cache configuration. Currently limited to in-memory storage with a
+    # configurable expiry time.
     state_cache_class: str = f"{junebug_state_cache.__name__}.MemoryJunebugStateCache"
     state_cache_config: dict = field(factory=dict)
 
-    # # Maximum time (seconds) a mo_message_url is allowed to take to process a message
-    # mo_message_url_timeout: int = 10
-    # # Maximum time (seconds) a mo_message_url is allowed to take to process an event
-    # event_url_timeout: int = 10
+    # Maximum time allowed (in seconds) for outbound message request handling.
+    request_timeout: float = 4 * 60
 
-    request_timeout: int = 4 * 60
+    # Maximum time allowed (in seconds) for inbound message and event HTTP
+    # requests.
+    mo_message_url_timeout: float = 10
+    event_url_timeout: float = 10
 
     def url(self, path: str) -> str:
         return "/".join([self.base_url_path.rstrip("/"), path.lstrip("/")])
@@ -81,8 +97,6 @@ class JunebugMessageApi(BaseWorker):
     Inbound messages and events are sent over HTTP to the configured
     URL(s). Outbound messages are received over HTTP and sent to the
     configured transport.
-
-    TODO: Finish implementation.
     """
 
     config: JunebugMessageApiConfig
@@ -113,21 +127,29 @@ class JunebugMessageApi(BaseWorker):
         if self.config.mo_message_url_auth_token is not None:
             headers["Authorization"] = f"Token {self.config.mo_message_url_auth_token}"
 
-        # TODO: Handle timeouts
-        async with AsyncClient() as client:
-            resp = await client.post(
-                self.config.mo_message_url,
-                json=msg,
-                headers=headers,
-            )
+        timeout = self.config.mo_message_url_timeout
+        with move_on_after(timeout) as cs:
+            async with AsyncClient() as client:
+                resp = await client.post(
+                    self.config.mo_message_url,
+                    json=msg,
+                    headers=headers,
+                )
 
-        if resp.status_code < 200 or resp.status_code >= 300:
-            logger.error(
-                LOG_MSG_HTTP_ERR,
-                {"code": resp.status_code, "body": resp.text, "message": msg},
-            )
+            if resp.status_code < 200 or resp.status_code >= 300:
+                logger.error(
+                    LOG_MSG_HTTP_ERR,
+                    {"code": resp.status_code, "body": resp.text, "message": msg},
+                )
+
+        if cs.cancelled_caught:
+            logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
 
     async def handle_event(self, event: Event) -> None:
+        """
+        Send the vumi event as an HTTP request to the cached event URL
+        for the associated outbound message.
+        """
         logger.debug("Consuming event %s", event)
         event_hi = await self.state_cache.fetch_event_http_info(event.user_message_id)
 
@@ -141,19 +163,24 @@ class JunebugMessageApi(BaseWorker):
         if event_hi.auth_token is not None:
             headers["Authorization"] = f"Token {event_hi.auth_token}"
 
-        # TODO: Handle timeouts
-        async with AsyncClient() as client:
-            resp = await client.post(event_hi.url, json=ev, headers=headers)
+        timeout = self.config.event_url_timeout
+        with move_on_after(timeout) as cs:
+            async with AsyncClient() as client:
+                resp = await client.post(event_hi.url, json=ev, headers=headers)
 
-        if resp.status_code < 200 or resp.status_code >= 300:
-            logger.error(
-                LOG_EV_HTTP_ERR,
-                {"code": resp.status_code, "body": resp.text, "event": ev},
-            )
+            if resp.status_code < 200 or resp.status_code >= 300:
+                logger.error(
+                    LOG_EV_HTTP_ERR,
+                    {"code": resp.status_code, "body": resp.text, "event": ev},
+                )
+
+        if cs.cancelled_caught:
+            logger.error(LOG_EV_HTTP_TIMEOUT, {"timeout": timeout, "event": ev})
 
     async def http_send_message(self) -> tuple[Union[str, dict], int, dict[str, str]]:
         _message_id = generate_message_id()
         try:
+            # TODO: Log requests that timed out?
             with move_on_after(self.config.request_timeout):
                 try:
                     msg_dict = json.loads(await request.get_data(as_text=True))
