@@ -39,7 +39,6 @@ class ReqInfo:
 class RspInfo:
     code: int = 200
     body: str = ""
-    disconnect: bool = False
 
 
 @define
@@ -233,7 +232,7 @@ async def test_inbound_message(jma_worker, http_server):
     assert await fetch_inbound(jma_worker, msg.message_id) == msg
 
 
-async def test_send_message_bad_response(jma_worker, http_server, caplog):
+async def test_inbound_bad_response(jma_worker, http_server, caplog):
     """
     If an inbound message results in an HTTP error, the error and
     message are logged.
@@ -251,7 +250,7 @@ async def test_send_message_bad_response(jma_worker, http_server, caplog):
     assert await fetch_inbound(jma_worker, msg.message_id) == msg
 
 
-async def test_send_message_basic_auth_url(worker_factory, http_server):
+async def test_inbound_basic_auth_url(worker_factory, http_server):
     """
     If mo_message_url has credentials in it, those get sent as an
     Authorization header.
@@ -272,7 +271,7 @@ async def test_send_message_basic_auth_url(worker_factory, http_server):
     assert req.headers["Authorization"] == f"Basic {basic}"
 
 
-async def test_send_message_auth_token(worker_factory, http_server):
+async def test_inbound_auth_token(worker_factory, http_server):
     """
     If mo_message_url_auth_token is set, we use its token in the
     Authorization header.
@@ -754,97 +753,3 @@ async def test_send_outbound_expired_allowed(worker_factory, http_server, jma_ro
     assert outbound.transport_name == "jma-test"
     assert outbound.helper_metadata == {}
     assert outbound.content == "late"
-
-
-## Test cases from the original junebug codebase.
-
-#     @inlineCallbacks
-#     def test_send_message_under_character_limit(self):
-#         '''If the content length is under the character limit, no errors should
-#         be returned'''
-#         properties = self.create_channel_properties(character_limit=100)
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'Under the character limit.',
-#             'from': None})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': None,
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': 'Under the character limit.',
-#             }, ignore=['timestamp', 'message_id'])
-
-#     @inlineCallbacks
-#     def test_send_message_equal_character_limit(self):
-#         '''If the content length is equal to the character limit, no errors
-#         should be returned'''
-#         content = 'Equal to the character limit.'
-#         properties = self.create_channel_properties(
-#             character_limit=len(content))
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': content, 'from': None})
-#         yield self.assert_response(
-#             resp, http.CREATED, 'message submitted', {
-#                 'to': '+1234',
-#                 'channel_id': 'test-channel',
-#                 'from': None,
-#                 'group': None,
-#                 'reply_to': None,
-#                 'channel_data': {},
-#                 'content': content,
-#             }, ignore=['timestamp', 'message_id'])
-
-#     @inlineCallbacks
-#     def test_send_message_over_character_limit(self):
-#         '''If the content length is over the character limit, an error should
-#         be returned'''
-#         properties = self.create_channel_properties(character_limit=10)
-#         config = yield self.create_channel_config()
-#         redis = yield self.get_redis()
-#         channel = Channel(redis, config, properties, id='test-channel')
-#         yield channel.save()
-#         yield channel.start(self.service)
-#         resp = yield self.post('/channels/test-channel/messages/', {
-#             'to': '+1234', 'content': 'Over the character limit.',
-#             'from': None})
-#         yield self.assert_response(
-#             resp, http.BAD_REQUEST, 'message too long', {
-#                 'errors': [{
-#                     'message':
-#                         "Message content u'Over the character limit.' "
-#                         "is of length 25, which is greater than the character "
-#                         "limit of 10",
-#                     'type': 'MessageTooLong',
-#                 }],
-#             })
-
-## I'm not sure how we'd close the connection to test. Worth doing if we can, though.
-
-#     @inlineCallbacks
-#     def test_send_message_imploding_response(self):
-#         '''If there is an error connecting to the configured URL, the
-#         error and message should be logged'''
-#         self.patch_logger()
-#         self.worker = yield self.get_worker({
-#             'transport_name': 'testtransport',
-#             'mo_message_url': self.url + '/implode/',
-#             })
-#         msg = TransportUserMessage.send(to_addr='+1234', content='testcontent')
-#         yield self.worker.consume_user_message(msg)
-
-#         self.assert_was_logged('Post to %s/implode/ failed because of' % (
-#             self.url,))
-#         self.assert_was_logged('ConnectionDone')
