@@ -270,7 +270,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
                 await http_server.send_rsp(RspInfo(code=502, wait=0.3))
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Timed out sending message after 0.1 seconds." in err.getMessage()
+    assert "Timed out sending message after 0.2 seconds." in err.getMessage()
 
     assert await fetch_inbound(jma_worker, msg.message_id) == msg
 
@@ -454,7 +454,7 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
                 await http_server.send_rsp(RspInfo(code=502, wait=0.4))
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Timed out sending event after 0.1 seconds." in err.getMessage()
+    assert "Timed out sending event after 0.2 seconds." in err.getMessage()
 
 
 async def test_forward_nack(jma_worker, http_server):
