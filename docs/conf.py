@@ -25,7 +25,10 @@ else:
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions: list[str] = ["sphinx.ext.todo"]
+extensions: list[str] = [
+    "sphinx.ext.todo",
+    "sphinxcontrib.httpdomain",
+]
 
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]

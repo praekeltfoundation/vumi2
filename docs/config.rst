@@ -19,30 +19,45 @@ An example of a yaml file configuration:
 .. code-block:: yaml
 
    amqp:
-      hostname: localhost
-      port: 5672
-      username: guest
-      password: guest
-      vhost: /
+     hostname: localhost
+     port: 5672
+     username: guest
+     password: guest
+     vhost: /
    worker_concurrency: 10
    sentry_dsn: https://key@sentry.io/12345
 
 config
 ^^^^^^
 
-amqp
+.. py:data:: amqp
+
    The AMQP configuration. See :ref:`amqp-config` for details.
-amqp_url
-   The AMQP URL to use. For example, ``amqp://user:pass@host/vhost``. If specified, it
-   is used instead of the amqp configuration.
-worker_concurrency
+
+.. py:data:: amqp_url
+   :type: str
+
+   The AMQP URL to use. For example, ``amqp://user:pass@host/vhost``. If specified, it is used instead of the amqp configuration.
+
+.. py:data:: worker_concurrency
+   :type: int
+
    The number of messages to prefetch and process in parallel. Defaults to 20.
-sentry_dsn
+
+.. py:data:: sentry_dsn
+   :type: str
+
    The Sentry DSN to use. If specified, errors will be logged to Sentry.
-http_bind
-   Optional. If supplied, runs an HTTP server that binds to `http_bind`. For example, `localhost:8000` to bind to port 8000 on localhost, or `0.0.0.0:80` to bind to port 80 on all interfaces, or `unix:/tmp/socket` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like `nginx`_ in front of the transport to handle HTTPS.
-log_level
-   The threshold for which messages to log. Defaults to INFO.
+
+.. py:data:: http_bind
+   :type: str
+
+   Optional. If supplied, runs an HTTP server that binds to :py:data:`http_bind`. For example, ``localhost:8000`` to bind to port 8000 on localhost, or ``0.0.0.0:80`` to bind to port 80 on all interfaces, or ``unix:/tmp/socket`` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like `nginx`_ in front of the transport to handle HTTPS.
+
+.. py:data:: log_level
+   :type: str
+
+   The threshold for which messages to log. Defaults to ``INFO``.
 
 .. _the hypercorn documentation: https://pgjones.gitlab.io/hypercorn/how_to_guides/binds.html
 .. _nginx: https://nginx.org/en/docs/
@@ -54,15 +69,29 @@ amqp
 
 The amqp configuration options are:
 
-hostname
+.. py:data:: hostname
+   :type: str
+
    The hostname of the AMQP server. Defaults to ``127.0.0.1``
-port
+
+.. py:data:: port
+   :type: int
+
    The port of the AMQP server. Defaults to ``5672``
-username
+
+.. py:data:: username
+   :type: str
+
    The username to use to authenticate to the AMQP server. Defaults to ``guest``
-password
+
+.. py:data:: password
+   :type: str
+
    The password to use to authenticate to the AMQP server. Defaults to ``guest``
-vhost
+
+.. py:data:: vhost
+   :type: str
+
    The virtual host to use for the AMQP server. Defaults to ``/``
 
 
