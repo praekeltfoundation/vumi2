@@ -259,7 +259,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     Using an autojump clock here seems to break the AMQP client, so we
     have to use wall-clock time instead.
     """
-    config = mk_config(http_server, mo_message_url_timeout=0.05)
+    config = mk_config(http_server, mo_message_url_timeout=0.2)
     msg = mkmsg("hello")
 
     async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
@@ -267,7 +267,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
         with fail_after(5):
             async with handle_inbound(jma_worker, msg):
                 await http_server.receive_req()
-                await http_server.send_rsp(RspInfo(code=502, wait=0.2))
+                await http_server.send_rsp(RspInfo(code=502, wait=0.3))
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert "Timed out sending message after 0.1 seconds." in err.getMessage()
@@ -442,7 +442,7 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
     Using an autojump clock here seems to break the AMQP client, so we
     have to use wall-clock time instead.
     """
-    config = mk_config(http_server, event_url_timeout=0.05)
+    config = mk_config(http_server, event_url_timeout=0.2)
 
     async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
         await jma_worker.setup()
@@ -451,7 +451,7 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
         with fail_after(5):
             async with handle_event(jma_worker, ev):
                 await http_server.receive_req()
-                await http_server.send_rsp(RspInfo(code=502, wait=0.2))
+                await http_server.send_rsp(RspInfo(code=502, wait=0.4))
 
     [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert "Timed out sending event after 0.1 seconds." in err.getMessage()
