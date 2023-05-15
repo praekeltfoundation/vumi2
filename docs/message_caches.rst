@@ -20,5 +20,7 @@ Configuration
 ^^^^^^^^^^^^^
 The following configuration options are available:
 
-timeout: int
-    The time, in seconds, to keep messages for. Defaults to 1 hour.
+.. py:data:: timeout
+   :type: int
+
+   The time, in seconds, to keep messages for. Defaults to 1 hour.

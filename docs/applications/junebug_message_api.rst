@@ -15,6 +15,8 @@ All the configuration items from the base worker (see :ref:`base-worker-configur
 
 **Junebug Message API specific**
 
+.. py:currentmodule:: vumi2.applications.junebug_message_api
+
 .. py:data:: connector_name
    :type: str
 
