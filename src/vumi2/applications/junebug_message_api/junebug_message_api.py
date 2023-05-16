@@ -51,11 +51,15 @@ class JunebugMessageApiConfig(BaseConfig):
     # outbound messages and `channel_id` for events.
     connector_name: str
 
-    # The URL to send HTTP POST requests to for inbound messages.
+    # The URL to POST inbound messages to.
     mo_message_url: str
-
     # Authorization token to use for inbound message HTTP requests.
     mo_message_url_auth_token: Optional[str] = None
+
+    # The URL to POST events with no associated message info to.
+    default_event_url: Optional[str] = None
+    # Authorization token to use for events with no associates message info.
+    default_event_auth_token: Optional[str] = None
 
     # Base URL path for outbound message HTTP requests. This has "/messages"
     # appended to it. For compatibility with existing Junebug API clients, set
@@ -154,8 +158,13 @@ class JunebugMessageApi(BaseWorker):
         event_hi = await self.state_cache.fetch_event_http_info(event.user_message_id)
 
         if event_hi is None:
-            logger.warning(LOG_EV_URL_MISSING, {"event": event})
-            return
+            if self.config.default_event_url is None:
+                logger.warning(LOG_EV_URL_MISSING, {"event": event})
+                return
+            # We have a default event URL and maybe an auth token too, so use it.
+            event_hi = junebug_state_cache.EventHttpInfo(
+                self.config.default_event_url, self.config.default_event_auth_token
+            )
 
         ev = junebug_event_from_ev(event, self.config.connector_name)
 
