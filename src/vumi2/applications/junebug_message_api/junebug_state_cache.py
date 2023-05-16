@@ -48,6 +48,7 @@ class JunebugStateCache(ABC):  # pragma: no cover
 @define
 class MemoryJunebugStateCacheConfig:
     timeout: float = 60 * 60 * 24
+    store_event_info: bool = True
 
 
 class MemoryJunebugStateCache(JunebugStateCache):
@@ -66,7 +67,8 @@ class MemoryJunebugStateCache(JunebugStateCache):
         """
         Stores the mapping between one or many smpp message IDs and the vumi message ID
         """
-        self._event_http_info[message_id] = EventHttpInfo(url, auth_token)
+        if self.config.store_event_info:
+            self._event_http_info[message_id] = EventHttpInfo(url, auth_token)
 
     async def fetch_event_http_info(self, message_id: str) -> Optional[EventHttpInfo]:
         return self._event_http_info[message_id]

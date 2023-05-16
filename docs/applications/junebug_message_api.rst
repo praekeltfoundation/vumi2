@@ -255,3 +255,8 @@ It has the following configuration fields:
    :type: int
 
    The maximum amount of time (in seconds) to keep inbound messages (for replies) and event delivery informnation. Defaults to 24 hours.
+
+.. py:data:: store_event_info
+   :type: bool
+
+   If ``false``, event information isn't stored. This is useful in combination with :py:data:`default_event_url` if all events need to be sent to the same URL. Defaults to ``true``.
