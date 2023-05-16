@@ -241,5 +241,7 @@ This is a state cache implementation that stores the data in memory. Because of 
 
 It has the following configuration fields:
 
-timeout (int)
-    The maximum amount of time (in seconds) to keep inbound messages (for replies) and event delivery informnation. Defaults to 24 hours.
+.. py:data:: timeout
+   :type: int
+
+   The maximum amount of time (in seconds) to keep inbound messages (for replies) and event delivery informnation. Defaults to 24 hours.
