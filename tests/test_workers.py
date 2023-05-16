@@ -17,7 +17,7 @@ from vumi2.workers import BaseWorker
 #    shutdown to avoid thinking something's blocked when it's actually slow.
 # The numbers here are an attempt to balance reliability (waiting longer) with
 # convenience (finishing faster) and may need adjustment from time to time.
-CLOSED_WAIT_TIME = 0.02
+CLOSED_WAIT_TIME = 0.03
 UNCLOSED_WAIT_TIME = 2.5 * CLOSED_WAIT_TIME
 
 
