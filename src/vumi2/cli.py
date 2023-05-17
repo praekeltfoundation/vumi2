@@ -76,7 +76,9 @@ def class_from_string(class_path: str):
     return getattr(module, class_name)
 
 
-async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorker:
+async def run_worker(
+    worker_cls: type[BaseWorker], args: list[str], task_status=trio.TASK_STATUS_IGNORED
+) -> BaseWorker:
     """
     Runs the worker specified by the worker class
     """
@@ -90,6 +92,8 @@ async def run_worker(worker_cls: type[BaseWorker], args: list[str]) -> BaseWorke
                 nursery=nursery, amqp_connection=amqp_connection, config=config
             ) as worker:
                 await worker.setup()
+                task_status.started(worker)
+                await worker._closed.wait()
             return worker
 
 

@@ -75,7 +75,7 @@ class BaseWorker(AsyncResource):
         self.receive_outbound_connectors: dict[str, ReceiveOutboundConnector] = {}
         self._connectors = ConnectorCollection()
         self.resources_to_close: list[AsyncResource] = [self._connectors]
-        self._closed = False
+        self._closed = trio.Event()
         self.config = config
         self._setup_sentry()
         self.healthchecks = {"amqp": self._amqp_healthcheck}
@@ -127,7 +127,7 @@ class BaseWorker(AsyncResource):
             for resource in self.resources_to_close:
                 nursery.start_soon(resource.aclose)
         # The nursery will block until all resources are closed.
-        self._closed = True
+        self._closed.set()
 
     async def setup(self):
         pass
