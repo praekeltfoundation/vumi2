@@ -97,11 +97,11 @@ Outbound message API
 
    :<json str reply_to: The uuid of the message being replied to if this is a response to a previous message. Important for session-based transports like USSD. Optional.
       If :py:data:`allow_expired_replies` is set, ``to`` and ``from`` will be used as a fallback in case ``reply_to`` does not resolve to an inbound message.
-      The default settings allow 10 minutes to reply to a message, after which an error will be returned.
+      The default settings allow 24 hours to reply to a message, after which an error will be returned.
 
    :<json str content: The text content of the message. Required.
 
-   :<json str event_url: URL to call for status events (e.g. acknowledgements and delivery reports) related to this message. The default settings allow 2 days for events to arrive, after which they will no longer be forwarded.
+   :<json str event_url: URL to call for status events (e.g. acknowledgements and delivery reports) related to this message. The default settings allow 24 hours for events to arrive, after which they will no longer be forwarded.
 
    :<json str event_auth_token: The token to use for authentication if the event_url requires token auth.
 
@@ -195,7 +195,7 @@ Events ``POST``\ed to the ``event_url`` specified in :http:post:`<base_url_path>
 
    :<json dict event_details: Details specific to the event type.
 
-Events are posted to the message's ``event_url`` after the message is submitted to the provider, and when delivery reports are received. The default settings allow events to arrive for up to 2 days; any further events will not be forwarded.
+Events are posted to the message's ``event_url`` after the message is submitted to the provider, and when delivery reports are received. The default settings allow events to arrive for up to 24 hours; any further events will not be forwarded.
 
 **Request example**:
 
