@@ -17,52 +17,51 @@ The transport has the following configuration options:
 
 **Common to all vumi workers**
 
-http_bind
-    Required. This is where the HTTP server will bind. For example, `localhost:8000` to bind to port 8000 on localhost, or `0.0.0.0:80` to bind to port 80 on all interfaces, or `unix:/tmp/socket` to bind to a unix socket. See `the hypercorn documentation`_ for more details. Note that HTTPS is not handled, we recommend using something like `nginx`_ in front of the transport to handle HTTPS.
-worker_concurrency
-    Optional. The number of worker tasks to run concurrently. Defaults to 20. This is the maximum amount of concurrent connections allowed.
-
-You can find the rest of the base worker configuration at :ref:`base-worker-configuration`
-
-.. _the hypercorn documentation: https://pgjones.gitlab.io/hypercorn/how_to_guides/binds.html
-.. _nginx: https://nginx.org/en/docs/
+All the configuration items from the base worker (see :ref:`base-worker-configuration` for details) are available. However, :py:data:`http_bind` is required rather than optional.
 
 **Common to all HTTP RPC transports**
 
-transport_name
-    Defaults to `http_rpc`. This is the base of the routing key/queue that the transport
-    will listen on and publish messages to. For example, with the default, it will
-    publish messages to `http_rpc.inbound`, events to `http_rpc.event`, and will listen
-    for messages on `http_rpc.outbound`.
-web_path
-    Defaults to `/http_rpc`. This is the path that the transport will listen on for
-    inbound requests from the USSD gateway.
-request_timeout
-    Defaults to 4 minutes. This is an integer value representing seconds. This is the
-    amount of time to wait for a reply from the application before closing the incoming
-    connection with a 504 Gateway Timeout response.
+.. py:currentmodule:: vumi2.transports.aat_ussd
+
+.. py:data:: transport_name
+   :type: str
+
+   Defaults to ``http_rpc``. This is the base of the routing key/queue that the transport will listen on and publish messages to. For example, with the default, it will publish messages to ``http_rpc.inbound``, events to ``http_rpc.event``, and will listen for messages on ``http_rpc.outbound``.
+
+.. py:data:: web_path
+   :type: str
+
+   Defaults to ``/http_rpc``. This is the path that the transport will listen on for inbound requests from the USSD gateway.
+
+.. py:data:: request_timeout
+   :type: int
+
+   Defaults to 4 minutes. This is an integer value representing seconds. This is the amount of time to wait for a reply from the application before closing the incoming connection with a 504 Gateway Timeout response.
 
 **AAT USSD transport specific**
 
-base_url
-    Defaults to `http://localhost`. This is the base URL of this transport. It is used to build a full URL for the callback URL that is sent to the USSD gateway. It is combined with the `web_path` configuration parameter to build the full URL.
+.. py:data:: base_url
+   :type: str
+
+   Defaults to ``http://localhost``. This is the base URL of this transport. It is used to build a full URL for the callback URL that is sent to the USSD gateway. It is combined with the `web_path` configuration parameter to build the full URL.
 
 
 How it works
 ^^^^^^^^^^^^
 The USSD gateway makes an HTTP GET request to the transport, with the following query parameters:
 
-msisdn
-    The MSISDN of the user in international format.
-provider
-    The name of the mobile network operator, eg. `Vodacom`
-request
-    The input that the user submitted on their device. For the start of the session,    this will be the USSD code that the user dialled. For subsequent requests, this will be the free text response from the user.
+.. http:get:: <base_url>
 
-We take this request, and put a message on the inbound queue, and keep the HTTP connection open. We then wait for a message to appear on the outbound, that is a reply to the inbound message, and use the reply to response to the request and close the connection. If we don't receive a reply within `request_timeout`, then we close the connection with a 504 Gateway Timeout response.
+   :query msisdn: The MSISDN of the user in international format.
 
-The response is an XML document that contains the outbound message content, and sets it to expect a freetext response, unless the session event is `close`, in which case it will end the USSD session.
+   :query provider: The name of the mobile network operator, eg. ``Vodacom``
+
+   :query request: The input that the user submitted on their device. For the start of the session,    this will be the USSD code that the user dialled. For subsequent requests, this will be the free text response from the user.
+
+We take this request, and put a message on the inbound queue, and keep the HTTP connection open. We then wait for a message to appear on the outbound, that is a reply to the inbound message, and use the reply to response to the request and close the connection. If we don't receive a reply within :py:data:`request_timeout`, then we close the connection with a 504 Gateway Timeout response.
+
+The response is an XML document that contains the outbound message content, and sets it to expect a freetext response, unless the session event is ``close``, in which case it will end the USSD session.
 
 While the gateway allows for a list of choices to be sent to the user, we only use the freetext option, and give the responsibility of rendering options, and handling user responses, to the application.
 
-For freetext responses, we're expected to give a callback URL, which can also contain query parameters that will be sent back to us in the next request. We use the `base_url` and `web_path` configuration parameters to build the callback URL, and add a `to_addr` query parameter, which contains the initial message content, ie. the USSD code that the user dialled intially. This performs two functions: Firstly, it gives us the to address to set on every message, since we're only given that on the first HTTP request; and secondly, it allows us to differentiate between a new request, and a response to a previous request, since we're using the same URL for both.
+For freetext responses, we're expected to give a callback URL, which can also contain query parameters that will be sent back to us in the next request. We use the :py:data:`base_url` and :py:data:`web_path` configuration parameters to build the callback URL, and add a ``to_addr`` query parameter, which contains the initial message content, ie. the USSD code that the user dialled intially. This performs two functions: Firstly, it gives us the to address to set on every message, since we're only given that on the first HTTP request; and secondly, it allows us to differentiate between a new request, and a response to a previous request, since we're using the same URL for both.

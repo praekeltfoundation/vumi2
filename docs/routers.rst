@@ -28,16 +28,25 @@ Configuration
 The following configuration options are available. See :ref:`base-worker-configuration`
 for the additional configuration options available for all workers.
 
-transport_names: list[str]
-    The names of the transports that we're consuming inbound messages from, and routing
-    outbound messages to.
-to_address_mappings: dict[str, str]
-    The keys of this dictionary are the application names to send the inbound messages
-    to, and the values are the regular expression patterns to match against
-message_cache_class: str
-    The path to the class to use for caching messages. Defaults to `vumi2.message_caches.MemoryMessageCache`, a message cache that caches the messages in memory. This transport caches outbound messages in order to know where to route the events for those messages. See :ref:`memory-message-cache` for more information
-message_cache_config: dict
-    The config for the specified message cache.
+.. py:data:: transport_names
+   :type: list[str]
+
+   The names of the transports that we're consuming inbound messages from, and routing outbound messages to.
+
+.. py:data:: to_address_mappings
+   :type: dict[str, str]
+
+   The keys of this dictionary are the application names to send the inbound messages to, and the values are the regular expression patterns to match against
+
+.. py:data:: message_cache_class
+   :type: str
+
+   The path to the class to use for caching messages. Defaults to `vumi2.message_caches.MemoryMessageCache`, a message cache that caches the messages in memory. This transport caches outbound messages in order to know where to route the events for those messages. See :ref:`memory-message-cache` for more information
+
+.. py:data:: message_cache_config
+   :type: dict
+
+   The config for the specified message cache.
 
 For example:
 
