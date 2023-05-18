@@ -187,6 +187,8 @@ class JunebugMessageApi(BaseWorker):
                 except json.JSONDecodeError as e:
                     raise JsonDecodeError(str(e)) from e
 
+                logger.debug("Received outbound message: %s", msg_dict)
+
                 jom = JunebugOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
