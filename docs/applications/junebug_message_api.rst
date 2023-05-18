@@ -32,6 +32,16 @@ All the configuration items from the base worker (see :ref:`base-worker-configur
 
    The authorization token to use for inbound message HTTP requests. Token authentication will only be used if a token is provided. Defaults to no token.
 
+.. py:data:: default_event_url
+   :type: str
+
+   The default URL to send HTTP POST requests to for events that don't have stored event delivery info from the associated outbound message. If unset, such events cannot be delivered and will be logged instead.
+
+.. py:data:: default_event_auth_token
+   :type: str
+
+   The authorization token to use for events sent to the :py:data:`default_event_url`. Token authentication will only be used if a token is provided. Defaults to no token.
+
 .. py:data:: base_url_path
    :type: str
 
@@ -245,3 +255,8 @@ It has the following configuration fields:
    :type: int
 
    The maximum amount of time (in seconds) to keep inbound messages (for replies) and event delivery informnation. Defaults to 24 hours.
+
+.. py:data:: store_event_info
+   :type: bool
+
+   If ``false``, event information isn't stored. This is useful in combination with :py:data:`default_event_url` if all events need to be sent to the same URL. Defaults to ``true``.

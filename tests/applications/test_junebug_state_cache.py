@@ -33,6 +33,18 @@ async def test_ehi_store_fetch_delete():
     assert await jsc.fetch_event_http_info("foo") is None
 
 
+async def test_ehi_disabled():
+    """
+    When event info storage is disabled, no EventHttpInfo entries are stored.
+    """
+    jsc = MemoryJunebugStateCache({"store_event_info": False})
+
+    assert await jsc.fetch_event_http_info("foo") is None
+
+    await jsc.store_event_http_info("foo", "http://localhost/blah", None)
+    assert await jsc.fetch_event_http_info("foo") is None
+
+
 async def test_inbound_store_fetch_delete():
     """
     The cache must be able to store, fetch, and delete Message entries.

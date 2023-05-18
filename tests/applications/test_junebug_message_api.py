@@ -422,6 +422,67 @@ async def test_forward_ack_auth_token(jma_worker, http_server):
     assert req.body_json["message_id"] == "msg-21"
 
 
+async def test_event_default_url(worker_factory, http_server, caplog):
+    """
+    If we have a default event url configured, events with stored
+    message info are sent the their stored url and events without are
+    sent to the default url.
+    """
+    config = mk_config(http_server, default_event_url=f"{http_server.bind}/allevents")
+
+    async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
+        await jma_worker.setup()
+        await store_ehi(jma_worker, "msg-21", f"{http_server.bind}/event21", None)
+        ev21 = mkev("msg-21", EventType.ACK)
+        ev22 = mkev("msg-22", EventType.ACK)
+        with fail_after(2):
+            async with handle_event(jma_worker, ev21):
+                req21 = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+            async with handle_event(jma_worker, ev22):
+                req22 = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+
+    assert req21.path == "event21"
+    assert req21.headers["Content-Type"] == "application/json"
+    assert req21.body_json["event_type"] == "submitted"
+    assert req21.body_json["event_details"] == {}
+    assert req21.body_json["channel_id"] == "jma-test"
+
+    assert req22.path == "allevents"
+    assert req22.headers["Content-Type"] == "application/json"
+    assert req22.body_json["event_type"] == "submitted"
+    assert req22.body_json["event_details"] == {}
+    assert req22.body_json["channel_id"] == "jma-test"
+
+
+async def test_event_default_url_and_auth(worker_factory, http_server, caplog):
+    """
+    If we have a default event url and token configured, events with no
+    stored message info are sent to the default url with token auth.
+    """
+    config = mk_config(
+        http_server,
+        default_event_url=f"{http_server.bind}/allevents",
+        default_event_auth_token="tok",  # noqa: S106 (This is a fake token.)
+    )
+
+    async with worker_factory.with_cleanup(JunebugMessageApi, config) as jma_worker:
+        await jma_worker.setup()
+        ev = mkev("msg-21", EventType.ACK)
+        with fail_after(2):
+            async with handle_event(jma_worker, ev):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+
+    assert req.path == "allevents"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.headers["Authorization"] == "Token tok"
+    assert req.body_json["event_type"] == "submitted"
+    assert req.body_json["event_details"] == {}
+    assert req.body_json["channel_id"] == "jma-test"
+
+
 async def test_forward_ack_bad_response(jma_worker, http_server, caplog):
     """
     If forwarding an ack results in an HTTP error, the error and event
