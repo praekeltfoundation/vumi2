@@ -70,6 +70,7 @@ def junebug_event_from_ev(event: Event, channel_id: str) -> dict:
     """
     vumi_dict = event.serialise()
     ev = {
+        "message_id": vumi_dict["user_message_id"],
         "channel_id": channel_id,
         "timestamp": vumi_dict["timestamp"],
         "event_details": {},

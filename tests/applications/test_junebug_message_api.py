@@ -351,6 +351,7 @@ async def test_forward_ack_amqp(jma_worker, jma_ro, http_server):
     assert req.body_json["event_type"] == "submitted"
     assert req.body_json["event_details"] == {}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "msg-21"
 
 
 async def test_forward_ack(jma_worker, http_server):
@@ -371,6 +372,7 @@ async def test_forward_ack(jma_worker, http_server):
     assert req.body_json["event_type"] == "submitted"
     assert req.body_json["event_details"] == {}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "msg-21"
 
 
 async def test_forward_ack_basic_auth_url(jma_worker, http_server):
@@ -394,6 +396,7 @@ async def test_forward_ack_basic_auth_url(jma_worker, http_server):
     assert req.body_json["event_type"] == "submitted"
     assert req.body_json["event_details"] == {}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "msg-21"
 
 
 async def test_forward_ack_auth_token(jma_worker, http_server):
@@ -416,6 +419,7 @@ async def test_forward_ack_auth_token(jma_worker, http_server):
     assert req.body_json["event_type"] == "submitted"
     assert req.body_json["event_details"] == {}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "msg-21"
 
 
 async def test_forward_ack_bad_response(jma_worker, http_server, caplog):
@@ -475,6 +479,7 @@ async def test_forward_nack(jma_worker, http_server):
     assert req.body_json["event_type"] == "rejected"
     assert req.body_json["event_details"] == {"reason": "KaBooM!"}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "msg-21"
 
 
 async def test_forward_dr(jma_worker, http_server):
@@ -495,6 +500,7 @@ async def test_forward_dr(jma_worker, http_server):
     assert req.body_json["event_type"] == "delivery_pending"
     assert req.body_json["event_details"] == {}
     assert req.body_json["channel_id"] == "jma-test"
+    assert req.body_json["message_id"] == "m-21"
 
 
 async def test_send_outbound(jma_worker, jma_ro):
