@@ -1,6 +1,6 @@
 import importlib.metadata
 from logging import getLogger
-from typing import TypedDict, TypeVar, get_type_hints
+from typing import TypedDict, TypeVar
 
 import sentry_sdk
 import trio
@@ -58,10 +58,6 @@ class WorkerHttp(AsyncResource):
 
 class BaseWorker(AsyncResource):
     config: BaseConfig
-
-    @classmethod
-    def get_config_class(cls):
-        return get_type_hints(cls)["config"]
 
     def __init__(
         self, nursery: trio.Nursery, amqp_connection: AmqpProtocol, config: BaseConfig

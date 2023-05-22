@@ -10,7 +10,7 @@ from trio import MemoryReceiveChannel, Nursery, fail_after, open_memory_channel
 from trio.abc import AsyncResource
 
 from vumi2.amqp import create_amqp_client
-from vumi2.config import load_config
+from vumi2.config import get_config_class, load_config
 from vumi2.connectors import (
     ConnectorCollection,
     Consumer,
@@ -166,7 +166,7 @@ class WorkerFactory:
     def __call__(self, default_class: type[BaseWorker], default_config: dict):
         worker_class = from_marker(self.request, "worker_class", default_class)
         config_dict = from_marker(self.request, "worker_config", default_config)
-        config = worker_class.get_config_class().deserialise(config_dict)
+        config = get_config_class(worker_class).deserialise(config_dict)
         return worker_class(self.nursery, self.amqp, config)
 
     @asynccontextmanager

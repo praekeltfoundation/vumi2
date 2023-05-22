@@ -8,7 +8,7 @@ import trio
 from attrs import Attribute
 
 from vumi2.amqp import create_amqp_client
-from vumi2.config import BaseConfig, load_config, walk_config_class
+from vumi2.config import BaseConfig, get_config_class, load_config, walk_config_class
 from vumi2.workers import BaseWorker
 
 
@@ -30,7 +30,7 @@ def worker_subcommand(
         name="worker", description="Run a vumi worker", help="Run a vumi worker"
     )
     command.add_argument("worker_class", help="The worker class to run")
-    worker_config_options(worker_cls.get_config_class(), command)
+    worker_config_options(get_config_class(worker_cls), command)
     return command
 
 
@@ -84,7 +84,7 @@ async def run_worker(
     """
     parser = build_main_parser(worker_cls=worker_cls)
     parsed_args = parser.parse_args(args=args)
-    config = load_config(cls=worker_cls.get_config_class(), cli=parsed_args)
+    config = load_config(cls=get_config_class(worker_cls), cli=parsed_args)
     logging.basicConfig(level=config.log_level)
     async with create_amqp_client(config) as amqp_connection:
         async with trio.open_nursery() as nursery:

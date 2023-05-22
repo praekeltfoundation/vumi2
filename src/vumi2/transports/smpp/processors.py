@@ -3,7 +3,6 @@ from enum import Enum, EnumType
 from logging import getLogger
 from typing import Callable, Optional, TypeVar, Union
 
-import cattrs
 from attrs import Factory, define, field
 from smpp.pdu.operations import PDU, DeliverSM, SubmitSM  # type: ignore
 from smpp.pdu.pdu_types import (  # type: ignore
@@ -17,6 +16,7 @@ from smpp.pdu.pdu_types import (  # type: ignore
     RegisteredDeliverySmeOriginatedAcks,
 )
 
+from vumi2.config import structure_config
 from vumi2.messages import DeliveryStatus, Event, EventType, Message, TransportType
 
 from .codecs import register_codecs
@@ -28,7 +28,6 @@ register_codecs()
 logger = getLogger(__name__)
 
 ET = TypeVar("ET", bound=EnumType)
-_conv = cattrs.Converter(prefer_attrib_converters=True)
 
 
 def convert_enum(enum: ET) -> Callable[[Union[int, str, ET]], ET]:
@@ -128,11 +127,11 @@ class SubmitShortMessageProcesserBase:  # pragma: no cover
 
 
 class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
-    CONFIG_CLASS = SubmitShortMessageProcessorConfig
+    config: SubmitShortMessageProcessorConfig
 
     def __init__(self, config: dict, sequencer: Sequencer) -> None:
         self.sequencer = sequencer
-        self.config = _conv.structure(config, self.CONFIG_CLASS)
+        self.config = structure_config(config, self)
 
     def _get_msg_length(self, split_msg=False) -> int:
         # From https://www.twilio.com/docs/glossary/what-sms-character-limit
@@ -328,10 +327,10 @@ class DeliveryReportProcessorConfig:
 
 
 class DeliveryReportProcesser(DeliveryReportProcesserBase):
-    CONFIG_CLASS = DeliveryReportProcessorConfig
+    config: DeliveryReportProcessorConfig
 
     def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
-        self.config = _conv.structure(config, self.CONFIG_CLASS)
+        self.config = structure_config(config, self)
         self.regex = re.compile(self.config.regex)
         self.smpp_cache = smpp_cache
 
@@ -449,10 +448,10 @@ class ShortMessageProcessorConfig:
 
 
 class ShortMessageProcessor(ShortMessageProcesserBase):
-    CONFIG_CLASS = ShortMessageProcessorConfig
+    config: ShortMessageProcessorConfig
 
     def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
-        self.config = _conv.structure(config, self.CONFIG_CLASS)
+        self.config = structure_config(config, self)
         self.smpp_cache = smpp_cache
 
     def _decode_text(self, text: bytes, data_coding: DataCoding) -> str:

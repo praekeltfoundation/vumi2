@@ -2,12 +2,32 @@ import os
 from argparse import Namespace
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Generic, Optional, Protocol, TypeVar, get_type_hints
 
 import yaml
 from attrs import Attribute, AttrsInstance, Factory, define, fields
 from attrs import has as is_attrs
-from cattrs import structure
+from cattrs import Converter
+
+_conv = Converter(prefer_attrib_converters=True)
+
+CT = TypeVar("CT", bound=AttrsInstance)
+
+
+class Configurable(Protocol, Generic[CT]):
+    config: CT
+
+
+def get_config_class(cls: type[Configurable[CT]]) -> type[CT]:
+    return get_type_hints(cls)["config"]
+
+
+def structure(config: dict, cls: type[CT]) -> CT:
+    return _conv.structure(config, cls)
+
+
+def structure_config(config: dict, obj: Configurable[CT]) -> CT:
+    return structure(config, get_config_class(type(obj)))
 
 
 @define
