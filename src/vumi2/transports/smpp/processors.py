@@ -33,7 +33,7 @@ ET = TypeVar("ET", bound=Enum)
 def convert_enum(enum: type[ET]) -> Callable[[Union[int, str, ET]], ET]:
     def _convert_enum(value: Union[int, str, ET]) -> ET:
         if isinstance(value, int):
-            return enum(value + 1)
+            raise TypeError("Enums must be specified by name")
         if isinstance(value, str):
             return enum[value]
         return value

@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from cattrs.errors import ClassValidationError
 from smpp.pdu.operations import DeliverSM  # type: ignore
 from smpp.pdu.pdu_types import (  # type: ignore
     AddrNpi,
@@ -117,8 +118,8 @@ async def submit_sm_processor_custom_config(
 
 async def test_config_conversion_ints(sequencer: InMemorySequencer):
     """
-    Various enum config values may be specified as integers according to
-    the SMPP spec rather than the enum values.
+    Enum config values may not be specified as integers, because the
+    enum values don't match the SMPP spec and are effectively arbitrary.
     """
     cfg_dict = {
         "data_coding": 1,
@@ -134,19 +135,13 @@ async def test_config_conversion_ints(sequencer: InMemorySequencer):
             "intermediate_notification": True,
         },
     }
-    cfg = SubmitShortMessageProcessor(cfg_dict, sequencer).config
 
-    assert cfg.data_coding == DataCodingDefault.IA5_ASCII
-    assert cfg.source_addr_ton == AddrTon.SUBSCRIBER_NUMBER
-    assert cfg.source_addr_npi == AddrNpi.NATIONAL
-    assert cfg.dest_addr_ton == AddrTon.INTERNATIONAL
-    assert cfg.dest_addr_npi == AddrNpi.TELEX
-    assert cfg.registered_delivery.delivery_receipt == (
-        RegisteredDeliveryReceipt.SMSC_DELIVERY_RECEIPT_REQUESTED
-    )
-    assert cfg.registered_delivery.sme_originated_acks == [
-        RegisteredDeliverySmeOriginatedAcks.SME_MANUAL_ACK_REQUESTED
-    ]
+    with pytest.raises(ClassValidationError) as e_info:
+        SubmitShortMessageProcessor(cfg_dict, sequencer)
+
+    [cve] = e_info.value.exceptions
+    for e in cve.exceptions:
+        assert str(e) == "Enums must be specified by name"
 
 
 async def test_config_conversion_strs(sequencer: InMemorySequencer):
