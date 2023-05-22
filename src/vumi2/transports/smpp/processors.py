@@ -1,5 +1,5 @@
 import re
-from enum import Enum, EnumType
+from enum import Enum
 from logging import getLogger
 from typing import Callable, Optional, TypeVar, Union
 
@@ -27,10 +27,10 @@ register_codecs()
 
 logger = getLogger(__name__)
 
-ET = TypeVar("ET", bound=EnumType)
+ET = TypeVar("ET", bound=Enum)
 
 
-def convert_enum(enum: ET) -> Callable[[Union[int, str, ET]], ET]:
+def convert_enum(enum: type[ET]) -> Callable[[Union[int, str, ET]], ET]:
     def _convert_enum(value: Union[int, str, ET]) -> ET:
         if isinstance(value, int):
             return enum(value + 1)
@@ -41,21 +41,21 @@ def convert_enum(enum: ET) -> Callable[[Union[int, str, ET]], ET]:
     return _convert_enum
 
 
-def convert_enum_list(enum: ET) -> Callable[[list[Union[int, str]]], list[ET]]:
+def conv_enum_list(enum: type[ET]) -> Callable[[list[Union[int, str, ET]]], list[ET]]:
     ce = convert_enum(enum)
 
-    def _convert_enum_list(values: list[Union[int, str]]) -> list[ET]:
+    def _conv_enum_list(values: list[Union[int, str, ET]]) -> list[ET]:
         return [ce(val) for val in values]
 
-    return _convert_enum_list
+    return _conv_enum_list
 
 
-def enum_field(enum: ET, **kw):
+def enum_field(enum: type[ET], **kw):
     return field(converter=convert_enum(enum), **kw)
 
 
-def enum_list_field(enum: ET, **kw):
-    return field(converter=convert_enum_list(enum), **kw)
+def enum_list_field(enum: type[ET], **kw):
+    return field(converter=conv_enum_list(enum), **kw)
 
 
 class DataCodingCodecs(Enum):
