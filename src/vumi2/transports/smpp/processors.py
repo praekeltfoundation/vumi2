@@ -1,10 +1,10 @@
 import re
-from enum import Enum
+from enum import Enum, EnumType
 from logging import getLogger
-from typing import Optional
+from typing import Callable, Optional, TypeVar, Union
 
 import cattrs
-from attrs import Factory, define
+from attrs import Factory, define, field
 from smpp.pdu.operations import PDU, DeliverSM, SubmitSM  # type: ignore
 from smpp.pdu.pdu_types import (  # type: ignore
     AddrNpi,
@@ -26,6 +26,37 @@ from .smpp_cache import BaseSmppCache
 register_codecs()
 
 logger = getLogger(__name__)
+
+ET = TypeVar("ET", bound=EnumType)
+_conv = cattrs.Converter(prefer_attrib_converters=True)
+
+
+def convert_enum(enum: ET) -> Callable[[Union[int, str, ET]], ET]:
+    def _convert_enum(value: Union[int, str, ET]) -> ET:
+        if isinstance(value, int):
+            return enum(value + 1)
+        if isinstance(value, str):
+            return enum[value]
+        return value
+
+    return _convert_enum
+
+
+def convert_enum_list(enum: ET) -> Callable[[list[Union[int, str]]], list[ET]]:
+    ce = convert_enum(enum)
+
+    def _convert_enum_list(values: list[Union[int, str]]) -> list[ET]:
+        return [ce(val) for val in values]
+
+    return _convert_enum_list
+
+
+def enum_field(enum: ET, **kw):
+    return field(converter=convert_enum(enum), **kw)
+
+
+def enum_list_field(enum: ET, **kw):
+    return field(converter=convert_enum_list(enum), **kw)
 
 
 class DataCodingCodecs(Enum):
@@ -58,22 +89,29 @@ class MultipartHandling(Enum):
 
 @define
 class RegisteredDeliveryConfig:
-    delivery_receipt: RegisteredDeliveryReceipt = (
-        RegisteredDeliveryReceipt.NO_SMSC_DELIVERY_RECEIPT_REQUESTED
+    delivery_receipt: RegisteredDeliveryReceipt = enum_field(
+        RegisteredDeliveryReceipt,
+        default=RegisteredDeliveryReceipt.NO_SMSC_DELIVERY_RECEIPT_REQUESTED,
     )
-    sme_originated_acks: list[RegisteredDeliverySmeOriginatedAcks] = Factory(list)
+    sme_originated_acks: list[RegisteredDeliverySmeOriginatedAcks] = enum_list_field(
+        RegisteredDeliverySmeOriginatedAcks,
+        factory=list,
+    )
     intermediate_notification: bool = False
 
 
 @define
 class SubmitShortMessageProcessorConfig:
-    data_coding: DataCodingDefault = DataCodingDefault.SMSC_DEFAULT_ALPHABET
+    data_coding: DataCodingDefault = enum_field(
+        DataCodingDefault,
+        default=DataCodingDefault.SMSC_DEFAULT_ALPHABET,
+    )
     multipart_handling: MultipartHandling = MultipartHandling.short_message
     service_type: Optional[str] = None
-    source_addr_ton: AddrTon = AddrTon.UNKNOWN
-    source_addr_npi: AddrNpi = AddrNpi.UNKNOWN
-    dest_addr_ton: AddrTon = AddrTon.UNKNOWN
-    dest_addr_npi: AddrNpi = AddrNpi.ISDN
+    source_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
+    source_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.UNKNOWN)
+    dest_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
+    dest_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.ISDN)
     registered_delivery: RegisteredDeliveryConfig = Factory(RegisteredDeliveryConfig)
     multipart_sar_reference_rollover: int = 0x10000
 
@@ -94,7 +132,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
     def __init__(self, config: dict, sequencer: Sequencer) -> None:
         self.sequencer = sequencer
-        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.config = _conv.structure(config, self.CONFIG_CLASS)
 
     def _get_msg_length(self, split_msg=False) -> int:
         # From https://www.twilio.com/docs/glossary/what-sms-character-limit
@@ -237,7 +275,7 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
                 self.config.registered_delivery.sme_originated_acks,
                 self.config.registered_delivery.intermediate_notification,
             ),
-            **kwargs
+            **kwargs,
         )
 
 
@@ -293,7 +331,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
     CONFIG_CLASS = DeliveryReportProcessorConfig
 
     def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
-        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.config = _conv.structure(config, self.CONFIG_CLASS)
         self.regex = re.compile(self.config.regex)
         self.smpp_cache = smpp_cache
 
@@ -414,7 +452,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
     CONFIG_CLASS = ShortMessageProcessorConfig
 
     def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
-        self.config = cattrs.structure(config, self.CONFIG_CLASS)
+        self.config = _conv.structure(config, self.CONFIG_CLASS)
         self.smpp_cache = smpp_cache
 
     def _decode_text(self, text: bytes, data_coding: DataCoding) -> str:

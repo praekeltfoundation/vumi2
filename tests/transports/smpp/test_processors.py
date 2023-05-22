@@ -98,33 +98,88 @@ async def test_submit_sm_outbound_blank_vumi_message(
 async def submit_sm_processor_custom_config(
     sequencer: InMemorySequencer,
 ) -> SubmitShortMessageProcessor:
-    # TODO: Better config than this
-    # Because the PDU library generates Enums that look like:
-    # class AddrTon(Enum):
-    #     UNKNOWN = 1
-    #     INTERNATIONAL = 2
-    #     ...
-    # we have to specify those numbers here when defining config. This makes the config
-    # unclear, but also makes it really easy to make mistakes, since these are all
-    # off-by-one compared to the spec; eg. a data_coding of 1 represents
-    # SMSC_DEFAULT_ALPHABET, which is 0x00 in the SMPP spec
-    return SubmitShortMessageProcessor(
-        {
-            "data_coding": 2,
-            "multipart_handling": "message_payload",
-            "service_type": "test service type",
-            "source_addr_ton": 5,
-            "source_addr_npi": 6,
-            "dest_addr_ton": 2,
-            "dest_addr_npi": 4,
-            "registered_delivery": {
-                "delivery_receipt": 2,
-                "sme_originated_acks": [2],
-                "intermediate_notification": True,
-            },
+    cfg = {
+        "data_coding": "IA5_ASCII",
+        "multipart_handling": "message_payload",
+        "service_type": "test service type",
+        "source_addr_ton": "SUBSCRIBER_NUMBER",
+        "source_addr_npi": "NATIONAL",
+        "dest_addr_ton": "INTERNATIONAL",
+        "dest_addr_npi": "TELEX",
+        "registered_delivery": {
+            "delivery_receipt": "SMSC_DELIVERY_RECEIPT_REQUESTED",
+            "sme_originated_acks": ["SME_MANUAL_ACK_REQUESTED"],
+            "intermediate_notification": True,
         },
-        sequencer,
+    }
+    return SubmitShortMessageProcessor(cfg, sequencer)
+
+
+async def test_config_conversion_ints(sequencer: InMemorySequencer):
+    """
+    Various enum config values may be specified as integers according to
+    the SMPP spec rather than the enum values.
+    """
+    cfg_dict = {
+        "data_coding": 1,
+        "multipart_handling": "message_payload",
+        "service_type": "test service type",
+        "source_addr_ton": 4,
+        "source_addr_npi": 5,
+        "dest_addr_ton": 1,
+        "dest_addr_npi": 3,
+        "registered_delivery": {
+            "delivery_receipt": 1,
+            "sme_originated_acks": [1],
+            "intermediate_notification": True,
+        },
+    }
+    cfg = SubmitShortMessageProcessor(cfg_dict, sequencer).config
+
+    assert cfg.data_coding == DataCodingDefault.IA5_ASCII
+    assert cfg.source_addr_ton == AddrTon.SUBSCRIBER_NUMBER
+    assert cfg.source_addr_npi == AddrNpi.NATIONAL
+    assert cfg.dest_addr_ton == AddrTon.INTERNATIONAL
+    assert cfg.dest_addr_npi == AddrNpi.TELEX
+    assert cfg.registered_delivery.delivery_receipt == (
+        RegisteredDeliveryReceipt.SMSC_DELIVERY_RECEIPT_REQUESTED
     )
+    assert cfg.registered_delivery.sme_originated_acks == [
+        RegisteredDeliverySmeOriginatedAcks.SME_MANUAL_ACK_REQUESTED
+    ]
+
+
+async def test_config_conversion_strs(sequencer: InMemorySequencer):
+    """
+    Various enum config values may be specified as strings.
+    """
+    cfg_dict = {
+        "data_coding": "IA5_ASCII",
+        "multipart_handling": "message_payload",
+        "service_type": "test service type",
+        "source_addr_ton": "SUBSCRIBER_NUMBER",
+        "source_addr_npi": "NATIONAL",
+        "dest_addr_ton": "INTERNATIONAL",
+        "dest_addr_npi": "TELEX",
+        "registered_delivery": {
+            "delivery_receipt": "SMSC_DELIVERY_RECEIPT_REQUESTED",
+            "sme_originated_acks": ["SME_MANUAL_ACK_REQUESTED"],
+            "intermediate_notification": True,
+        },
+    }
+    cfg = SubmitShortMessageProcessor(cfg_dict, sequencer).config
+
+    assert cfg.data_coding == DataCodingDefault.IA5_ASCII
+    assert cfg.source_addr_ton == AddrTon.SUBSCRIBER_NUMBER
+    assert cfg.source_addr_npi == AddrNpi.NATIONAL
+    assert cfg.dest_addr_ton == AddrTon.INTERNATIONAL
+    assert cfg.dest_addr_npi == AddrNpi.TELEX
+    assert cfg.registered_delivery.delivery_receipt == (
+        RegisteredDeliveryReceipt.SMSC_DELIVERY_RECEIPT_REQUESTED
+    )
+    assert cfg.registered_delivery.sme_originated_acks == [
+        RegisteredDeliverySmeOriginatedAcks.SME_MANUAL_ACK_REQUESTED
+    ]
 
 
 async def test_submit_sm_outbound_vumi_message_custom_config(
