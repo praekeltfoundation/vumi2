@@ -10,6 +10,7 @@ from smpp.pdu.pdu_types import (  # type: ignore
     EsmClass,
     EsmClassMode,
     EsmClassType,
+    MessageState,
     RegisteredDelivery,
     RegisteredDeliveryReceipt,
     RegisteredDeliverySmeOriginatedAcks,
@@ -294,7 +295,7 @@ async def test_delivery_report_optional_params(
     """
     await smpp_cache.store_smpp_message_id("messageid", "abc")
     handled, event = await dr_processer.handle_deliver_sm(
-        DeliverSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
+        DeliverSM(receipted_message_id="abc", message_state=MessageState.UNDELIVERABLE)
     )
     assert handled is True
     assert event is not None
@@ -396,7 +397,7 @@ async def test_delivery_report_no_cache(dr_processer: DeliveryReportProcesser, c
     If there isn't a message ID in the cache, then we cannot send an event, so log
     """
     handled, event = await dr_processer.handle_deliver_sm(
-        DeliverSM(receipted_message_id="abc", message_state="UNDELIVERABLE")
+        DeliverSM(receipted_message_id="abc", message_state=MessageState.UNDELIVERABLE)
     )
     assert handled is True
     assert event is None

@@ -310,7 +310,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         if receipted_message_id is None or message_state is None:
             return False, None
         return True, await self._create_event(
-            receipted_message_id.decode(), message_state.decode()
+            receipted_message_id.decode(), message_state.name
         )
 
     async def _handle_deliver_sm_esm_class(
