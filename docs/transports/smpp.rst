@@ -151,13 +151,18 @@ This sequencer is designed to work with most EMSEs.
 
 It has the following configuration fields:
 
-.. warning::
-    These fields will be changed, to something better, and then documentation can be improved showing all the choices for each field.
-
 .. py:data:: data_coding
-   :type: int
+   :type: str
 
-   What data encoding to use. This sets both the ``data_coding`` field on the PDU, as well as sets the encoding that we use for the message body. The following encodings are supported: SMSC default (GSM03.38), ASCII, Latin 1, JIS (ISO 2022 JP), Cyrllic (ISO-8859-5), Latin/Hebrew (ISO-8859-8), UCS2
+   What data encoding to use. This sets both the ``data_coding`` field on the PDU, as well as sets the encoding that we use for the message body. The following encodings are supported:
+
+   * ``SMSC_DEFAULT_ALPHABET`` (0): SMSC default (GSM03.38)
+   * ``IA5_ASCII`` (1): ASCII
+   * ``LATIN_1`` (3): Latin 1
+   * ``JIS`` (5): JIS (ISO 2022 JP)
+   * ``CYRILLIC`` (6): Cyrllic (ISO-8859-5)
+   * ``ISO_8859_8`` (7): Latin/Hebrew (ISO-8859-8)
+   * ``UCS2`` (8): UCS2
 
 .. py:data:: multipart_handling
    :type: str
@@ -170,36 +175,71 @@ It has the following configuration fields:
    Defaults to none. ESME specific, what string to put in the ``service_type`` field of the PDU.
 
 .. py:data:: source_addr_ton
-   :type: int
+   :type: str
 
-   Defaults to unknown. The type of number for the source address (the address of the service).
+   The type of number for the source address (the address of the service). Defaults to ``UNKNOWN``. The following values are supported:
+
+   * ``UNKNOWN`` (0)
+   * ``INTERNATIONAL`` (1)
+   * ``NATIONAL`` (2)
+   * ``NETWORK_SPECIFIC`` (3)
+   * ``SUBSCRIBER_NUMBER`` (4)
+   * ``ALPHANUMERIC`` (5)
+   * ``ABBREVIATED`` (6)
+
 
 .. py:data:: source_addr_npi
-   :type: int
+   :type: str
 
-   Defaults to unknown. The numbering plan indicator for the source address (the address of the service)
+   The numbering plan indicator for the source address (the address of the service). Defaults to ``UNKNOWN``. The following values are supported:
+
+   * ``UNKNOWN`` (0)
+   * ``ISDN`` (1)
+   * ``DATA`` (3)
+   * ``TELEX`` (4)
+   * ``LAND_MOBILE`` (6)
+   * ``NATIONAL`` (8)
+   * ``PRIVATE`` (9)
+   * ``ERMES`` (10)
+   * ``INTERNET`` (14)
+   * ``WAP_CLIENT_ID`` (18)
 
 .. py:data:: dest_addr_ton
-   :type: int
+   :type: str
 
-   Defaults to unknown. The type of number for the destination address (the address of the user).
+   The type of number for the destination address (the address of the user). Defaults to ``UNKNOWN``. See :py:data:`source_addr_ton` for supported values.
 
 .. py:data:: dest_addr_npi
-   :type: int
+   :type: str
 
-   Defaults to ISDN. The numbering plan indicator for the destination address (the address of the user)
+   The numbering plan indicator for the destination address (the address of the user). Defaults to ``ISDN``. See :py:data:`source_addr_npi` for supported values.
 
 .. py:data:: registered_delivery
    :type: dict
 
    The configuration for registered delivery. Takes the following fields:
 
-   delivery_receipt (int)
-      Defaults to no receipt requested. The SMSC delivery receipt to request
-   sme_originated_acks (list[int])
-      Defaults to none. Which SME originated acknowledgements to request
-   intermediate_notification (bool)
-      Defaults to False. Whether or not to request intermediate notifications
+   .. py:data:: delivery_receipt
+      :type: str
+
+      The SMSC delivery receipt to request. Defaults to ``NO_SMSC_DELIVERY_RECEIPT_REQUESTED``. The following values are supported:
+
+      * ``NO_SMSC_DELIVERY_RECEIPT_REQUESTED`` (0)
+      * ``SMSC_DELIVERY_RECEIPT_REQUESTED`` (1)
+      * ``SMSC_DELIVERY_RECEIPT_REQUESTED_FOR_FAILURE`` (2)
+
+   .. py:data:: sme_originated_acks
+      :type: list[str]
+
+      Which SME originated acknowledgements to request. Defaults to none. The following values are supported:
+
+      * ``SME_DELIVERY_ACK_REQUESTED`` (4)
+      * ``SME_MANUAL_ACK_REQUESTED`` (8)
+
+   .. py:data:: intermediate_notification
+      :type: bool
+
+      Whether or not to request intermediate notifications. Defaults to ``false``.
 
 
 .. _delivery-report-processors:
