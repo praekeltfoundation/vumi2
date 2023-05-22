@@ -2,7 +2,16 @@ import os
 from argparse import Namespace
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Callable, Generic, Optional, Protocol, TypeVar, get_type_hints
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    Protocol,
+    TypeVar,
+    Union,
+    get_type_hints,
+)
 
 import yaml
 from attrs import Attribute, AttrsInstance, Factory, define, fields
@@ -18,7 +27,7 @@ class Configurable(Protocol, Generic[CT]):
     config: CT
 
 
-def get_config_class(cls: type[Configurable[CT]]) -> type[CT]:
+def get_config_class(cls: Union[Configurable[CT], type[Configurable[CT]]]) -> type[CT]:
     return get_type_hints(cls)["config"]
 
 
@@ -26,8 +35,11 @@ def structure(config: dict, cls: type[CT]) -> CT:
     return _conv.structure(config, cls)
 
 
-def structure_config(config: dict, obj: Configurable[CT]) -> CT:
-    return structure(config, get_config_class(type(obj)))
+def structure_config(
+    config: dict,
+    obj: Union[Configurable[CT], type[Configurable[CT]]],
+) -> CT:
+    return structure(config, get_config_class(obj))
 
 
 @define
@@ -47,10 +59,6 @@ class BaseConfig:
     sentry_dsn: Optional[str] = None
     http_bind: Optional[str] = None
     log_level: str = "INFO"
-
-    @classmethod
-    def deserialise(cls, config: dict[str, Any]) -> "BaseConfig":
-        return structure(config, cls)
 
 
 ConfigCallback = Callable[[Attribute, Iterable[str]], Any]
@@ -166,6 +174,5 @@ def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
     )
     config_file = load_config_from_file(path=config_path)
     config_cli = load_config_from_cli(source=cli, cls=cls)
-    return cls.deserialise(
-        _combine_nested_dictionaries(config_file, config_env, config_cli)
-    )
+    config_dict = _combine_nested_dictionaries(config_file, config_env, config_cli)
+    return structure(config_dict, cls)

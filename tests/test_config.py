@@ -9,11 +9,16 @@ from vumi2.config import (
     load_config_from_cli,
     load_config_from_environment,
     load_config_from_file,
+    structure,
 )
 
 
+def deserialise(config: dict) -> BaseConfig:
+    return structure(config, BaseConfig)
+
+
 def test_default_base_config():
-    config = BaseConfig.deserialise({})
+    config = deserialise({})
     assert config.amqp.hostname == "127.0.0.1"
     assert config.amqp.port == 5672
     assert config.amqp.username == "guest"  # noqa: S105 (These are fake creds.)
@@ -24,7 +29,7 @@ def test_default_base_config():
 
 
 def test_specified_base_config():
-    config = BaseConfig.deserialise(
+    config = deserialise(
         {
             "amqp": {
                 "hostname": "localhost",
@@ -69,7 +74,7 @@ def test_load_config_from_environment():
         "amqp_url": "amqp://user:pass@localhost:1234/vumi",
         "worker_concurrency": "10",
     }
-    config_obj = BaseConfig.deserialise(config)
+    config_obj = deserialise(config)
     assert config_obj.amqp.username == "guest"
 
 
@@ -92,7 +97,7 @@ def test_load_config_from_cli():
         "worker_concurrency": "5",
     }
 
-    config_obj = BaseConfig.deserialise(config)
+    config_obj = deserialise(config)
     assert config_obj.amqp.port == 1234
     assert config_obj.worker_concurrency == 5
 
