@@ -267,7 +267,7 @@ class EsmeClient:
                 await self.send_message_channel.send(event)
                 return
 
-            smpp_message_id = response.params["message_id"]
+            smpp_message_id = response.params["message_id"].decode()
             await self.smpp_cache.store_smpp_message_id(
                 message.message_id, smpp_message_id
             )
