@@ -308,7 +308,9 @@ async def test_send_vumi_message(client: EsmeClient, smsc: FakeSmsc):
     await smsc.send_pdu(response_pdu)
 
 
-async def test_submit_sm_resp_ack(client: EsmeClient, receive_message_channel, smsc):
+async def test_submit_sm_resp_ack(
+    client: EsmeClient, receive_message_channel, smsc, smpp_cache
+):
     """
     If the response PDU is ESME_ROK, send an ack
     """
@@ -325,12 +327,15 @@ async def test_submit_sm_resp_ack(client: EsmeClient, receive_message_channel, s
     client.nursery.start_soon(client.send_vumi_message, message)
     msg_pdu = await smsc.receive_pdu()
 
-    pdu = SubmitSMResp(seqNum=msg_pdu.seqNum)
+    pdu = SubmitSMResp(seqNum=msg_pdu.seqNum, message_id="2468135")
     await smsc.send_pdu(pdu)
 
     event = await receive_message_channel.receive()
     assert isinstance(event, Event)
     assert event.event_type == EventType.ACK
+
+    msg_id = await smpp_cache.get_smpp_message_id("2468135")
+    assert msg_id == message.message_id
 
 
 async def test_submit_sm_resp_nack(client: EsmeClient, receive_message_channel, smsc):
