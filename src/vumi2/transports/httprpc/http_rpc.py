@@ -47,6 +47,7 @@ class HttpRpcTransport(BaseWorker):
             self.config.transport_name, self.handle_outbound_message
         )
         self.http.app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
+        await self.start_consuming()
 
     async def inbound_request(self) -> tuple[Union[str, dict], int, dict[str, str]]:
         message_id = generate_message_id()

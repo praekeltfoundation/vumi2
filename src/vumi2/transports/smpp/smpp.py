@@ -91,6 +91,7 @@ class SmppTransceiverTransport(BaseWorker):
             outbound_handler=self.handle_outbound,
         )
         self.nursery.start_soon(self.handle_inbound_message_or_event, receive_channel)
+        await self.start_consuming()
 
     async def handle_inbound_message_or_event(
         self, receive_message_channel: MemoryReceiveChannel

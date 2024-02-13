@@ -1,4 +1,5 @@
 import importlib.metadata
+from typing import Optional
 
 import pytest
 import sentry_sdk
@@ -51,6 +52,7 @@ class AcloseWorker(BaseWorker):
         self.allow_out, self.r_allow_out = open_memory_channel[None](0)
         await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
         await self.setup_receive_outbound_connector("ro", self.handle_out)
+        await self.start_consuming()
 
     async def aclose(self):
         await super().aclose()
@@ -67,6 +69,38 @@ class AcloseWorker(BaseWorker):
     async def handle_out(self, message: Message):
         await self.s_consume_out.send(message)
         await self.r_allow_out.receive()
+
+
+class SlowSetupWorker(BaseWorker):
+    """
+    A worker whose connectors are set up with a delay between them.
+
+    The RO handler sends to the RI publisher, which will fail if we process a
+    message before all connectors are set up.
+    """
+
+    async def setup(self):
+        self.s_exc, self.exc = open_memory_channel[Optional[Exception]](1)
+        await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
+        await sleep(0.1)
+        await self.setup_receive_outbound_connector("ro", self.handle_out)
+        await self.start_consuming()
+
+    async def handle_in(self, message: Message):
+        # We catch and log exceptions in message handlers, so the only way the
+        # test will know about them is if we tell it.
+        try:
+            await self.receive_outbound_connectors["ro"].publish_inbound(message)
+            await self.s_exc.send(None)
+        except Exception as e:
+            await self.s_exc.send(e)
+            raise
+
+    async def handle_ev(self, event: Event):
+        print("HANDLE EV!")
+
+    async def handle_out(self, message: Message):
+        print("HANDLE OUT!")
 
 
 @pytest.fixture()
@@ -257,3 +291,50 @@ async def test_aclose_pending_outbound(nursery, worker, connector_factory):
     with fail_after(CLOSED_WAIT_TIME):
         await worker.aclose()
     assert worker.is_closed
+
+
+@pytest.mark.worker_class.with_args(SlowSetupWorker)
+async def test_connector_setup_race(nursery, worker, connector_factory):
+    """
+    All connectors must be set up and available to publish before any messages
+    are consumed.
+    """
+    # In order to send a message that the worker will receive at startup, we
+    # need to create and bind the relevant queue. The easiest way to do that is
+    # to create a a matching connector. We then close that connector so it
+    # doesn't consume the message before the worker starts.
+    ri_ri = await connector_factory.setup_ri("ri")
+    await ri_ri.conn.aclose_consumers()
+
+    ro_ri = await connector_factory.setup_ro("ri")
+    ri_ro = await connector_factory.setup_ri("ro")
+
+    # Publish a message before we start the worker so that the first connector
+    # receives it as soon as it's able to receive.
+    await ro_ri.publish_inbound(mkmsg("hi"))
+    await sleep(0.1)
+
+    await worker.setup()
+
+    # If all went well, we get no exception and we receive the message through
+    # the connector that was only set up later.
+    assert (await worker.exc.receive()) is None
+    assert (await ri_ro.consume_inbound()).content == "hi"
+
+
+async def test_connector_setup_call_start_twice(connector_factory):
+    """
+    Starting connectors more than once should not cause the worker to hang or fail
+    """
+    ro_ri = await connector_factory.setup_ro("ri")
+    await ro_ri.conn.start_consuming()
+
+
+async def test_connector_setup_call_start_after_closing(connector_factory):
+    """
+    Starting connectors after closing the consumers should not cause the worker to
+    hang or fail
+    """
+    ro_ri = await connector_factory.setup_ro("ri")
+    await ro_ri.conn.aclose_consumers()
+    await ro_ri.conn.start_consuming()

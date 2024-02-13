@@ -56,6 +56,8 @@ class ToAddressRouter(BaseWorker):
                 event_handler=self.handle_event,
             )
 
+        await self.start_consuming()
+
     # TODO: Teardown
 
     async def handle_inbound_message(self, message: Message):

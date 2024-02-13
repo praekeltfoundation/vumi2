@@ -67,6 +67,8 @@ class Consumer(AsyncResource):
         self._closed = trio.Event()
 
     async def start(self) -> None:
+        if self._active_consumers == self.concurrency or self._closing:
+            return
         self.channel = channel = await self.connection.channel()
         await channel.basic_qos(prefetch_count=self.concurrency)
         await channel.exchange_declare(
@@ -192,8 +194,12 @@ class BaseConnector:
             message_class=message_class,
             concurrency=self.concurrency,
         )
-        await consumer.start()
         self._consumers[message_type] = consumer
+
+    async def start_consuming(self):
+        async with trio.open_nursery() as nursery:
+            for consumer in self._consumers.values():
+                nursery.start_soon(consumer.start)
 
     async def _setup_publisher(self, message_type: str) -> None:
         routing_key = self.routing_key(message_type)
@@ -273,3 +279,8 @@ class ConnectorCollection(AsyncResource):
         async with trio.open_nursery() as nursery:
             for connector in self.connectors:
                 nursery.start_soon(connector.aclose_publishers)
+
+    async def start_consuming(self):
+        async with trio.open_nursery() as nursery:
+            for connector in self.connectors:
+                nursery.start_soon(connector.start_consuming)
