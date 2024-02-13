@@ -330,6 +330,7 @@ async def test_connector_setup_call_start_twice(connector_factory):
     ro_ri = await connector_factory.setup_ro("ri")
     await ro_ri.conn.start_consuming()
 
+
 @pytest.mark.worker_class.with_args(SlowSetupWorker)
 async def test_connector_setup_call_start_after_closing(connector_factory):
     """
