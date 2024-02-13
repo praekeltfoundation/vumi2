@@ -320,3 +320,22 @@ async def test_connector_setup_race(nursery, worker, connector_factory):
     # the connector that was only set up later.
     assert (await worker.exc.receive()) is None
     assert (await ri_ro.consume_inbound()).content == "hi"
+
+
+@pytest.mark.worker_class.with_args(SlowSetupWorker)
+async def test_connector_setup_call_start_twice(connector_factory):
+    """
+    Starting connectors more than once should not cause the worker to hang or fail
+    """
+    ro_ri = await connector_factory.setup_ro("ri")
+    await ro_ri.conn.start_consuming()
+
+@pytest.mark.worker_class.with_args(SlowSetupWorker)
+async def test_connector_setup_call_start_after_closing(connector_factory):
+    """
+    Starting connectors after closing the consumers should not cause the worker to
+    hang or fail
+    """
+    ro_ri = await connector_factory.setup_ro("ri")
+    await ro_ri.conn.aclose_consumers()
+    await ro_ri.conn.start_consuming()

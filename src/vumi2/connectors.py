@@ -67,6 +67,8 @@ class Consumer(AsyncResource):
         self._closed = trio.Event()
 
     async def start(self) -> None:
+        if self._active_consumers == self.concurrency or self._closing:
+            return
         self.channel = channel = await self.connection.channel()
         await channel.basic_qos(prefetch_count=self.concurrency)
         await channel.exchange_declare(
