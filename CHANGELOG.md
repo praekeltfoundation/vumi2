@@ -5,6 +5,7 @@
 ### Added
 
 ### Fixed
+- Fix connector startup error (#53, #54)
 
 ### Changed
 
