@@ -111,12 +111,14 @@ def test_load_config():
     os.environ["AMQP_HOSTNAME"] = "localhost"
     with NamedTemporaryFile("w") as f:
         os.environ["VUMI_CONFIG_FILE"] = f.name
-        f.write("""
+        f.write(
+            """
             amqp:
                 hostname: overwritten
                 port: 1234
             worker_concurrency: 10
-            """)
+            """
+        )
         f.flush()
         config = load_config(cli=cli)
 
