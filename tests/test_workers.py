@@ -80,7 +80,7 @@ class SlowSetupWorker(BaseWorker):
     """
 
     async def setup(self):
-        self.s_exc, self.exc = open_memory_channel[Optional[Exception]|None](1)
+        self.s_exc, self.exc = open_memory_channel[Optional[Exception] | None](1)
         await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
         await sleep(0.1)
         await self.setup_receive_outbound_connector("ro", self.handle_out)
