@@ -119,6 +119,8 @@ class JunebugMessageApi(BaseWorker):
             methods=["POST"],
         )
 
+        await self.start_consuming()
+
     async def handle_inbound_message(self, message: Message) -> None:
         """
         Send the vumi message as an HTTP request to the configured URL.

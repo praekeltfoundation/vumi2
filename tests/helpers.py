@@ -142,6 +142,9 @@ class ConnectorFactory(AsyncResource):
         self._connectors.add(conn.conn)
         return conn
 
+    async def start_consuming(self):
+        await self._connectors.start_consuming()
+
 
 T = TypeVar("T")
 

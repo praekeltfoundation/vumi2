@@ -51,6 +51,7 @@ class AcloseWorker(BaseWorker):
         self.allow_out, self.r_allow_out = open_memory_channel[None](0)
         await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
         await self.setup_receive_outbound_connector("ro", self.handle_out)
+        await self.start_consuming()
 
     async def aclose(self):
         await super().aclose()
@@ -185,6 +186,7 @@ async def test_aclose_pending_inbound(nursery, worker, connector_factory):
     blocked until the handler finishes.
     """
     ro_ri = await connector_factory.setup_ro("ri")
+    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 
@@ -212,6 +214,7 @@ async def test_aclose_pending_event(nursery, worker, connector_factory):
     the handler finishes.
     """
     ro_ri = await connector_factory.setup_ro("ri")
+    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 
@@ -239,6 +242,7 @@ async def test_aclose_pending_outbound(nursery, worker, connector_factory):
     blocked until the handler finishes.
     """
     ri_ro = await connector_factory.setup_ri("ro")
+    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 

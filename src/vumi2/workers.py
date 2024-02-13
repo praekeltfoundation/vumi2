@@ -128,6 +128,9 @@ class BaseWorker(AsyncResource):
     async def setup(self):
         pass
 
+    async def start_consuming(self):
+        await self._connectors.start_consuming()
+
     async def setup_receive_inbound_connector(
         self,
         connector_name: str,
