@@ -1,9 +1,9 @@
 import importlib.metadata
+from typing import Optional
 
 import pytest
 import sentry_sdk
 from trio import fail_after, open_memory_channel, sleep
-from typing import Optional
 
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.workers import BaseWorker
