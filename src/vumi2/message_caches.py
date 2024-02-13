@@ -55,16 +55,13 @@ class TimeoutDict(MutableMapping, Generic[T]):
 
 class MessageCache(ABC):  # pragma: no cover
     @abstractmethod
-    def __init__(self, config: dict) -> None:
-        ...
+    def __init__(self, config: dict) -> None: ...
 
     @abstractmethod
-    async def store_outbound(self, outbound: Message) -> None:
-        ...
+    async def store_outbound(self, outbound: Message) -> None: ...
 
     @abstractmethod
-    async def fetch_outbound(self, message_id: str) -> Message | None:
-        ...
+    async def fetch_outbound(self, message_id: str) -> Message | None: ...
 
 
 @define
