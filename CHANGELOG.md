@@ -8,7 +8,7 @@
 - Fix connector startup error (#53, #54)
 
 ### Changed
-- Drop support for Python 3.9 and 3.10, add 3.12 to CI (#55)
+- Drop support for Python 3.9 and 3.10 (#55)
 
 ## [0.1.0] - 2023-04-05
 
