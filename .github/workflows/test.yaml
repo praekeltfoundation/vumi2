@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         # Python 3.12 support needs some work, apparently.
-        python-version: ["3.11"]
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
