@@ -65,10 +65,8 @@ check_untyped_defs = true
 trio_mode = true
 addopts = "--cov=src --cov-report=term-missing"
 filterwarnings = [
-    # We can't do anything about these warnings until upstream updates.
-    "ignore::trio.TrioDeprecationWarning:quart_trio.app",
-    "ignore::trio.TrioDeprecationWarning:anyio._backends._trio",
-    "ignore::trio.TrioDeprecationWarning:hypercorn.trio",
+    # Python 3.12 deprecates this in favour of timezone-aware objects.
+    "ignore:datetime\\.datetime\\.utcnow\\(\\) is deprecated:DeprecationWarning"
 ]
 
 [tool.coverage.report]
