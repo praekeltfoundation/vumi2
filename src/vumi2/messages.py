@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
+from functools import partial
 from typing import Any
 from uuid import uuid4
 
@@ -12,7 +13,7 @@ VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 def deserialise_vumi_timestamp(value: str, _: Any) -> datetime:
     if "." not in value[-10:]:
         value = f"{value}.0"
-    return datetime.strptime(value, VUMI_DATE_FORMAT)
+    return datetime.strptime(value, VUMI_DATE_FORMAT).replace(tzinfo=UTC)
 
 
 def serialise_vumi_timestamp(value: datetime) -> str:
@@ -76,7 +77,7 @@ class Message:
     transport_type: TransportType
     message_version: str = "20110921"
     message_type: str = "user_message"
-    timestamp: datetime = Factory(datetime.utcnow)
+    timestamp: datetime = Factory(partial(datetime.now, tz=UTC))
     routing_metadata: dict = Factory(dict)
     helper_metadata: dict = Factory(dict)
     message_id: str = Factory(generate_message_id)
@@ -135,7 +136,7 @@ class Event:
     event_type: EventType = field()
     message_version: str = "20110921"
     message_type: str = "event"
-    timestamp: datetime = Factory(datetime.utcnow)
+    timestamp: datetime = Factory(partial(datetime.now, tz=UTC))
     routing_metadata: dict = Factory(dict)
     helper_metadata: dict = Factory(dict)
     transport_metadata: dict | None = Factory(dict)

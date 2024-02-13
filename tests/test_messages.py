@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -49,7 +49,7 @@ def test_deserialise_all_fields():
         transport_type=TransportType.SMS,
         message_version="20110921",
         message_type="user_message",
-        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456, tzinfo=UTC),
         routing_metadata={"test": "routing"},
         helper_metadata={"test": "helper"},
         message_id="7c9af210bc1b4718ae74a1aa026b4757",
@@ -75,7 +75,7 @@ def test_serialise_all_fields():
         transport_type=TransportType.SMS,
         message_version="20110921",
         message_type="user_message",
-        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456, tzinfo=UTC),
         routing_metadata={"test": "routing"},
         helper_metadata={"test": "helper"},
         message_id="7c9af210bc1b4718ae74a1aa026b4757",
@@ -160,10 +160,10 @@ def test_vumi_timestamp():
     """
     Serialising and deserialising of a vumi timestamp should work as expected
     """
-    ts = datetime(2022, 5, 16, 12, 13, 14, 123456)
+    ts = datetime(2022, 5, 16, 12, 13, 14, 123456, tzinfo=UTC)
     assert serialise_vumi_timestamp(ts) == "2022-05-16 12:13:14.123456"
     assert deserialise_vumi_timestamp("2022-05-16 12:13:14.123456", None) == ts
-    ts = datetime(2022, 5, 16, 12, 13, 14)
+    ts = datetime(2022, 5, 16, 12, 13, 14, tzinfo=UTC)
     assert deserialise_vumi_timestamp("2022-05-16 12:13:14", None) == ts
 
 
@@ -198,7 +198,7 @@ def test_event_deserialise_all_fields():
     assert Event.deserialise(data) == Event(
         user_message_id="23fdc3d6768443dd9b16455e556243a9",
         event_type=EventType.ACK,
-        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456, tzinfo=UTC),
         routing_metadata={"test": "routing"},
         helper_metadata={"test": "helper"},
         event_id="ef615b6bdf2741eba969f3f468b32da8",
@@ -215,7 +215,7 @@ def test_event_serialise_all_fields():
     event = Event(
         user_message_id="23fdc3d6768443dd9b16455e556243a9",
         event_type=EventType.ACK,
-        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456),
+        timestamp=datetime(2022, 5, 16, 13, 14, 15, 123456, tzinfo=UTC),
         routing_metadata={"test": "routing"},
         helper_metadata={"test": "helper"},
         transport_metadata={"test": "transport"},
