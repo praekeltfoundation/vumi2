@@ -1,7 +1,6 @@
 import json
 from http import HTTPStatus
 from logging import getLogger
-from typing import Optional, Union
 
 from attrs import define, field
 from httpx import AsyncClient
@@ -54,12 +53,12 @@ class JunebugMessageApiConfig(BaseConfig):
     # The URL to POST inbound messages to.
     mo_message_url: str
     # Authorization token to use for inbound message HTTP requests.
-    mo_message_url_auth_token: Optional[str] = None
+    mo_message_url_auth_token: str | None = None
 
     # The URL to POST events with no associated message info to.
-    default_event_url: Optional[str] = None
+    default_event_url: str | None = None
     # Authorization token to use for events with no associates message info.
-    default_event_auth_token: Optional[str] = None
+    default_event_auth_token: str | None = None
 
     # Base URL path for outbound message HTTP requests. This has "/messages"
     # appended to it. For compatibility with existing Junebug API clients, set
@@ -71,7 +70,7 @@ class JunebugMessageApiConfig(BaseConfig):
     transport_type: TransportType = TransportType.SMS
 
     # If None, all outbound messages must be replies or have a from address.
-    default_from_addr: Optional[str] = None
+    default_from_addr: str | None = None
 
     # If True, outbound messages with both `to` and `reply_to` set will be sent
     # as non-reply messages if the `reply_to` message can't be found.
@@ -188,7 +187,7 @@ class JunebugMessageApi(BaseWorker):
         if cs.cancelled_caught:
             logger.error(LOG_EV_HTTP_TIMEOUT, {"timeout": timeout, "event": ev})
 
-    async def http_send_message(self) -> tuple[Union[str, dict], int, dict[str, str]]:
+    async def http_send_message(self) -> tuple[str | dict, int, dict[str, str]]:
         _message_id = generate_message_id()
         try:
             # TODO: Log requests that timed out?

@@ -1,5 +1,4 @@
 from logging import getLogger
-from typing import Union
 
 from attrs import Factory, define
 from quart import request
@@ -32,7 +31,7 @@ class Request:
 
 @define
 class Response:
-    data: Union[str, dict]
+    data: str | dict
     code: int
     headers: dict[str, str]
 
@@ -49,7 +48,7 @@ class HttpRpcTransport(BaseWorker):
         self.http.app.add_url_rule(self.config.web_path, view_func=self.inbound_request)
         await self.start_consuming()
 
-    async def inbound_request(self) -> tuple[Union[str, dict], int, dict[str, str]]:
+    async def inbound_request(self) -> tuple[str | dict, int, dict[str, str]]:
         message_id = generate_message_id()
         try:
             with move_on_after(self.config.request_timeout):
@@ -135,7 +134,7 @@ class HttpRpcTransport(BaseWorker):
         await self.publish_ack(message.message_id)
 
     def finish_request(
-        self, request_id: str, data: Union[str, dict], code=200, headers=None
+        self, request_id: str, data: str | dict, code=200, headers=None
     ) -> None:
         headers = {} if headers is None else headers
         logger.debug(

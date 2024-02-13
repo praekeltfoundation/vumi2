@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, MutableMapping
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from attrs import define
 from cattrs import structure
@@ -34,7 +34,7 @@ class TimeoutDict(MutableMapping, Generic[T]):
         self._remove_expired()
         self.data[key] = (current_time(), value)
 
-    def __getitem__(self, key: str) -> Optional[T]:
+    def __getitem__(self, key: str) -> T | None:
         self._remove_expired()
         if key not in self.data:
             return None
@@ -63,7 +63,7 @@ class MessageCache(ABC):  # pragma: no cover
         ...
 
     @abstractmethod
-    async def fetch_outbound(self, message_id: str) -> Optional[Message]:
+    async def fetch_outbound(self, message_id: str) -> Message | None:
         ...
 
 
@@ -81,5 +81,5 @@ class MemoryMessageCache(MessageCache):
     async def store_outbound(self, outbound: Message) -> None:
         self._outbounds[outbound.message_id] = outbound
 
-    async def fetch_outbound(self, message_id: str) -> Optional[Message]:
+    async def fetch_outbound(self, message_id: str) -> Message | None:
         return self._outbounds.get(message_id)

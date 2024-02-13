@@ -1,6 +1,6 @@
 from io import BytesIO
 from logging import getLogger
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, cast
 
 from smpp.pdu.constants import (  # type: ignore
     command_status_name_map,
@@ -176,7 +176,7 @@ class EsmeClient:
             logger.warning("Unknown PDU type, ignoring %s", pdu)
 
     @staticmethod
-    def extract_pdu(data: bytearray) -> Optional[bytearray]:
+    def extract_pdu(data: bytearray) -> bytearray | None:
         """
         Used for extracting PDUs from the buffer
 
@@ -196,11 +196,11 @@ class EsmeClient:
         self,
         system_id: str,
         password: str,
-        system_type: Optional[str] = None,
+        system_type: str | None = None,
         interface_version: int = 34,
         addr_ton: AddrTon = AddrTon.UNKNOWN,
         addr_npi: AddrNpi = AddrNpi.UNKNOWN,
-        address_range: Optional[str] = None,
+        address_range: str | None = None,
     ) -> PDU:
         """
         Sends a bind request to the server, and waits for a successful bind response
@@ -223,8 +223,8 @@ class EsmeClient:
         return bind_response
 
     async def send_pdu(
-        self, pdu: Union[PDURequest, PDUResponse], check_response: bool = True
-    ) -> Optional[PDU]:
+        self, pdu: PDURequest | PDUResponse, check_response: bool = True
+    ) -> PDU | None:
         """
         Sends the PDU, waits for, and returns the response PDU
         """

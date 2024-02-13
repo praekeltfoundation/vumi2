@@ -1,7 +1,7 @@
 import json
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from logging import getLogger
-from typing import Callable, Optional, overload
+from typing import overload
 
 import trio
 from async_amqp import AmqpProtocol  # type: ignore
@@ -16,8 +16,8 @@ from vumi2.messages import Event, Message, MessageType
 logger = getLogger(__name__)
 
 
-MessageCallbackType = Callable[[Message], Optional[Awaitable[None]]]
-EventCallbackType = Callable[[Event], Optional[Awaitable[None]]]
+MessageCallbackType = Callable[[Message], Awaitable[None] | None]
+EventCallbackType = Callable[[Event], Awaitable[None] | None]
 _AmqpChType = tuple[Channel, bytes, Envelope, Properties]
 
 
