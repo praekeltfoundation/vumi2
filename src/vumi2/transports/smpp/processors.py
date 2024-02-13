@@ -1,7 +1,8 @@
 import re
+from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
-from typing import Callable, Optional, TypeVar, Union
+from typing import TypeVar
 
 from attrs import Factory, define, field
 from smpp.pdu.operations import PDU, DeliverSM, SubmitSM  # type: ignore
@@ -30,8 +31,8 @@ logger = getLogger(__name__)
 ET = TypeVar("ET", bound=Enum)
 
 
-def convert_enum(enum: type[ET]) -> Callable[[Union[int, str, ET]], ET]:
-    def _convert_enum(value: Union[int, str, ET]) -> ET:
+def convert_enum(enum: type[ET]) -> Callable[[int | str | ET], ET]:
+    def _convert_enum(value: int | str | ET) -> ET:
         if isinstance(value, int):
             raise TypeError("Enums must be specified by name")
         if isinstance(value, str):
@@ -41,10 +42,10 @@ def convert_enum(enum: type[ET]) -> Callable[[Union[int, str, ET]], ET]:
     return _convert_enum
 
 
-def conv_enum_list(enum: type[ET]) -> Callable[[list[Union[int, str, ET]]], list[ET]]:
+def conv_enum_list(enum: type[ET]) -> Callable[[list[int | str | ET]], list[ET]]:
     ce = convert_enum(enum)
 
-    def _conv_enum_list(values: list[Union[int, str, ET]]) -> list[ET]:
+    def _conv_enum_list(values: list[int | str | ET]) -> list[ET]:
         return [ce(val) for val in values]
 
     return _conv_enum_list
@@ -106,7 +107,7 @@ class SubmitShortMessageProcessorConfig:
         default=DataCodingDefault.SMSC_DEFAULT_ALPHABET,
     )
     multipart_handling: MultipartHandling = MultipartHandling.short_message
-    service_type: Optional[str] = None
+    service_type: str | None = None
     source_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
     source_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.UNKNOWN)
     dest_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
@@ -285,7 +286,7 @@ class DeliveryReportProcesserBase:  # pragma: no cover
     async def handle_deliver_sm(  # type: ignore
         self,
         pdu: DeliverSM,
-    ) -> tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Event | None]:
         ...
 
 
@@ -336,7 +337,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_optional_params(
         self, pdu: DeliverSM
-    ) -> tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Event | None]:
         """
         Check if this is a delivery report using the optional PDU params.
 
@@ -352,7 +353,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_esm_class(
         self, pdu: DeliverSM
-    ) -> tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Event | None]:
         """
         Check if this is a delivery report by looking at the esm_class.
 
@@ -381,7 +382,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _handle_deliver_sm_body(
         self, pdu: DeliverSM
-    ) -> tuple[bool, Optional[Event]]:
+    ) -> tuple[bool, Event | None]:
         """
         Try to decode the body as a delivery report, even if the esm_class doesn't
         say it's a delivery report
@@ -396,7 +397,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
     async def _create_event(
         self, smpp_message_id: str, smpp_status: str
-    ) -> Optional[Event]:
+    ) -> Event | None:
         status = DeliveryStatus(self.config.status_mapping.get(smpp_status, "pending"))
         vumi_message_id = await self.smpp_cache.get_smpp_message_id(smpp_message_id)
         if not vumi_message_id:
@@ -418,7 +419,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
             transport_metadata={"smpp_delivery_status": smpp_status},
         )
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> tuple[bool, Optional[Event]]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> tuple[bool, Event | None]:
         """
         Try to handle the pdu as a delivery report. Returns an equivalent Event if
         handled, or None if not.
@@ -438,7 +439,7 @@ class ShortMessageProcesserBase:  # pragma: no cover
     def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
         ...
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Message | None:
         ...
 
 
@@ -484,9 +485,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
             content=self._get_text(pdu),
         )
 
-    def _extract_multipart(
-        self, pdu: DeliverSM
-    ) -> Optional[tuple[int, int, int, bytes]]:
+    def _extract_multipart(self, pdu: DeliverSM) -> tuple[int, int, int, bytes] | None:
         """
         Tries to extract the multipart data from the PDU, using optional params, or UDH
         CSM or CSM16.
@@ -531,7 +530,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
 
     async def _handle_multipart_message(
         self, pdu: DeliverSM
-    ) -> tuple[bool, Optional[Message]]:
+    ) -> tuple[bool, Message | None]:
         """
         Tries to handle the message as a multipart message.
 
@@ -559,7 +558,7 @@ class ShortMessageProcessor(ShortMessageProcesserBase):
             content=full_message,
         )
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Optional[Message]:
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Message | None:
         """
         Processes the DeliverSM pdu, and returns a Message if one was decoded, else
         returns None.

@@ -1,15 +1,12 @@
 import os
 from argparse import Namespace
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
     Generic,
-    Optional,
     Protocol,
     TypeVar,
-    Union,
     get_type_hints,
 )
 
@@ -27,7 +24,7 @@ class Configurable(Protocol, Generic[CT]):
     config: CT
 
 
-def get_config_class(cls: Union[Configurable[CT], type[Configurable[CT]]]) -> type[CT]:
+def get_config_class(cls: Configurable[CT] | type[Configurable[CT]]) -> type[CT]:
     return get_type_hints(cls)["config"]
 
 
@@ -37,7 +34,7 @@ def structure(config: dict, cls: type[CT]) -> CT:
 
 def structure_config(
     config: dict,
-    obj: Union[Configurable[CT], type[Configurable[CT]]],
+    obj: Configurable[CT] | type[Configurable[CT]],
 ) -> CT:
     return structure(config, get_config_class(obj))
 
@@ -56,8 +53,8 @@ class BaseConfig:
     amqp: AmqpConfig = Factory(AmqpConfig)
     amqp_url: str = ""
     worker_concurrency: int = 20
-    sentry_dsn: Optional[str] = None
-    http_bind: Optional[str] = None
+    sentry_dsn: str | None = None
+    http_bind: str | None = None
     log_level: str = "INFO"
 
 
