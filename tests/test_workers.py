@@ -322,7 +322,6 @@ async def test_connector_setup_race(nursery, worker, connector_factory):
     assert (await ri_ro.consume_inbound()).content == "hi"
 
 
-@pytest.mark.worker_class.with_args(SlowSetupWorker)
 async def test_connector_setup_call_start_twice(connector_factory):
     """
     Starting connectors more than once should not cause the worker to hang or fail
@@ -331,7 +330,6 @@ async def test_connector_setup_call_start_twice(connector_factory):
     await ro_ri.conn.start_consuming()
 
 
-@pytest.mark.worker_class.with_args(SlowSetupWorker)
 async def test_connector_setup_call_start_after_closing(connector_factory):
     """
     Starting connectors after closing the consumers should not cause the worker to
