@@ -72,7 +72,6 @@ async def test_to_addr_router_event(to_addr_router, connector_factory):
         sent_message_id=outbound.message_id,
     )
     ri_app1 = await connector_factory.setup_ri("app1")
-    await connector_factory.start_consuming()
 
     await to_addr_router.handle_outbound_message(outbound)
     await to_addr_router.handle_event(event)
@@ -100,7 +99,6 @@ async def test_to_addr_router_inbound(to_addr_router, connector_factory):
     ri_app1 = await connector_factory.setup_ri("app1")
     ri_app2 = await connector_factory.setup_ri("app2")
     ro_test1 = await connector_factory.setup_ro("test1")
-    await connector_factory.start_consuming()
 
     await ro_test1.publish_inbound(msg1)
     await ro_test1.publish_inbound(msg2)
@@ -129,7 +127,6 @@ async def test_to_addr_router_outbound(to_addr_router, connector_factory):
     ri_app1 = await connector_factory.setup_ri("app1")
     ro_test1 = await connector_factory.setup_ro("test1")
     ro_test2 = await connector_factory.setup_ro("test2")
-    await connector_factory.start_consuming()
 
     await ri_app1.publish_outbound(msg1)
     await ri_app1.publish_outbound(msg2)

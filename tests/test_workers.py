@@ -3,6 +3,7 @@ import importlib.metadata
 import pytest
 import sentry_sdk
 from trio import fail_after, open_memory_channel, sleep
+from typing import Optional
 
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.workers import BaseWorker
@@ -79,10 +80,11 @@ class SlowSetupWorker(BaseWorker):
     """
 
     async def setup(self):
-        self.s_exc, self.exc = open_memory_channel[Exception|None](1)
+        self.s_exc, self.exc = open_memory_channel[Optional[Exception]|None](1)
         await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
         await sleep(0.1)
         await self.setup_receive_outbound_connector("ro", self.handle_out)
+        await self.start_consuming()
 
     async def handle_in(self, message: Message):
         # We catch and log exceptions in message handlers, so the only way the
@@ -217,7 +219,6 @@ async def test_aclose_pending_inbound(nursery, worker, connector_factory):
     blocked until the handler finishes.
     """
     ro_ri = await connector_factory.setup_ro("ri")
-    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 
@@ -245,7 +246,6 @@ async def test_aclose_pending_event(nursery, worker, connector_factory):
     the handler finishes.
     """
     ro_ri = await connector_factory.setup_ro("ri")
-    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 
@@ -273,7 +273,6 @@ async def test_aclose_pending_outbound(nursery, worker, connector_factory):
     blocked until the handler finishes.
     """
     ri_ro = await connector_factory.setup_ri("ro")
-    await connector_factory.start_consuming()
     await worker.setup()
     assert not worker.is_closed
 

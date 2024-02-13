@@ -134,16 +134,15 @@ class ConnectorFactory(AsyncResource):
 
     async def setup_ri(self, name: str) -> RIConn:
         conn = await RIConn.create(self.nursery, self.amqp, name)
+        await conn.conn.start_consuming()
         self._connectors.add(conn.conn)
         return conn
 
     async def setup_ro(self, name: str) -> ROConn:
         conn = await ROConn.create(self.nursery, self.amqp, name)
+        await conn.conn.start_consuming()
         self._connectors.add(conn.conn)
         return conn
-
-    async def start_consuming(self):
-        await self._connectors.start_consuming()
 
 
 T = TypeVar("T")
