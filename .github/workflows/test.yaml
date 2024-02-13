@@ -16,7 +16,6 @@ jobs:
           - 5672:5672
     strategy:
       matrix:
-        # Python 3.12 support needs some work, apparently.
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v3
