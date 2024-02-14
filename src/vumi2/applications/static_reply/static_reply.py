@@ -14,16 +14,12 @@ class StaticReplyApplication(BaseWorker):
     """
     A static reply application
 
-    It will reply to any inbound message with the exonfigured reply text
+    It will reply to any inbound message with the configured reply text
     """
 
     config: StaticReplyConfig
 
     async def setup(self) -> None:
-        await self.setup_receive_outbound_connector(
-            connector_name=self.config.transport_name,
-            outbound_handler=self.handle_outbound_message,
-        )
         await self.setup_receive_inbound_connector(
             connector_name=self.config.transport_name,
             inbound_handler=self.handle_inbound_message,
@@ -35,12 +31,9 @@ class StaticReplyApplication(BaseWorker):
     async def handle_inbound_message(self, message: Message):
         reply_msg = message.reply(self.config.reply_text, Session.CLOSE)
 
-        await self.receive_outbound_connectors[
+        await self.receive_inbound_connectors[
             self.config.transport_name
-        ].publish_inbound(reply_msg)
+        ].publish_outbound(reply_msg)
 
     async def handle_event(self, event: Event):
-        pass
-
-    async def handle_outbound_message(self, message: Message):
         pass

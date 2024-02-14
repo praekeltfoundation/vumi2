@@ -27,12 +27,11 @@ async def test_static_reply(static_reply, connector_factory):
         transport_type=TransportType.USSD,
     )
 
-    ri_test = await connector_factory.setup_ri(TEST_CONFIG["transport_name"])
     ro_test = await connector_factory.setup_ro(TEST_CONFIG["transport_name"])
 
     await ro_test.publish_inbound(msg1)
 
-    reply = await ri_test.consume_inbound()
+    reply = await ro_test.consume_outbound()
 
     assert reply.content == TEST_CONFIG["reply_text"]
     assert reply.session_event == Session.CLOSE
