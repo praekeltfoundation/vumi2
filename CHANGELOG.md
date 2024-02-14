@@ -8,6 +8,9 @@
 - Fix connector startup error (#53, #54)
 
 ### Changed
+- Drop support for Python 3.9 and 3.10 (#55)
+- Update dependencies and add support for Python 3.12 (#56, #57)
+- Switch to timezone-aware objects for message timestamps (#58)
 
 ## [0.1.0] - 2023-04-05
 

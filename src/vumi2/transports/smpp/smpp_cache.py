@@ -1,5 +1,3 @@
-from typing import Optional
-
 import cattrs
 from attrs import define
 
@@ -7,24 +5,19 @@ from vumi2.message_caches import TimeoutDict
 
 
 class BaseSmppCache:  # pragma: no cover
-    def __init__(self, config: dict) -> None:
-        ...
+    def __init__(self, config: dict) -> None: ...
 
     async def store_multipart(
         self, ref_num: int, tot_num: int, part_num: int, content: str
-    ) -> Optional[str]:
-        ...
+    ) -> str | None: ...
 
     async def store_smpp_message_id(
         self, vumi_message_id: str, smpp_message_id: str
-    ) -> None:
-        ...
+    ) -> None: ...
 
-    async def delete_smpp_message_id(self, smpp_message_id: str) -> None:
-        ...
+    async def delete_smpp_message_id(self, smpp_message_id: str) -> None: ...
 
-    async def get_smpp_message_id(self, smpp_message_id: str) -> Optional[str]:
-        ...
+    async def get_smpp_message_id(self, smpp_message_id: str) -> str | None: ...
 
 
 @define
@@ -40,7 +33,7 @@ class InMemorySmppCache(BaseSmppCache):
 
     async def store_multipart(
         self, ref_num: int, tot_num: int, part_num: int, content: str
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Stores the one part of a multipart message in the cache. If this results in all
         the parts being stored in the cache, removes them from the cache and returns
@@ -68,7 +61,7 @@ class InMemorySmppCache(BaseSmppCache):
         """
         self._smpp_msg_id.pop(smpp_message_id, None)
 
-    async def get_smpp_message_id(self, smpp_message_id: str) -> Optional[str]:
+    async def get_smpp_message_id(self, smpp_message_id: str) -> str | None:
         """
         Returns the vumi message ID for the given smpp message id
         """

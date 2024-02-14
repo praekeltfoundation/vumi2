@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Optional, Union
+from functools import partial
+from typing import Any
 from uuid import uuid4
 
 import cattrs
@@ -12,7 +13,7 @@ VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 def deserialise_vumi_timestamp(value: str, _: Any) -> datetime:
     if "." not in value[-10:]:
         value = f"{value}.0"
-    return datetime.strptime(value, VUMI_DATE_FORMAT)
+    return datetime.strptime(value, VUMI_DATE_FORMAT).replace(tzinfo=UTC)
 
 
 def serialise_vumi_timestamp(value: datetime) -> str:
@@ -76,18 +77,18 @@ class Message:
     transport_type: TransportType
     message_version: str = "20110921"
     message_type: str = "user_message"
-    timestamp: datetime = Factory(datetime.utcnow)
+    timestamp: datetime = Factory(partial(datetime.now, tz=UTC))
     routing_metadata: dict = Factory(dict)
     helper_metadata: dict = Factory(dict)
     message_id: str = Factory(generate_message_id)
-    in_reply_to: Optional[str] = None
-    provider: Optional[str] = None
+    in_reply_to: str | None = None
+    provider: str | None = None
     session_event: Session = Session.NONE
-    content: Optional[str] = None
+    content: str | None = None
     transport_metadata: dict = Factory(dict)
-    group: Optional[str] = None
-    to_addr_type: Optional[AddressType] = None
-    from_addr_type: Optional[AddressType] = None
+    group: str | None = None
+    to_addr_type: AddressType | None = None
+    from_addr_type: AddressType | None = None
 
     def serialise(self) -> dict[str, Any]:
         return cattrs.unstructure(self)
@@ -97,7 +98,7 @@ class Message:
         return cattrs.structure(data, cls)
 
     def reply(
-        self, content: Optional[str] = None, session_event=Session.RESUME, **kwargs
+        self, content: str | None = None, session_event=Session.RESUME, **kwargs
     ) -> "Message":
         for f in [
             "to_addr",
@@ -135,14 +136,14 @@ class Event:
     event_type: EventType = field()
     message_version: str = "20110921"
     message_type: str = "event"
-    timestamp: datetime = Factory(datetime.utcnow)
+    timestamp: datetime = Factory(partial(datetime.now, tz=UTC))
     routing_metadata: dict = Factory(dict)
     helper_metadata: dict = Factory(dict)
-    transport_metadata: Optional[dict] = Factory(dict)
+    transport_metadata: dict | None = Factory(dict)
     event_id: str = Factory(generate_message_id)
-    sent_message_id: Optional[str] = None
-    nack_reason: Optional[str] = None
-    delivery_status: Optional[DeliveryStatus] = None
+    sent_message_id: str | None = None
+    nack_reason: str | None = None
+    delivery_status: DeliveryStatus | None = None
 
     @event_type.validator
     def _check_event_type(self, _, value: EventType) -> None:
@@ -169,4 +170,4 @@ class Event:
         return cattrs.structure(data, cls)
 
 
-MessageType = Union[Message, Event]
+MessageType = Message | Event

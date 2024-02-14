@@ -9,7 +9,7 @@ Currently under development.
 ## Development
 This project uses [poetry](https://python-poetry.org/docs/#installation) for packaging and dependancy management, so install that first.
 
-Ensure you're also running at least python 3.7, `python --version`.
+Ensure you're also running at least python 3.11, `python --version`.
 
 Then you can install the dependencies
 ```bash

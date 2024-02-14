@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any
 
 import cattrs
 from attrs import define, field
@@ -128,12 +128,12 @@ class JunebugOutboundMessage:
     """
 
     content: str
-    to: Optional[str] = None
-    from_addr: Optional[str] = None
-    group: Optional[str] = None
-    reply_to: Optional[str] = None
-    event_url: Optional[str] = None
-    event_auth_token: Optional[str] = None
+    to: str | None = None
+    from_addr: str | None = None
+    group: str | None = None
+    reply_to: str | None = None
+    event_url: str | None = None
+    event_auth_token: str | None = None
     priority: int = 1
     channel_data: dict[str, Any] = field(factory=dict)
 
@@ -143,7 +143,7 @@ class JunebugOutboundMessage:
 
     @classmethod
     def deserialise(
-        cls, data: dict[str, Any], default_from: Optional[str] = None
+        cls, data: dict[str, Any], default_from: str | None = None
     ) -> "JunebugOutboundMessage":
         if data.get("from") is None:
             data["from"] = default_from

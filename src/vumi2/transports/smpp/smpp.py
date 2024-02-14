@@ -1,5 +1,4 @@
 from logging import getLogger
-from typing import Optional
 
 from async_amqp import AmqpProtocol  # type: ignore
 from attrs import Factory, define
@@ -21,9 +20,9 @@ class SmppTransceiverTransportConfig(BaseConfig):
     port: int = 2775
     system_id: str = "smppclient1"
     password: str = "password"
-    system_type: Optional[str] = None
+    system_type: str | None = None
     interface_version: int = 34
-    address_range: Optional[str] = None
+    address_range: str | None = None
     smpp_enquire_link_interval: int = 55
     sequencer_class: str = "vumi2.transports.smpp.sequencers.InMemorySequencer"
     sequencer_config: dict = Factory(dict)
