@@ -21,7 +21,7 @@ class ToAddressRouterConfig(BaseConfig):
     to_address_mappings: dict[str, str] = Factory(dict)
     message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
     message_cache_config: dict = Factory(dict)
-    default_app: str = None
+    default_app: str | None = None
 
 
 class ToAddressRouter(BaseWorker):
