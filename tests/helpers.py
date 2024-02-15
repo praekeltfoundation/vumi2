@@ -94,8 +94,14 @@ class RIConn:
     async def consume_inbound(self) -> Message:
         return await self._recv_in.receive()
 
+    async def consume_inbound_nowait(self) -> Message:
+        return await self._recv_in.receive_nowait()
+
     async def consume_event(self) -> Event:
         return await self._recv_ev.receive()
+
+    async def consume_event_nowait(self) -> Event:
+        return await self._recv_ev.receive_nowait()
 
     async def publish_outbound(self, message: Message):
         return await self.conn.publish_outbound(message)
