@@ -1,6 +1,15 @@
 # Changelog
 
-## [0.1.1.dev0] - UNRELEASED
+## [0.1.2.dev0] - UNRELEASED
+
+### Added
+
+### Fixed
+
+### Changed
+- Add default app to ToAddressRouter (#60)
+
+## [0.1.1] - 2024-02-13
 
 ### Added
 
