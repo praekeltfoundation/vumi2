@@ -36,6 +36,14 @@ async def to_addr_router_duplicate_default(worker_factory):
         yield worker
 
 
+@pytest.fixture()
+async def to_addr_router_multiple_matches(worker_factory):
+    new_config = TEST_CONFIG.copy()
+    new_config["to_address_mappings"]["app2"] = r"^1"
+    async with worker_factory.with_cleanup(ToAddressRouter, new_config) as worker:
+        yield worker
+
+
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
@@ -233,6 +241,27 @@ async def test_to_addr_router_inbound_no_default(
 
     with pytest.raises(WouldBlock):
         await ri_app2.consume_inbound_nowait()
+
+
+async def test_to_addr_router_inbound_multiple_matches(to_addr_router_multiple_matches, connector_factory):
+    """
+    Should only send message to the first app where the mapping regex matches
+    """
+    await to_addr_router_multiple_matches.setup()
+    msg = Message(
+        to_addr="12345",
+        from_addr="54321",
+        transport_name="test",
+        transport_type=TransportType.SMS,
+    )
+    ri_app1 = await connector_factory.setup_ri("app1")
+    ri_app2 = await connector_factory.setup_ri("app2")
+
+    await to_addr_router_multiple_matches.handle_inbound_message(msg)
+
+    assert msg == await ri_app1.consume_inbound()
+    with pytest.raises(WouldBlock):
+        assert msg == await ri_app2.consume_inbound()
 
 
 async def test_to_addr_router_outbound(to_addr_router, connector_factory):
