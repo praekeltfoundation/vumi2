@@ -1,8 +1,17 @@
 # Changelog
 
-## [0.1.2.dev0] - UNRELEASED
+## [0.1.3.dev0] - UNRELEASED
 
 ### Added
+
+### Fixed
+
+### Changed
+
+## [0.1.2] - 2024-02-19
+
+### Added
+Add static reply application (#59, #61)
 
 ### Fixed
 
