@@ -28,6 +28,14 @@ async def to_addr_router_no_default(worker_factory):
         yield worker
 
 
+@pytest.fixture()
+async def to_addr_router_duplicate_default(worker_factory):
+    new_config = TEST_CONFIG.copy()
+    new_config["default_app"] = "app1"
+    async with worker_factory.with_cleanup(ToAddressRouter, new_config) as worker:
+        yield worker
+
+
 def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
@@ -49,6 +57,22 @@ async def test_to_addr_router_setup(to_addr_router):
     assert set(to_addr_router.receive_outbound_connectors.keys()) == set(
         receive_outbound_connectors
     )
+
+
+async def test_to_addr_router_setup_duplicate_default(to_addr_router_duplicate_default):
+    """
+    It should not attempt to add a duplicate connector if the default app is one of the
+    to address mappings
+    """
+    await to_addr_router_duplicate_default.setup()
+    receive_inbound_connectors = ["test1", "test2"]
+    receive_outbound_connectors = ["app1", "app2"]
+    assert set(
+        to_addr_router_duplicate_default.receive_inbound_connectors.keys()
+    ) == set(receive_inbound_connectors)
+    assert set(
+        to_addr_router_duplicate_default.receive_outbound_connectors.keys()
+    ) == set(receive_outbound_connectors)
 
 
 async def test_to_addr_router_event_no_routing(to_addr_router):
