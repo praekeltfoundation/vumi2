@@ -50,12 +50,10 @@ class ToAddressRouter(BaseWorker):
                 connector_name=name, outbound_handler=self.handle_outbound_message
             )
 
-        if (
-            self.config.default_app
-            and self.config.default_app not in self.receive_outbound_connectors
-        ):
-            self.default_connector = await self.setup_receive_outbound_connector(
-                connector_name=self.config.default_app,
+        default_app = self.config.default_app
+        if default_app and default_app not in self.receive_outbound_connectors:
+            await self.setup_receive_outbound_connector(
+                connector_name=default_app,
                 outbound_handler=self.handle_outbound_message,
             )
 
