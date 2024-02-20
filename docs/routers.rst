@@ -13,7 +13,7 @@ To address router
 
 A to address router routes inbound messages from one or many transports according to the
 to address on the message. The address is matched against a list of patterns, and is
-sent to the first applications whose configured pattern is matched against.
+sent to the first application whose configured pattern is matched against.
 
 A default application can also be configured to forward any messages that do not match
 any of the patterns.
@@ -64,7 +64,7 @@ For example:
         - ussd_transport
     to_address_mappings:
         - name: home_application
-          pattern "^\\*1234#$"
+          pattern: "^\\*1234#$"
         - name: app2
-          pattern "^\\*1234\\*1#$"
+          pattern: "^\\*1234\\*1#$"
     default_app: home_application
