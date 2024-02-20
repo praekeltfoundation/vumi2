@@ -1,6 +1,7 @@
 import re
 from logging import getLogger
 from re import Pattern
+from typing import TypedDict
 
 import trio
 from async_amqp.protocol import AmqpProtocol  # type: ignore
@@ -15,10 +16,15 @@ from vumi2.workers import BaseWorker
 logger = getLogger(__name__)
 
 
+class ToAddressMapping(TypedDict):
+    name: str
+    pattern: str
+
+
 @define
 class ToAddressRouterConfig(BaseConfig):
     transport_names: list[str] = Factory(list)
-    to_address_mappings: list[dict[str, str]] = Factory(list)
+    to_address_mappings: list[ToAddressMapping] = Factory(list)
     message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
     message_cache_config: dict = Factory(dict)
     default_app: str | None = None
