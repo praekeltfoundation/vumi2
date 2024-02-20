@@ -18,7 +18,7 @@ logger = getLogger(__name__)
 @define
 class ToAddressRouterConfig(BaseConfig):
     transport_names: list[str] = Factory(list)
-    to_address_mappings: dict[str, str] = Factory(dict)
+    to_address_mappings: list[dict[str, str]] = Factory(list)
     message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
     message_cache_config: dict = Factory(dict)
     default_app: str | None = None
@@ -44,10 +44,11 @@ class ToAddressRouter(BaseWorker):
     async def setup(self):
         self.mappings: list[tuple[str, Pattern]] = []
 
-        for name, pattern in self.config.to_address_mappings.items():
-            self.mappings.append((name, re.compile(pattern)))
+        for mapping in self.config.to_address_mappings:
+            self.mappings.append((mapping["name"], re.compile(mapping["pattern"])))
             await self.setup_receive_outbound_connector(
-                connector_name=name, outbound_handler=self.handle_outbound_message
+                connector_name=mapping["name"],
+                outbound_handler=self.handle_outbound_message,
             )
 
         default_app = self.config.default_app
@@ -73,6 +74,7 @@ class ToAddressRouter(BaseWorker):
         for name, pattern in self.mappings:
             if pattern.match(addr):
                 matched_names.append(name)
+                # return [name]
 
         if self.config.default_app and not matched_names:
             return [self.config.default_app]
