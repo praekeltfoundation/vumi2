@@ -1,15 +1,15 @@
 import pytest
-from trio import WouldBlock, open_memory_channel
+from trio import WouldBlock, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, MessageType, TransportType
 from vumi2.routers import ToAddressRouter
 
 TEST_CONFIG = {
     "transport_names": ["test1", "test2"],
-    "to_address_mappings": {
-        "app1": r"^1",
-        "app2": r"^2",
-    },
+    "to_address_mappings": [
+        {"name": "app1", "pattern": r"^1"},
+        {"name": "app2", "pattern": r"^2"},
+    ],
     "default_app": "app3",
 }
 
@@ -32,6 +32,17 @@ async def to_addr_router_no_default(worker_factory):
 async def to_addr_router_duplicate_default(worker_factory):
     new_config = TEST_CONFIG.copy()
     new_config["default_app"] = "app1"
+    async with worker_factory.with_cleanup(ToAddressRouter, new_config) as worker:
+        yield worker
+
+
+@pytest.fixture()
+async def to_addr_router_multiple_matches(worker_factory):
+    new_config = TEST_CONFIG.copy()
+    new_config["to_address_mappings"] = [
+        {"name": "app1", "pattern": r"^1"},
+        {"name": "app2", "pattern": r"^1"},
+    ]
     async with worker_factory.with_cleanup(ToAddressRouter, new_config) as worker:
         yield worker
 
@@ -162,7 +173,7 @@ async def test_to_addr_router_event_no_default(
     await to_addr_router_no_default.handle_event(event)
 
     with pytest.raises(WouldBlock):
-        await ri_app3.consume_event_nowait()
+        ri_app3.consume_event_nowait()
 
 
 async def test_to_addr_router_inbound(to_addr_router, connector_factory):
@@ -232,7 +243,30 @@ async def test_to_addr_router_inbound_no_default(
     assert msg1 == await ri_app1.consume_inbound()
 
     with pytest.raises(WouldBlock):
-        await ri_app2.consume_inbound_nowait()
+        ri_app2.consume_inbound_nowait()
+
+
+async def test_to_addr_router_inbound_multiple_matches(
+    to_addr_router_multiple_matches, connector_factory
+):
+    """
+    Should only send message to the first app where the mapping regex matches
+    """
+    await to_addr_router_multiple_matches.setup()
+    msg = Message(
+        to_addr="12345",
+        from_addr="54321",
+        transport_name="test",
+        transport_type=TransportType.SMS,
+    )
+    ri_app1 = await connector_factory.setup_ri("app1")
+    ri_app2 = await connector_factory.setup_ri("app2")
+
+    await to_addr_router_multiple_matches.handle_inbound_message(msg)
+    await sleep(0.1)
+    assert msg == await ri_app1.consume_inbound()
+    with pytest.raises(WouldBlock):
+        assert msg == ri_app2.consume_inbound_nowait()
 
 
 async def test_to_addr_router_outbound(to_addr_router, connector_factory):

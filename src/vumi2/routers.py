@@ -16,9 +16,15 @@ logger = getLogger(__name__)
 
 
 @define
+class ToAddressMapping:
+    name: str
+    pattern: str
+
+
+@define
 class ToAddressRouterConfig(BaseConfig):
     transport_names: list[str] = Factory(list)
-    to_address_mappings: dict[str, str] = Factory(dict)
+    to_address_mappings: list[ToAddressMapping] = Factory(list)
     message_cache_class: str = "vumi2.message_caches.MemoryMessageCache"
     message_cache_config: dict = Factory(dict)
     default_app: str | None = None
@@ -44,10 +50,11 @@ class ToAddressRouter(BaseWorker):
     async def setup(self):
         self.mappings: list[tuple[str, Pattern]] = []
 
-        for name, pattern in self.config.to_address_mappings.items():
-            self.mappings.append((name, re.compile(pattern)))
+        for mapping in self.config.to_address_mappings:
+            self.mappings.append((mapping.name, re.compile(mapping.pattern)))
             await self.setup_receive_outbound_connector(
-                connector_name=name, outbound_handler=self.handle_outbound_message
+                connector_name=mapping.name,
+                outbound_handler=self.handle_outbound_message,
             )
 
         default_app = self.config.default_app
@@ -68,24 +75,20 @@ class ToAddressRouter(BaseWorker):
 
     # TODO: Teardown
 
-    async def _get_matched_mapping_names(self, addr):
-        matched_names = []
+    async def _get_matched_mapping_name(self, addr):
         for name, pattern in self.mappings:
             if pattern.match(addr):
-                matched_names.append(name)
+                return name
 
-        if self.config.default_app and not matched_names:
-            return [self.config.default_app]
-
-        return matched_names
+        return self.config.default_app
 
     async def handle_inbound_message(self, message: Message):
         logger.debug("Processing inbound message %s", message)
 
-        matched_names = await self._get_matched_mapping_names(message.to_addr)
-        for name in matched_names:
-            logger.debug("Routing inbound message to %s", name)
-            await self.receive_outbound_connectors[name].publish_inbound(message)
+        app_name = await self._get_matched_mapping_name(message.to_addr)
+        if app_name:
+            logger.debug("Routing inbound message to %s", app_name)
+            await self.receive_outbound_connectors[app_name].publish_inbound(message)
 
     async def handle_event(self, event: Event):
         logger.debug("Processing event %s", event)
@@ -94,10 +97,10 @@ class ToAddressRouter(BaseWorker):
             logger.info("Cannot find outbound for event %s, not routing", event)
             return
 
-        matched_names = await self._get_matched_mapping_names(outbound.from_addr)
-        for name in matched_names:
-            logger.debug("Routing event to %s", name)
-            await self.receive_outbound_connectors[name].publish_event(event)
+        app_name = await self._get_matched_mapping_name(outbound.from_addr)
+        if app_name:
+            logger.debug("Routing event to %s", app_name)
+            await self.receive_outbound_connectors[app_name].publish_event(event)
 
     async def handle_outbound_message(self, message: Message):
         logger.debug("Processing outbound message %s", message)
