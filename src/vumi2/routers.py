@@ -69,25 +69,20 @@ class ToAddressRouter(BaseWorker):
 
     # TODO: Teardown
 
-    async def _get_matched_mapping_names(self, addr):
-        matched_names = []
+    async def _get_matched_mapping_name(self, addr):
         for name, pattern in self.mappings:
             if pattern.match(addr):
-                matched_names.append(name)
-                # return [name]
+                return name
 
-        if self.config.default_app and not matched_names:
-            return [self.config.default_app]
-
-        return matched_names
+        return self.config.default_app
 
     async def handle_inbound_message(self, message: Message):
         logger.debug("Processing inbound message %s", message)
 
-        matched_names = await self._get_matched_mapping_names(message.to_addr)
-        for name in matched_names:
-            logger.debug("Routing inbound message to %s", name)
-            await self.receive_outbound_connectors[name].publish_inbound(message)
+        app_name = await self._get_matched_mapping_name(message.to_addr)
+        if app_name:
+            logger.debug("Routing inbound message to %s", app_name)
+            await self.receive_outbound_connectors[app_name].publish_inbound(message)
 
     async def handle_event(self, event: Event):
         logger.debug("Processing event %s", event)
@@ -96,10 +91,10 @@ class ToAddressRouter(BaseWorker):
             logger.info("Cannot find outbound for event %s, not routing", event)
             return
 
-        matched_names = await self._get_matched_mapping_names(outbound.from_addr)
-        for name in matched_names:
-            logger.debug("Routing event to %s", name)
-            await self.receive_outbound_connectors[name].publish_event(event)
+        app_name = await self._get_matched_mapping_name(outbound.from_addr)
+        if app_name:
+            logger.debug("Routing event to %s", app_name)
+            await self.receive_outbound_connectors[app_name].publish_event(event)
 
     async def handle_outbound_message(self, message: Message):
         logger.debug("Processing outbound message %s", message)
