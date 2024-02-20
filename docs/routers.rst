@@ -13,7 +13,10 @@ To address router
 
 A to address router routes inbound messages from one or many transports according to the
 to address on the message. The address is matched against a list of patterns, and is
-sent to any applications whose configured pattern is matched against.
+sent to the first applications whose configured pattern is matched against.
+
+A default application can also be configured to forward any messages that do not match
+any of the patterns.
 
 Outbound messages from applications are routed to the transport that the are in reply
 to. The ``transport_name`` field on the message is used to determine which transport
@@ -34,9 +37,9 @@ for the additional configuration options available for all workers.
    The names of the transports that we're consuming inbound messages from, and routing outbound messages to.
 
 .. py:data:: to_address_mappings
-   :type: dict[str, str]
+   :type: list[dict[str, str]]
 
-   The keys of this dictionary are the application names to send the inbound messages to, and the values are the regular expression patterns to match against
+   A list of dictionaries with `name` and `pattern` keys, where the name value is the application name to send the inbound message to, and the pattern value is the regular expression pattern to match against.
 
 .. py:data:: message_cache_class
    :type: str
@@ -48,6 +51,11 @@ for the additional configuration options available for all workers.
 
    The config for the specified message cache.
 
+.. py:data:: default_app
+   :type: str
+
+   The default application name to forward any messages that do not match ay of the `to_address_mappings`. Defaults to ``None``.
+
 For example:
 
 .. code-block:: yaml
@@ -55,5 +63,8 @@ For example:
     transport_names:
         - ussd_transport
     to_address_mappings:
-        home_application: "^\\*1234#$"
-        app2: "^\\*1234\\*1#$"
+        - name: home_application
+          pattern "^\\*1234#$"
+        - name: app2
+          pattern "^\\*1234\\*1#$"
+    default_app: home_application
