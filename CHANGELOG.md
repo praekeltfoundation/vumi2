@@ -1,12 +1,21 @@
 # Changelog
 
-## [0.1.3.dev0] - UNRELEASED
+## [0.2.1.dev0] - UNRELEASED
 
 ### Added
 
 ### Fixed
 
 ### Changed
+
+## [0.2.0] - 2024-02-20
+
+### Added
+
+### Fixed
+
+### Changed
+- Limit toaddressrouter to one mapping match. This is a breaking change because of a new config format for the ToAddressRouter (#62)
 
 ## [0.1.2] - 2024-02-19
 
