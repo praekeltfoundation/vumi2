@@ -1,7 +1,6 @@
 import re
 from logging import getLogger
 from re import Pattern
-from typing import TypedDict
 
 import trio
 from async_amqp.protocol import AmqpProtocol  # type: ignore
@@ -16,7 +15,8 @@ from vumi2.workers import BaseWorker
 logger = getLogger(__name__)
 
 
-class ToAddressMapping(TypedDict):
+@define
+class ToAddressMapping:
     name: str
     pattern: str
 
@@ -51,9 +51,9 @@ class ToAddressRouter(BaseWorker):
         self.mappings: list[tuple[str, Pattern]] = []
 
         for mapping in self.config.to_address_mappings:
-            self.mappings.append((mapping["name"], re.compile(mapping["pattern"])))
+            self.mappings.append((mapping.name, re.compile(mapping.pattern)))
             await self.setup_receive_outbound_connector(
-                connector_name=mapping["name"],
+                connector_name=mapping.name,
                 outbound_handler=self.handle_outbound_message,
             )
 

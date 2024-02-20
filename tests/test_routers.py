@@ -55,7 +55,7 @@ async def ignore_message(_: MessageType) -> None:
     return
 
 
-async def test_to_addr_router_setup1(to_addr_router):
+async def test_to_addr_router_setup(to_addr_router):
     """
     Sets up all the consumers and publishers according to the config
     """
