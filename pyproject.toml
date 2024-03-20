@@ -27,7 +27,7 @@ hypercorn = "^0.16.0"
 httpx = "^0.26.0"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.2.0"
+black = "^24.3.0"
 mypy = "^1.8.0"
 pytest = "^8.0.0"
 pytest-trio = "^0.8.0"
