@@ -577,3 +577,43 @@ async def test_short_message_multipart(sm_processer: ShortMessageProcessor):
     assert msg.content == "part1part2"
     assert msg.from_addr == "27820001001"
     assert msg.to_addr == "123456"
+
+
+async def test_invalid_delivery_report_esm_class_bad_encoding(
+    dr_processer: DeliveryReportProcesser, caplog
+):
+    """
+    If the ESM class says this is a delivery report, and it isn't UTF8-compatible,
+    then log a warning and don't return any event
+    """
+    handled, event = await dr_processer.handle_deliver_sm(
+        DeliverSM(
+            esm_class=EsmClass(
+                EsmClassMode.DEFAULT, EsmClassType.SMSC_DELIVERY_RECEIPT
+            ),
+            short_message=b"\xa4\xe8 bad bytes",
+        )
+    )
+    assert handled is False
+    assert event is None
+    [log] = [log for log in caplog.records if log.levelno >= logging.WARNING]
+
+    assert (
+        log.getMessage()
+        == "esm_class SMSC_DELIVERY_RECEIPT indicates delivery report, but regex"
+        " does not match content: ¤è bad bytes"
+    )
+
+
+async def test_delivery_report_body_bad_encoding(dr_processer: DeliveryReportProcesser):
+    """
+    If it is not valid UTF-8, don't throw a UnicodeDecodeError
+    """
+    handled, event = await dr_processer.handle_deliver_sm(
+        DeliverSM(
+            esm_class=EsmClass(EsmClassMode.DEFAULT, EsmClassType.DEFAULT),
+            short_message=b"\xa4\xe8 bad bytes",
+        )
+    )
+    assert handled is False
+    assert event is None

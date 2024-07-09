@@ -360,7 +360,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         if esm_class.type == EsmClassType.DEFAULT:
             return False, None
 
-        content = pdu.params["short_message"].decode()
+        content = pdu.params["short_message"].decode("latin1")
         match = self.regex.match(content)
         if not match:
             logger.warning(
@@ -383,7 +383,7 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
         Try to decode the body as a delivery report, even if the esm_class doesn't
         say it's a delivery report
         """
-        content = pdu.params["short_message"].decode()
+        content = pdu.params["short_message"].decode("latin1")
         match = self.regex.match(content)
         if not match:
             return False, None
