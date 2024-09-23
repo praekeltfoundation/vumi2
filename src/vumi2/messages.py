@@ -11,6 +11,9 @@ VUMI_DATE_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
 
 
 def deserialise_vumi_timestamp(value: str, _: Any) -> datetime:
+    # External systems may give us a timezone-aware UTC timestamp.
+    if value.endswith("Z"):
+        value = value[:-1]
     if "." not in value[-10:]:
         value = f"{value}.0"
     return datetime.strptime(value, VUMI_DATE_FORMAT).replace(tzinfo=UTC)

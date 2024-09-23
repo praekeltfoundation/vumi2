@@ -167,6 +167,17 @@ def test_vumi_timestamp():
     assert deserialise_vumi_timestamp("2022-05-16 12:13:14", None) == ts
 
 
+def test_deserialise_utc_vumi_timestamp():
+    """
+    If we get a timestamp with a trailing Z UTC timezone indicator, we can
+    deserialise it.
+    """
+    ts = datetime(2022, 5, 16, 12, 13, 14, 123456, tzinfo=UTC)
+    assert deserialise_vumi_timestamp("2022-05-16 12:13:14.123456Z", None) == ts
+    ts = datetime(2022, 5, 16, 12, 13, 14, tzinfo=UTC)
+    assert deserialise_vumi_timestamp("2022-05-16 12:13:14Z", None) == ts
+
+
 def test_generate_message_id():
     """
     Should return hex representation of uuid v4
