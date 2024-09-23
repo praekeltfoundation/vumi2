@@ -5,6 +5,7 @@
 ### Added
 
 ### Fixed
+- Correctly parse message timestamps with a trailing Z UTC indicator
 
 ### Changed
 
