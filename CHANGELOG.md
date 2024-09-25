@@ -5,7 +5,8 @@
 ### Added
 
 ### Fixed
-- Correctly parse message timestamps with a trailing Z UTC indicator
+- Decode potential delivery reports as latin1 to prevent encoding-related crashes (#71)
+- Correctly parse message timestamps with a trailing Z UTC indicator (#74)
 
 ### Changed
 
