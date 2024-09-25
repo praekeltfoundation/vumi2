@@ -1,12 +1,20 @@
 # Changelog
 
-## [0.2.1.dev0] - UNRELEASED
+## [0.2.2.dev0] - UNRELEASED
+
+### Added
+
+### Fixed
+- Correctly parse message timestamps with a trailing Z UTC indicator (#74)
+
+### Changed
+
+## [0.2.1] - 2024-07-09 (with 0.2.1.dev0 in pyproject.toml)
 
 ### Added
 
 ### Fixed
 - Decode potential delivery reports as latin1 to prevent encoding-related crashes (#71)
-- Correctly parse message timestamps with a trailing Z UTC indicator (#74)
 
 ### Changed
 
