@@ -74,3 +74,19 @@ If you're using an editor that supports [LSP](https://microsoft.github.io/langua
 ```
 
 Configuring LSP depends on your editor. In most cases, the default configuration for the relevant plugin or extension should be suitable.
+
+## Release process
+
+To release a new version, follow these steps:
+
+1. Make sure all relevant PRs are merged and that all necessary QA testing is complete
+1. Make sure release notes are up to date and accurate
+1. In one commit on the `main` branch:
+   - Update the version number in `pyproject.toml` to the release version
+   - Replace the UNRELEASED header in `CHANGELOG.md` with the release version and date
+1. Tag the release commit with the release version (for example, `v0.2.1` for version `0.2.1`)
+1. Push the release commit and tag
+1. In one commit on the `main` branch:
+   - Update the version number in `pyproject.toml` to the next pre-release version
+   - Add a new UNRELEASED header in `CHANGELOG.md`
+1. Push the post-release commit
