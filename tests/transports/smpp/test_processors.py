@@ -337,6 +337,33 @@ async def test_submit_sm_msg_length(submit_sm_processor: SubmitShortMessageProce
     assert submit_sm_processor._get_msg_length(split_msg=True) == 134
 
 
+async def test_submit_sm_outbound_vumi_message_with_double_qoute(
+    submit_sm_processor: SubmitShortMessageProcessor,
+):
+    """
+    Creates a valid PDU representing the outbound vumi message, storing the contents of
+    long messages in the message_payload portion
+    """
+    message = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="sms",
+        transport_type=TransportType.SMS,
+        content="Moenie van MomConnect vergeet nie! Antwoord met die woord “SMS” op hierdie"
+        * 10,
+    )
+    submit_sm_processor.config.multipart_handling = MultipartHandling.message_payload
+    [pdu] = await submit_sm_processor.handle_outbound_message(message)
+    assert pdu.params["source_addr"] == b"12345"
+    assert pdu.params["destination_addr"] == b"+27820001001"
+    assert pdu.params["short_message"] is None
+    assert (
+        pdu.params["message_payload"]
+        == b"Moenie van MomConnect vergeet nie! Antwoord met die woord \xe2\x80\x9cSMS\xe2\x80\x9d op hierdie"
+        * 10
+    )
+
+
 async def test_delivery_report_optional_params(
     dr_processer: DeliveryReportProcesser, smpp_cache: InMemorySmppCache
 ):

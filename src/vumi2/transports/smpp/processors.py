@@ -159,7 +159,10 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         """
         # TODO: support USSD over SMPP
         codec = DataCodingCodecs[self.config.data_coding.name]
-        message_content = (message.content or "").encode(codec.value)
+        try:
+            message_content = (message.content or "").encode(codec.value)
+        except Exception as e:
+            message_content = (message.content or "").encode("utf-8")
 
         if (
             self.config.multipart_handling == MultipartHandling.short_message
