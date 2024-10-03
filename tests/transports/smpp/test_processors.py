@@ -349,7 +349,8 @@ async def test_submit_sm_outbound_vumi_message_with_double_qoute(
         from_addr="12345",
         transport_name="sms",
         transport_type=TransportType.SMS,
-        content="Moenie van MomConnect vergeet nie! Antwoord met die woord “SMS” op hierdie"
+        content="Moenie van MomConnect vergeet nie! Antwoord"
+        "met die woord “SMS” op hierdie"
         * 10,
     )
     submit_sm_processor.config.multipart_handling = MultipartHandling.message_payload
@@ -359,7 +360,8 @@ async def test_submit_sm_outbound_vumi_message_with_double_qoute(
     assert pdu.params["short_message"] is None
     assert (
         pdu.params["message_payload"]
-        == b"Moenie van MomConnect vergeet nie! Antwoord met die woord \xe2\x80\x9cSMS\xe2\x80\x9d op hierdie"
+        == b"Moenie van MomConnect vergeet nie! Antwoord"
+        b"met die woord \xe2\x80\x9cSMS\xe2\x80\x9d op hierdie"
         * 10
     )
 
