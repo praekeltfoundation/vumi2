@@ -1,13 +1,13 @@
 import os
 from argparse import Namespace
-from pathlib import Path
+
+import pytest
 
 from vumi2.config import (
     BaseConfig,
     load_config,
     load_config_from_cli,
     load_config_from_environment,
-    load_config_from_file,
     structure,
 )
 
@@ -77,10 +77,6 @@ def test_load_config_from_environment():
     assert config_obj.amqp.username == "guest"
 
 
-def test_load_config_from_nonexisting_file():
-    assert load_config_from_file(path=Path("nonexisting")) == {}
-
-
 def test_load_config_from_cli():
     # Make sure we don't have a stray config file set in the environment.
     assert "VUMI_CONFIG_FILE" not in os.environ
@@ -142,3 +138,15 @@ def test_missing_default_config_file():
     config = load_config(cli=Namespace())
 
     assert config == BaseConfig()
+
+
+def test_missing_nondefault_config_file(monkeypatch, tmp_path):
+    """
+    If a path to a config file is explicitly provided, it's an error for
+    the file to not be there.
+    """
+    # tmp_path was created for this test and is guaranteed to be empty.
+    monkeypatch.setenv("VUMI_CONFIG_FILE", str(tmp_path / "404.yaml"))
+
+    with pytest.raises(FileNotFoundError):
+        load_config(cli=Namespace())

@@ -146,10 +146,15 @@ def load_config_from_file(path: Path) -> dict[str, Any]:
     Loads a config from a yaml file, if it exists, otherwise returns an empty
     dictionary.
     """
-    if path.exists():
-        with path.open() as f:
-            return yaml.safe_load(f)
-    return {}
+    # FIXME: Ideally we'd only ignore missing configs if the VUMI_CONFIG_FILE
+    # envvar isn't set, but there may be deployments that rely on the current
+    # behaviour. On the other hand, we're already modifying the current
+    # behaviour in ways that may break stuff. :shrugging-emoji:
+    if str(path) == "config.yaml" and not path.exists():
+        return {}
+
+    with path.open() as f:
+        return yaml.safe_load(f)
 
 
 def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
