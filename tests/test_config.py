@@ -1,7 +1,6 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
 from vumi2.config import (
     BaseConfig,
@@ -105,26 +104,26 @@ def test_load_config_from_cli():
     assert config_obj.worker_concurrency == 5
 
 
-def test_load_config(monkeypatch):
+def test_load_config(monkeypatch, tmp_path):
     # CLI config should override environment config
     cli = Namespace()
     cli.worker_concurrency = "5"
     # Environment config should override file config
     monkeypatch.setenv("WORKER_CONCURRENCY", "15")
     monkeypatch.setenv("AMQP_HOSTNAME", "localhost")
-    with NamedTemporaryFile("w") as f:
-        monkeypatch.setenv("VUMI_CONFIG_FILE", f.name)
-        f.write(
-            """
-            amqp:
-                hostname: overwritten
-                port: 1234
-            worker_concurrency: 10
-            """
-        )
-        f.flush()
-        config = load_config(cli=cli)
 
+    config_path = tmp_path / "test-config.yaml"
+    config_path.write_text(
+        """
+        amqp:
+            hostname: overwritten
+            port: 1234
+        worker_concurrency: 10
+        """
+    )
+    monkeypatch.setenv("VUMI_CONFIG_FILE", str(config_path))
+
+    config = load_config(cli=cli)
     assert config.amqp.port == 1234
     assert config.amqp.hostname == "localhost"
     assert config.worker_concurrency == 5
