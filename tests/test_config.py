@@ -83,6 +83,9 @@ def test_load_config_from_nonexisting_file():
 
 
 def test_load_config_from_cli():
+    # Make sure we don't have a stray config file set in the environment.
+    assert "VUMI_CONFIG_FILE" not in os.environ
+
     cli = Namespace()
     # For CLI, non-specified values are None
     cli.amqp_host = None
@@ -102,15 +105,15 @@ def test_load_config_from_cli():
     assert config_obj.worker_concurrency == 5
 
 
-def test_load_config():
+def test_load_config(monkeypatch):
     # CLI config should override environment config
     cli = Namespace()
     cli.worker_concurrency = "5"
     # Environment config should override file config
-    os.environ["WORKER_CONCURRENCY"] = "15"
-    os.environ["AMQP_HOSTNAME"] = "localhost"
+    monkeypatch.setenv("WORKER_CONCURRENCY", "15")
+    monkeypatch.setenv("AMQP_HOSTNAME", "localhost")
     with NamedTemporaryFile("w") as f:
-        os.environ["VUMI_CONFIG_FILE"] = f.name
+        monkeypatch.setenv("VUMI_CONFIG_FILE", f.name)
         f.write(
             """
             amqp:
@@ -125,3 +128,18 @@ def test_load_config():
     assert config.amqp.port == 1234
     assert config.amqp.hostname == "localhost"
     assert config.worker_concurrency == 5
+
+
+def test_missing_default_config_file():
+    """
+    A missing default config file is okay, we ignore it and get config from
+    other places.
+    """
+    # Make sure we don't have a stray config file set in the environment.
+    assert "VUMI_CONFIG_FILE" not in os.environ
+
+    # Load a config with no cli args, assuming no other config-related envvars
+    # are set. This should give us default values for everything.
+    config = load_config(cli=Namespace())
+
+    assert config == BaseConfig()
