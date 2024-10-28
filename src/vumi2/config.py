@@ -141,16 +141,12 @@ def _combine_nested_dictionaries(*args: dict[Any, Any]):
     return result
 
 
-def load_config_from_file(path: Path) -> dict[str, Any]:
+def load_config_from_file(path: Path | None) -> dict[str, Any]:
     """
-    Loads a config from a yaml file, if it exists, otherwise returns an empty
-    dictionary.
+    Load config information from a file if one is specified, otherwise
+    return an empty dict.
     """
-    # FIXME: Ideally we'd only ignore missing configs if the VUMI_CONFIG_FILE
-    # envvar isn't set, but there may be deployments that rely on the current
-    # behaviour. On the other hand, we're already modifying the current
-    # behaviour in ways that may break stuff. :shrugging-emoji:
-    if str(path) == "config.yaml" and not path.exists():
+    if path is None:
         return {}
 
     with path.open() as f:
@@ -169,7 +165,8 @@ def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
     - Command line arguments
     """
     cli = Namespace() if cli is None else cli
-    config_path = Path(os.environ.get("VUMI_CONFIG_FILE", "config.yaml"))
+    config_path_envvar = os.environ.get("VUMI_CONFIG_FILE", "")
+    config_path = Path(config_path_envvar) if config_path_envvar else None
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
     config_env = load_config_from_environment(
         cls=cls, prefix=config_prefix, source=os.environ
