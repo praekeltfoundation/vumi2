@@ -1,5 +1,4 @@
 import contextlib
-import importlib
 import io
 from argparse import ArgumentParser
 from pathlib import Path
@@ -163,9 +162,12 @@ def test_worker_module_with_import_error(monkeypatch, tmp_path):
     reported as a missing worker class.
     """
 
-    _write_python_module(tmp_path / "mod_import_err.py", """
-    import something_that_does_not_exist
-    """)
+    _write_python_module(
+        tmp_path / "mod_import_err.py",
+        """
+        import something_that_does_not_exist
+        """,
+    )
 
     monkeypatch.syspath_prepend(tmp_path)
 
@@ -176,9 +178,12 @@ def test_worker_module_with_import_error(monkeypatch, tmp_path):
     # In this case, the parent module is trying to import something that's a
     # string prefix of out module path, but not a path prefix. It's still a bug
     # in the worker module, so we need to make sure we detect it as one.
-    _write_python_module(tmp_path / "mod_import_err2.py", """
-    import mod_import_err2.bl
-    """)
+    _write_python_module(
+        tmp_path / "mod_import_err2.py",
+        """
+        import mod_import_err2.bl
+        """,
+    )
 
     with pytest.raises(ModuleNotFoundError) as e_info:
         _get_main_command_output(["worker", "mod_import_err2.blah.Class"])
@@ -191,9 +196,12 @@ def test_worker_module_with_other_error(monkeypatch, tmp_path):
     arbitrary exception on import, that exception isn't caught.
     """
 
-    _write_python_module(tmp_path / "mod_assert_err.py", """
-    assert False, "oops"
-    """)
+    _write_python_module(
+        tmp_path / "mod_assert_err.py",
+        """
+        assert False, "oops"
+        """,
+    )
 
     monkeypatch.syspath_prepend(tmp_path)
 

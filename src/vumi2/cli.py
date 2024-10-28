@@ -98,10 +98,11 @@ def class_from_string(class_path: str):
         #   should be handled like any other exception from inside the module
         #   we're importing, so we reraise.
 
-        if e.name == module_path:
+        name = str(e.name)  # This is allowed to be None, so stringify it for mypy
+        if name == module_path:
             # Exact matches are easy.
             raise _cfs_err(class_path, str(e)) from e
-        if module_path.startswith(e.name) and module_path[len(e.name)] == ".":
+        if module_path.startswith(name) and module_path[len(name)] == ".":
             # e.name must be a module path prefix, not just a string prefix.
             raise _cfs_err(class_path, str(e)) from e
         else:
