@@ -175,6 +175,15 @@ def test_worker_module_with_import_error(monkeypatch, tmp_path):
         _get_main_command_output(["worker", "mod_import_err.Class"])
     assert e_info.value.name == "something_that_does_not_exist"
 
+
+def test_worker_module_with_import_error_substring(monkeypatch, tmp_path):
+    """
+    When we try to load a worker class from a module that exists but has
+    its own import error, that import error is raised as-is even if the module
+    being imported is a string prefix (but not a module prefix) of the module
+    we're trying to import.
+    """
+
     # In this case, the parent module is trying to import something that's a
     # string prefix of out module path, but not a path prefix. It's still a bug
     # in the worker module, so we need to make sure we detect it as one.
@@ -184,6 +193,8 @@ def test_worker_module_with_import_error(monkeypatch, tmp_path):
         import mod_import_err2.bl
         """,
     )
+
+    monkeypatch.syspath_prepend(tmp_path)
 
     with pytest.raises(ModuleNotFoundError) as e_info:
         _get_main_command_output(["worker", "mod_import_err2.blah.Class"])
