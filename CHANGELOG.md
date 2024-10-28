@@ -8,6 +8,7 @@
 ### Added
 
 ### Fixed
+- Worker class loading now has better reporting for import-related errors, and no longer masks errors from within the module(s) being imported. (#77, #81)
 
 ## [0.2.2] - 2024-09-25
 
