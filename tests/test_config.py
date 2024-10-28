@@ -1,14 +1,14 @@
 import os
 from argparse import Namespace
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+
+import pytest
 
 from vumi2.config import (
     BaseConfig,
     load_config,
     load_config_from_cli,
     load_config_from_environment,
-    load_config_from_file,
     structure,
 )
 
@@ -78,11 +78,10 @@ def test_load_config_from_environment():
     assert config_obj.amqp.username == "guest"
 
 
-def test_load_config_from_nonexisting_file():
-    assert load_config_from_file(path=Path("nonexisting")) == {}
-
-
 def test_load_config_from_cli():
+    # Make sure we don't have a stray config file set in the environment.
+    assert "VUMI_CONFIG_FILE" not in os.environ
+
     cli = Namespace()
     # For CLI, non-specified values are None
     cli.amqp_host = None
@@ -102,26 +101,81 @@ def test_load_config_from_cli():
     assert config_obj.worker_concurrency == 5
 
 
-def test_load_config():
+def test_load_config_from_multiple_sources(monkeypatch, tmp_path):
+    """
+    Configs from multiple sources are overlaid such that CLI args take
+    priority, followed by envvars, with the config file only applying for
+    fields not specified elsewhere.
+    """
+
     # CLI config should override environment config
     cli = Namespace()
     cli.worker_concurrency = "5"
     # Environment config should override file config
-    os.environ["WORKER_CONCURRENCY"] = "15"
-    os.environ["AMQP_HOSTNAME"] = "localhost"
-    with NamedTemporaryFile("w") as f:
-        os.environ["VUMI_CONFIG_FILE"] = f.name
-        f.write(
-            """
-            amqp:
-                hostname: overwritten
-                port: 1234
-            worker_concurrency: 10
-            """
-        )
-        f.flush()
-        config = load_config(cli=cli)
+    monkeypatch.setenv("WORKER_CONCURRENCY", "15")
+    monkeypatch.setenv("AMQP_HOSTNAME", "localhost")
 
+    config_path = tmp_path / "test-config.yaml"
+    config_path.write_text(
+        """
+        amqp:
+            hostname: overwritten
+            port: 1234
+        worker_concurrency: 10
+        """
+    )
+    monkeypatch.setenv("VUMI_CONFIG_FILE", str(config_path))
+
+    config = load_config(cli=cli)
     assert config.amqp.port == 1234
     assert config.amqp.hostname == "localhost"
     assert config.worker_concurrency == 5
+
+
+def test_no_config_file():
+    """
+    If `VUMI_CONFIG_FILE` is unset (or empty), we don't try to load a
+    config file.
+    """
+    # Make sure we don't have a stray config file set in the environment.
+    assert "VUMI_CONFIG_FILE" not in os.environ
+
+    # Load a config with no cli args, assuming no other config-related envvars
+    # are set. This should give us default values for everything.
+    config = load_config(cli=Namespace())
+    assert config == BaseConfig()
+
+
+def test_no_default_config_file(monkeypatch, tmp_path):
+    """
+    Previously, we looked for "config.yaml" in the current dir if
+    `VUMI_CONFIG_FILE` wasn't specified. This is no longer the case.
+    """
+    # Make sure we don't have a stray config file set in the environment.
+    assert "VUMI_CONFIG_FILE" not in os.environ
+
+    # Change to tmp_dir so we know we're running in a place it's safe to write
+    # stuff to.
+    monkeypatch.chdir(tmp_path)
+
+    # Write a config file with a guaranteed non-default value in it.
+    wc = BaseConfig().worker_concurrency + 1
+    Path("config.yaml").write_text(f"worker_concurrency: {wc}")
+
+    # Load a config with no cli args, assuming no other config-related envvars
+    # are set. This should give us default values for everything unless we're
+    # loading "config.yaml".
+    config = load_config(cli=Namespace())
+    assert config == BaseConfig()
+
+
+def test_missing_config_file(monkeypatch, tmp_path):
+    """
+    If a path to a config file is explicitly provided, it's an error for
+    the file to not be there.
+    """
+    # tmp_path was created for this test and is guaranteed to be empty.
+    monkeypatch.setenv("VUMI_CONFIG_FILE", str(tmp_path / "404.yaml"))
+
+    with pytest.raises(FileNotFoundError):
+        load_config(cli=Namespace())

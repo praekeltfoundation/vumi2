@@ -147,11 +147,14 @@ the option ``AMQP_HOST``.
 
 Configuration file
 ------------------
-The configuration file is the third priority, so will be overwritten by both environment
-variables and command line arguments. It is in YAML format.
 
-There is a special environment variable, ``VUMI_CONFIG_FILE``, which specifies the path
-to the configuration file. It defaults to ``config.yaml``.
+The configuration file is the third priority, so will be overwritten by both
+environment variables and command line arguments. It is in YAML format.
+
+There is a special environment variable, ``VUMI_CONFIG_FILE``, which must be
+set to the configuration file's path. If unset, no configuration file is read.
+(NOTE: Versions prior to 0.3.0 defaulted to ``config.yaml`` and would silently
+ignore missing configuration files, but this is no longer the case.)
 
 Configuration is specified in snake case, and can be nested using dictionaries. For
 example, configuring the AMQP host and port:

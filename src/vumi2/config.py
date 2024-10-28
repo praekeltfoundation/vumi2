@@ -141,15 +141,16 @@ def _combine_nested_dictionaries(*args: dict[Any, Any]):
     return result
 
 
-def load_config_from_file(path: Path) -> dict[str, Any]:
+def load_config_from_file(path: Path | None) -> dict[str, Any]:
     """
-    Loads a config from a yaml file, if it exists, otherwise returns an empty
-    dictionary.
+    Load config information from a file if one is specified, otherwise
+    return an empty dict.
     """
-    if path.exists():
-        with path.open() as f:
-            return yaml.safe_load(f)
-    return {}
+    if path is None:
+        return {}
+
+    with path.open() as f:
+        return yaml.safe_load(f)
 
 
 def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
@@ -164,7 +165,8 @@ def load_config(cls=BaseConfig, cli=None) -> BaseConfig:
     - Command line arguments
     """
     cli = Namespace() if cli is None else cli
-    config_path = Path(os.environ.get("VUMI_CONFIG_FILE", "config.yaml"))
+    config_path_envvar = os.environ.get("VUMI_CONFIG_FILE", "")
+    config_path = Path(config_path_envvar) if config_path_envvar else None
     config_prefix = os.environ.get("VUMI_CONFIG_PREFIX", "")
     config_env = load_config_from_environment(
         cls=cls, prefix=config_prefix, source=os.environ
