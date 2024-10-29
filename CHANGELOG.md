@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0.dev0] - UNRELEASED
+## [0.3.0] - 2024-10-29
 
 ### Changed
 - BREAKING CHANGE: If the `VUMI_CONFIG_FILE` is unset, we no longer look for a default config file. If the envvar is set but the file can't be found, we now exit with an error instead of silently using an empty config (#78)
