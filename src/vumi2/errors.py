@@ -8,3 +8,9 @@ class DuplicateConnectorError(ValueError):
     """
     When adding a connector to a worker that has a connector with the same name
     """
+
+
+class InvalidWorkerClass(VumiError):
+    """
+    TODO
+    """
