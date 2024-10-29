@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1.dev0] - UNRELEASED
+
+### Changed
+
+### Added
+
+### Fixed
+
 ## [0.3.0] - 2024-10-29
 
 ### Changed
