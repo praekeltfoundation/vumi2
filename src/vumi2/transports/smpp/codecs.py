@@ -88,8 +88,12 @@ class Gsm0338Codec(codecs.Codec):
 def register_codecs():
     gsm0338 = Gsm0338Codec()
     CODECS = {
+        # The type for decode wants a more general interface than `bytes`, but
+        # the way we're using it is fine.
         gsm0338.NAME: codecs.CodecInfo(
-            name=gsm0338.NAME, encode=gsm0338.encode, decode=gsm0338.decode
+            name=gsm0338.NAME,
+            encode=gsm0338.encode,
+            decode=gsm0338.decode,  # type: ignore
         )
     }
     codecs.register(CODECS.get)

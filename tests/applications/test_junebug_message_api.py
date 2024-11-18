@@ -11,7 +11,7 @@ from quart import request
 from quart_trio import QuartTrio
 from trio import fail_after, open_memory_channel, open_nursery, sleep
 from trio.abc import ReceiveChannel, SendChannel
-from werkzeug.datastructures import MultiDict
+from werkzeug.datastructures import Headers, MultiDict
 
 from vumi2.applications import JunebugMessageApi
 from vumi2.applications.junebug_message_api.junebug_state_cache import EventHttpInfo
@@ -30,7 +30,7 @@ class ReqInfo:
     method: str
     url: str
     path: str
-    headers: dict[str, str]
+    headers: Headers
     args: MultiDict[str, str]
     body_json: dict
 
