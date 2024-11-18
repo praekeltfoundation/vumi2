@@ -37,14 +37,6 @@ sphinxcontrib-httpdomain = "^1.8.1"
 trio-typing = "^0.10.0"
 types-pyyaml = "^6.0.12.12"
 
-[tool.poetry.group.lsp]
-optional = true
-
-[tool.poetry.group.lsp.dependencies]
-python-lsp-server = "^1.10.0"
-python-lsp-ruff = "^2.1.0"
-pylsp-mypy = "^0.6.8"
-
 [tool.poetry.scripts]
 vumi2 = "vumi2.cli:main"
 
