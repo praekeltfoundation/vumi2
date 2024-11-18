@@ -127,30 +127,40 @@ def mkev(msg_id: str) -> Event:
     )
 
 
+def get_sentry_client():
+    """
+    Fetch the current global sentry client for tests that manipulate sentry.
+    """
+    return sentry_sdk.get_global_scope().client
+
+
 async def test_sentry_unconfigured(worker_factory):
     """
     When sentry_dsn isn't configured, sentry isn't set up.
     """
-    assert sentry_sdk.Hub.current.client is None
+    assert not get_sentry_client().is_active()
+    assert get_sentry_client().dsn is None
     worker_factory(BaseWorker, {})
-    assert sentry_sdk.Hub.current.client is None
+    assert not get_sentry_client().is_active()
+    assert get_sentry_client().dsn is None
 
 
 async def test_sentry_configured(worker_factory):
     """
     When sentry_dsn is configured, sentry is set up at worker creation time.
     """
-    assert sentry_sdk.Hub.current.client is None
+    assert not get_sentry_client().is_active()
+    assert get_sentry_client().dsn is None
     try:
         worker_factory(BaseWorker, {"sentry_dsn": "http://key@example.org/0"})
-        client = sentry_sdk.Hub.current.client
-        assert client is not None
-        assert client.dsn == "http://key@example.org/0"
+        assert get_sentry_client().is_active()
+        assert get_sentry_client().dsn == "http://key@example.org/0"
         version = importlib.metadata.distribution("vumi2").version
-        assert client.options["release"] == version
+        assert get_sentry_client().options["release"] == version
     finally:
         # Disable sentry for the rest of the tests
         sentry_sdk.init()
+    assert get_sentry_client().dsn is None
 
 
 async def test_http_server_unconfigured(worker_factory):

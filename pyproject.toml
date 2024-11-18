@@ -27,7 +27,6 @@ hypercorn = "^0.16.0"
 httpx = "^0.26.0"
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.3.0"
 mypy = "^1.8.0"
 pytest = "^8.0.0"
 pytest-trio = "^0.8.0"
@@ -37,15 +36,6 @@ Sphinx = "^7.2.6"
 sphinxcontrib-httpdomain = "^1.8.1"
 trio-typing = "^0.10.0"
 types-pyyaml = "^6.0.12.12"
-
-[tool.poetry.group.lsp]
-optional = true
-
-[tool.poetry.group.lsp.dependencies]
-python-lsp-server = "^1.10.0"
-python-lsp-ruff = "^2.1.0"
-python-lsp-black = "^2.0.0"
-pylsp-mypy = "^0.6.8"
 
 [tool.poetry.scripts]
 vumi2 = "vumi2.cli:main"
@@ -58,8 +48,16 @@ build-backend = "poetry.core.masonry.api"
 preview = true
 
 [tool.mypy]
+files = "."
+# TODO: Fix the unreachable code and uncomment this.
+# warn_unreachable = true
 ignore_missing_imports = false
 check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "vumi2.*"
+# TODO: Fix the untyped defs and uncomment this.
+# disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 trio_mode = true
@@ -75,14 +73,15 @@ target-version = "py311"
 select = [
     "E", "F", "W", # pycodestyle + pyflakes == flake8 - mccabe
     "I",           # isort
+    "B",           # flake8-bugbear
     "UP",          # pyupgrade
     "S",           # flake8-bandit
-    "B",           # flake8-bugbear
     "C4",          # flake8-comprehensions
     "PIE",         # flake8-pie
-    "PT",          # flake8-pytest-style
     "SIM",         # flake8-simplify
     "PTH",         # flake8-use-pathlib
+    "PT",          # flake8-pytest-style
+    "RUF",         # ruff-specific rules
 ]
 ignore = [
     "SIM117", # Nested `with` is often more readable.

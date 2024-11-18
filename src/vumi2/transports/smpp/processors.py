@@ -117,12 +117,14 @@ class SubmitShortMessageProcessorConfig:
 
 
 class SubmitShortMessageProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict, sequencer: Sequencer) -> None: ...
+    def __init__(self, config: dict, sequencer: Sequencer) -> None:
+        ...
 
     async def handle_outbound_message(  # type: ignore
         self,
         message: Message,
-    ) -> list[PDU]: ...
+    ) -> list[PDU]:
+        ...
 
 
 class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
@@ -278,12 +280,14 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
 
 
 class DeliveryReportProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict) -> None: ...
+    def __init__(self, config: dict) -> None:
+        ...
 
     async def handle_deliver_sm(  # type: ignore
         self,
         pdu: DeliverSM,
-    ) -> tuple[bool, Event | None]: ...
+    ) -> tuple[bool, Event | None]:
+        ...
 
 
 DELIVERY_REPORT_REGEX = (
@@ -436,9 +440,11 @@ class DeliveryReportProcesser(DeliveryReportProcesserBase):
 
 
 class ShortMessageProcesserBase:  # pragma: no cover
-    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None: ...
+    def __init__(self, config: dict, smpp_cache: BaseSmppCache) -> None:
+        ...
 
-    async def handle_deliver_sm(self, pdu: DeliverSM) -> Message | None: ...
+    async def handle_deliver_sm(self, pdu: DeliverSM) -> Message | None:
+        ...
 
 
 @define

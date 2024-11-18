@@ -3,6 +3,8 @@
 ## [0.3.1.dev0] - UNRELEASED
 
 ### Changed
+- Updated dependencies (#82)
+- Replaced black with ruff format and updated various linter configs (#82)
 
 ### Added
 

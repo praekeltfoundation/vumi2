@@ -30,9 +30,9 @@ jobs:
           poetry install
       - name: Lint
         run: |
-          poetry run black --check .
-          poetry run mypy --install-types --non-interactive .
-          poetry run ruff check .
+          poetry run ruff format --check
+          poetry run ruff check
+          poetry run mypy --install-types --non-interactive
       - name: Test
         run: poetry run pytest
       - name: Build docs

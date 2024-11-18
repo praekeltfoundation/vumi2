@@ -139,9 +139,12 @@ async def test_config_conversion_ints(sequencer: InMemorySequencer):
     with pytest.raises(ClassValidationError) as e_info:
         SubmitShortMessageProcessor(cfg_dict, sequencer)
 
-    [cve] = e_info.value.exceptions
-    for e in cve.exceptions:
-        assert str(e) == "Enums must be specified by name"
+    # We get nested ClassValidationErrors until we reach the actual exception
+    # we need to assert on.
+    err: Exception = e_info.value
+    while isinstance(err, ClassValidationError):
+        [err] = err.exceptions
+    assert str(err) == "Enums must be specified by name"
 
 
 async def test_config_conversion_strs(sequencer: InMemorySequencer):
