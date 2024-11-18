@@ -30,7 +30,7 @@ Then you can run a local worker using the `vumi2` command, eg.
 
 To run the autoformatting and linting, run
 ```bash
-~ black . && mypy --install-types . && ruff check .
+~ ruff format && ruff check && mypy --install-types
 ```
 
 For the test runner, we use [pytest](https://docs.pytest.org/):
@@ -54,7 +54,7 @@ If you'd like your editor to handle linting and/or formatting for you, here's ho
 
 1. Install the Python and Ruff extensions
 1. In settings, check the "Python > Linting: Mypy Enabled" box
-1. In settings, set the "Python > Formatting: Provider" to "black"
+1. In settings, set the "Python > Formatting: Provider" to "black" (apparently "ruff format" isn't supported by the Python extension yet and "black" is probably close enough)
 1. If you want to have formatting automatically apply, in settings, check the "Editor: Format On Save" checkbox
 
 Alternatively, add the following to your `settings.json`:
@@ -65,15 +65,6 @@ Alternatively, add the following to your `settings.json`:
     "editor.formatOnSave": true,
 }
 ```
-
-### Editors with LSP support
-
-If you're using an editor that supports [LSP](https://microsoft.github.io/language-server-protocol/), you can install the optional `lsp` dependency group:
-```bash
-~ poetry install --with lsp
-```
-
-Configuring LSP depends on your editor. In most cases, the default configuration for the relevant plugin or extension should be suitable.
 
 ## Release process
 
