@@ -18,11 +18,11 @@ class AatUssdTransportConfig(HttpRpcConfig):
 class AatUssdTransport(HttpRpcTransport):
     config: AatUssdTransportConfig
 
-    EXPECTED_FIELDS = {"msisdn", "provider"}
+    EXPECTED_FIELDS = frozenset({"msisdn", "provider"})
 
     async def handle_raw_inbound_message(self, message_id: str, r: Request) -> None:
         values = r.args
-        missing_fields = self.EXPECTED_FIELDS - set(values.keys())
+        missing_fields = set(self.EXPECTED_FIELDS) - set(values.keys())
         # One of to_addr or request is required
         if values.get("to_addr") is None and values.get("request") is None:
             missing_fields.add("request")
