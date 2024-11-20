@@ -289,6 +289,8 @@ async def test_handle_known_command(client: EsmeClient):
 
 async def test_send_vumi_message(client: EsmeClient, smsc: FakeSmsc):
     """Sends the PDU/s that represent the vumi message"""
+    await smsc.start_and_bind(client)
+
     message = Message(
         to_addr="+27820001001",
         from_addr="12345",
@@ -452,3 +454,18 @@ async def test_handle_enquire_link(client: EsmeClient, smsc: FakeSmsc):
     resp = await smsc.receive_pdu()
     assert isinstance(resp, EnquireLinkResp)
     assert resp.seqNum == pdu.seqNum
+
+
+async def test_no_concurrent_socket_writes(client: EsmeClient, smsc: FakeSmsc):
+    """
+    Multiple tasks may not write to the same socket concurrently.
+    """
+    await smsc.start_and_bind(client)
+
+    # Start two tasks the each try to send a PDU.
+    client.nursery.start_soon(client.send_pdu, SubmitSM(seqNum=4))
+    client.nursery.start_soon(client.send_pdu, SubmitSM(seqNum=5))
+
+    # If this results in concurrent writes to the SMPP socket from separate
+    # tasks, we'll get a BusyResourceError here. If not, the test passes.
+    await smsc.receive_pdu()
