@@ -21,6 +21,7 @@ from smpp.pdu.operations import (  # type: ignore
 from smpp.pdu.pdu_encoding import PDUEncoder  # type: ignore
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus  # type: ignore
 from trio import (
+    MemoryReceiveChannel,
     MemorySendChannel,
     Nursery,
     SocketStream,
@@ -98,6 +99,8 @@ class EsmeClient:
         self.buffer = bytearray()
         self.responses: dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
+        self.pdu_send_channel: MemorySendChannel
+        self.pdu_receive_channel: MemoryReceiveChannel
         self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
 
     async def start(self) -> None:
@@ -243,6 +246,8 @@ class EsmeClient:
             await self.pdu_send_channel.send(pdu)
             return None
 
+        send_channel: MemorySendChannel
+        receive_channel: MemoryReceiveChannel
         send_channel, receive_channel = open_memory_channel(0)
         self.responses[pdu.seqNum] = send_channel
 
