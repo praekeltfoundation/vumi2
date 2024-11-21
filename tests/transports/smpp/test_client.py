@@ -150,17 +150,18 @@ async def client(
 ) -> EsmeClient:
     """An EsmeClient with default config"""
     config = SmppTransceiverTransportConfig()
-    return EsmeClient(
-        nursery,
-        client_stream,
-        config,
-        sequencer,
-        smpp_cache,
-        submit_sm_processor,
-        sm_processor,
-        dr_processor,
-        send_message_channel,
-    )
+
+    EsmeClient.nursery = nursery
+    EsmeClient.stream = client_stream
+    EsmeClient.config = config
+    EsmeClient.sequencer = sequencer
+    EsmeClient.smpp_cache = smpp_cache
+    EsmeClient.submit_sm_processor = submit_sm_processor
+    EsmeClient.sm_processer = sm_processor
+    EsmeClient.dr_processor = dr_processor
+    EsmeClient.send_message_channel = send_message_channel
+
+    return EsmeClient()
 
 
 @pytest.fixture()
