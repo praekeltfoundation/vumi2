@@ -21,6 +21,7 @@ from smpp.pdu.operations import (  # type: ignore
 from smpp.pdu.pdu_encoding import PDUEncoder  # type: ignore
 from smpp.pdu.pdu_types import PDU, AddrNpi, AddrTon, CommandStatus  # type: ignore
 from trio import (
+    MemoryReceiveChannel,
     MemorySendChannel,
     Nursery,
     SocketStream,
@@ -98,6 +99,9 @@ class EsmeClient:
         self.buffer = bytearray()
         self.responses: dict[int, MemorySendChannel] = {}
         self.encoder = PDUEncoder()
+        self.pdu_send_channel: MemorySendChannel
+        self.pdu_receive_channel: MemoryReceiveChannel
+        self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
 
     async def start(self) -> None:
         """
@@ -105,6 +109,7 @@ class EsmeClient:
         starts the periodic sending of enquire links
         """
         self.nursery.start_soon(self.consume_stream)
+        self.nursery.start_soon(self.publish_stream)
         await self.bind(
             system_id=self.config.system_id,
             password=self.config.password,
@@ -141,6 +146,13 @@ class EsmeClient:
                     break
                 pdu = self.encoder.decode(BytesIO(pdu_data))
                 await self.handle_pdu(pdu)
+
+    async def publish_stream(self) -> None:
+        """
+        Publishes pdu, ensuring only one is sent at a time.
+        """
+        async for pdu in self.pdu_receive_channel:
+            await self.stream.send_all(self.encoder.encode(pdu))
 
     async def handle_pdu(self, pdu: PDU) -> None:
         """
@@ -231,12 +243,16 @@ class EsmeClient:
         logger.debug("Sending PDU %s", pdu)
 
         if isinstance(pdu, PDUResponse):
-            await self.stream.send_all(self.encoder.encode(pdu))
+            await self.pdu_send_channel.send(pdu)
             return None
 
-        send_channel, receive_channel = open_memory_channel[PDU](0)
+        send_channel: MemorySendChannel
+        receive_channel: MemoryReceiveChannel
+        send_channel, receive_channel = open_memory_channel(0)
         self.responses[pdu.seqNum] = send_channel
-        await self.stream.send_all(self.encoder.encode(pdu))
+
+        await self.pdu_send_channel.send(pdu)
+
         async for response in receive_channel:
             if check_response and response.status != CommandStatus.ESME_ROK:
                 raise EsmeResponseStatusError(f"Received error response {response}")
@@ -244,7 +260,9 @@ class EsmeClient:
                 raise EsmeResponseStatusError(
                     f"Received response of incorrect type {response}"
                 )
-        return response
+            return response
+
+        return None
 
     async def send_vumi_message(self, message: Message):
         # If we encounter an error in one of the segments of a multipart message,
