@@ -73,17 +73,19 @@ class SmppTransceiverTransport(BaseWorker):
             host=self.config.host, port=self.config.port
         )
         send_channel, receive_channel = open_memory_channel[MessageType](0)
-        self.client = EsmeClient(
-            self.nursery,
-            self.stream,
-            self.config,
-            self.sequencer,
-            self.smpp_cache,
-            self.submit_sm_processor,
-            self.sm_processor,
-            self.dr_processor,
-            send_channel,
-        )
+
+        EsmeClient.nursery = self.nursery
+        EsmeClient.stream = self.stream
+        EsmeClient.config = self.config
+        EsmeClient.sequencer = self.sequencer
+        EsmeClient.smpp_cache = self.smpp_cache
+        EsmeClient.submit_sm_processor = self.submit_sm_processor
+        EsmeClient.sm_processer = self.sm_processor
+        EsmeClient.dr_processor = self.dr_processor
+        EsmeClient.send_message_channel = send_channel
+
+        self.client = EsmeClient()
+
         await self.client.start()
         self.connector = await self.setup_receive_outbound_connector(
             connector_name=self.config.transport_name,

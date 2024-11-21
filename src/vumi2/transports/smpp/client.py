@@ -1,6 +1,6 @@
 from io import BytesIO
 from logging import getLogger
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from smpp.pdu.constants import (  # type: ignore
     command_status_name_map,
@@ -75,32 +75,22 @@ class EsmeClient:
     to send vumi Messages.
     """
 
-    def __init__(
-        self,
-        nursery: Nursery,
-        stream: SocketStream,
-        config: "SmppTransceiverTransportConfig",
-        sequencer: Sequencer,
-        smpp_cache: BaseSmppCache,
-        submit_sm_processor: SubmitShortMessageProcesserBase,
-        sm_processer: ShortMessageProcesserBase,
-        dr_processor: DeliveryReportProcesserBase,
-        send_message_channel: MemorySendChannel,
-    ) -> None:
-        self.config = config
-        self.stream = stream
-        self.nursery = nursery
-        self.sequencer = sequencer
-        self.smpp_cache = smpp_cache
-        self.submit_sm_processor = submit_sm_processor
-        self.sm_processer = sm_processer
-        self.dr_processor = dr_processor
-        self.send_message_channel = send_message_channel
-        self.buffer = bytearray()
-        self.responses: dict[int, MemorySendChannel] = {}
-        self.encoder = PDUEncoder()
-        self.pdu_send_channel: MemorySendChannel
-        self.pdu_receive_channel: MemoryReceiveChannel
+    nursery: Nursery
+    stream: SocketStream
+    config: "SmppTransceiverTransportConfig"
+    sequencer: Sequencer
+    smpp_cache: BaseSmppCache
+    submit_sm_processor: SubmitShortMessageProcesserBase
+    sm_processer: ShortMessageProcesserBase
+    dr_processor: DeliveryReportProcesserBase
+    send_message_channel: MemorySendChannel
+    buffer: bytearray = bytearray()
+    responses: ClassVar[dict[int, MemorySendChannel]] = {}
+    encoder: PDUEncoder = PDUEncoder()
+    pdu_send_channel: MemorySendChannel
+    pdu_receive_channel: MemoryReceiveChannel
+
+    def __init__(self) -> None:
         self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
 
     async def start(self) -> None:
@@ -246,8 +236,6 @@ class EsmeClient:
             await self.pdu_send_channel.send(pdu)
             return None
 
-        send_channel: MemorySendChannel
-        receive_channel: MemoryReceiveChannel
         send_channel, receive_channel = open_memory_channel(0)
         self.responses[pdu.seqNum] = send_channel
 
