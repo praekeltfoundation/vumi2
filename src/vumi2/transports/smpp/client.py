@@ -2,6 +2,7 @@ from io import BytesIO
 from logging import getLogger
 from typing import TYPE_CHECKING, cast
 
+from attr import Factory, define, field
 from smpp.pdu.constants import (  # type: ignore
     command_status_name_map,
     command_status_value_map,
@@ -67,6 +68,7 @@ class EnquireLinkTimeout(EsmeClientError):
     """Didn't receive an enquire link response from the server in time"""
 
 
+@define(slots=False)
 class EsmeClient:
     """
     An SMPP 3.4 compatible client, for use with Vumi messages.
@@ -75,39 +77,27 @@ class EsmeClient:
     to send vumi Messages.
     """
 
-    def __init__(
-        self,
-        nursery: Nursery,
-        stream: SocketStream,
-        config: "SmppTransceiverTransportConfig",
-        sequencer: Sequencer,
-        smpp_cache: BaseSmppCache,
-        submit_sm_processor: SubmitShortMessageProcesserBase,
-        sm_processer: ShortMessageProcesserBase,
-        dr_processor: DeliveryReportProcesserBase,
-        send_message_channel: MemorySendChannel,
-    ) -> None:
-        self.config = config
-        self.stream = stream
-        self.nursery = nursery
-        self.sequencer = sequencer
-        self.smpp_cache = smpp_cache
-        self.submit_sm_processor = submit_sm_processor
-        self.sm_processer = sm_processer
-        self.dr_processor = dr_processor
-        self.send_message_channel = send_message_channel
-        self.buffer = bytearray()
-        self.responses: dict[int, MemorySendChannel] = {}
-        self.encoder = PDUEncoder()
-        self.pdu_send_channel: MemorySendChannel
-        self.pdu_receive_channel: MemoryReceiveChannel
-        self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
+    nursery: Nursery
+    stream: SocketStream
+    config: "SmppTransceiverTransportConfig"
+    sequencer: Sequencer
+    smpp_cache: BaseSmppCache
+    submit_sm_processor: SubmitShortMessageProcesserBase
+    sm_processer: ShortMessageProcesserBase
+    dr_processor: DeliveryReportProcesserBase
+    send_message_channel: MemorySendChannel
+    buffer: bytearray = Factory(bytearray)
+    responses: dict[int, MemorySendChannel] = Factory(dict)
+    encoder: PDUEncoder = Factory(PDUEncoder)
+    pdu_send_channel: MemorySendChannel = field(init=False)
+    pdu_receive_channel: MemoryReceiveChannel = field(init=False)
 
     async def start(self) -> None:
         """
         Starts the client consuming from the TCP tream, completes an SMPP bind, and
         starts the periodic sending of enquire links
         """
+        self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
         self.nursery.start_soon(self.consume_stream)
         self.nursery.start_soon(self.publish_stream)
         await self.bind(
