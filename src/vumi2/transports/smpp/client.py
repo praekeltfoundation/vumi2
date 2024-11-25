@@ -236,7 +236,6 @@ class EsmeClient:
             await self.pdu_send_channel.send(pdu)
             return None
 
-
         send_channel: MemorySendChannel
         receive_channel: MemoryReceiveChannel
         send_channel, receive_channel = open_memory_channel(0)
