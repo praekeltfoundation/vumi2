@@ -1,7 +1,9 @@
 from io import BytesIO
 from logging import getLogger
 from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast
 
+from attr import Factory, define
 from smpp.pdu.constants import (  # type: ignore
     command_status_name_map,
     command_status_value_map,
@@ -67,6 +69,7 @@ class EnquireLinkTimeout(EsmeClientError):
     """Didn't receive an enquire link response from the server in time"""
 
 
+@define(slots=False)
 class EsmeClient:
     """
     An SMPP 3.4 compatible client, for use with Vumi messages.
@@ -75,6 +78,18 @@ class EsmeClient:
     to send vumi Messages.
     """
 
+    nursery: Nursery
+    stream: SocketStream
+    config: "SmppTransceiverTransportConfig"
+    sequencer: Sequencer
+    smpp_cache: BaseSmppCache
+    submit_sm_processor: SubmitShortMessageProcesserBase
+    sm_processer: ShortMessageProcesserBase
+    dr_processor: DeliveryReportProcesserBase
+    send_message_channel: MemorySendChannel
+    buffer: bytearray = Factory(bytearray)
+    responses: dict[int, MemorySendChannel] = Factory(dict)
+    encoder: PDUEncoder = Factory(PDUEncoder)
     def __init__(
         self,
         nursery: Nursery,
@@ -108,6 +123,7 @@ class EsmeClient:
         Starts the client consuming from the TCP tream, completes an SMPP bind, and
         starts the periodic sending of enquire links
         """
+        self.pdu_send_channel, self.pdu_receive_channel = open_memory_channel(0)
         self.nursery.start_soon(self.consume_stream)
         self.nursery.start_soon(self.publish_stream)
         await self.bind(
@@ -246,6 +262,8 @@ class EsmeClient:
             await self.pdu_send_channel.send(pdu)
             return None
 
+        send_channel: MemorySendChannel
+        receive_channel: MemoryReceiveChannel
         send_channel: MemorySendChannel
         receive_channel: MemoryReceiveChannel
         send_channel, receive_channel = open_memory_channel(0)
