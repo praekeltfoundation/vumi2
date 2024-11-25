@@ -91,8 +91,6 @@ class EsmeClient:
     encoder: PDUEncoder = Factory(PDUEncoder)
     pdu_send_channel: MemorySendChannel = field(init=False)
     pdu_receive_channel: MemoryReceiveChannel = field(init=False)
-    send_channel: MemorySendChannel = field(init=False)
-    receive_channel: MemoryReceiveChannel = field(init=False)
 
     async def start(self) -> None:
         """
@@ -238,12 +236,15 @@ class EsmeClient:
             await self.pdu_send_channel.send(pdu)
             return None
 
-        self.send_channel, self.receive_channel = open_memory_channel(0)
-        self.responses[pdu.seqNum] = self.send_channel
+
+        send_channel: MemorySendChannel
+        receive_channel: MemoryReceiveChannel
+        send_channel, receive_channel = open_memory_channel(0)
+        self.responses[pdu.seqNum] = send_channel
 
         await self.pdu_send_channel.send(pdu)
 
-        async for response in self.receive_channel:
+        async for response in receive_channel:
             if check_response and response.status != CommandStatus.ESME_ROK:
                 raise EsmeResponseStatusError(f"Received error response {response}")
             if not isinstance(response, pdu.requireAck):
