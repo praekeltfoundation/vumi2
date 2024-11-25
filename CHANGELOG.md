@@ -5,10 +5,12 @@
 ### Changed
 - Updated dependencies (#82)
 - Replaced black with ruff format and updated various linter configs (#82)
+- Use attrs in the EsmeClient  (#85)
 
 ### Added
 
 ### Fixed
+- added a stream publisher to ensure that one pdu is sent at a time (#83)
 
 ## [0.3.0] - 2024-10-29
 
