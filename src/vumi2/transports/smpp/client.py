@@ -91,8 +91,8 @@ class EsmeClient:
     encoder: PDUEncoder = Factory(PDUEncoder)
     pdu_send_channel: MemorySendChannel = field(init=False)
     pdu_receive_channel: MemoryReceiveChannel = field(init=False)
-    send_channel: MemorySendChannel | None = field(init=False)
-    receive_channel: MemoryReceiveChannel | None = field(init=False)
+    send_channel: MemorySendChannel = field(init=False)
+    receive_channel: MemoryReceiveChannel = field(init=False)
 
     async def start(self) -> None:
         """
