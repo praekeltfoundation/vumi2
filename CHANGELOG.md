@@ -1,5 +1,8 @@
 # Changelog
 
+## [0.3.2.dev0] - UNRELEASED
+
+
 ## [0.3.1] - 2024-12-04
 
 ### Changed
