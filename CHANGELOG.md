@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.1.dev0] - UNRELEASED
+## [0.3.1] - 2024-12-04
 
 ### Changed
 - Updated dependencies (#82)
