@@ -16,13 +16,13 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
-from . import junebug_state_cache
+from .. import state_cache
 from ..errors import JsonDecodeError, ApiError, MessageNotFound
 from .messages import (
-    JunebugOutboundMessage,
-    junebug_event_from_ev,
-    junebug_inbound_from_msg,
-    junebug_outbound_from_msg,
+    TurnOutboundMessage,
+    turn_event_from_ev,
+    turn_inbound_from_msg,
+    turn_outbound_from_msg,
 )
 
 LOG_MSG_HTTP_ERR = (
@@ -45,7 +45,7 @@ logger = getLogger(__name__)
 
 
 @define(kw_only=True)
-class JunebugMessageApiConfig(BaseConfig):
+class TurnChannelsApiConfig(BaseConfig):
     # AMQP connector name. This is also used as `transport_name` for non-reply
     # outbound messages and `channel_id` for events.
     connector_name: str
@@ -78,7 +78,7 @@ class JunebugMessageApiConfig(BaseConfig):
 
     # State cache configuration. Currently limited to in-memory storage with a
     # configurable expiry time.
-    state_cache_class: str = f"{junebug_state_cache.__name__}.MemoryJunebugStateCache"
+    state_cache_class: str = f"{state_cache.__name__}.MemoryStateCache"
     state_cache_config: dict = field(factory=dict)
 
     # Maximum time allowed (in seconds) for outbound message request handling.
@@ -93,16 +93,16 @@ class JunebugMessageApiConfig(BaseConfig):
         return "/".join([self.base_url_path.rstrip("/"), path.lstrip("/")])
 
 
-class JunebugMessageApi(BaseWorker):
+class TurnChannelsApi(BaseWorker):
     """
-    An implementation of the Junebug HTTP message API.
+    An implementation of the Turn Channels API.
 
     Inbound messages and events are sent over HTTP to the configured
     URL(s). Outbound messages are received over HTTP and sent to the
     configured transport.
     """
 
-    config: JunebugMessageApiConfig
+    config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
         state_cache_class = class_from_string(self.config.state_cache_class)
@@ -125,7 +125,7 @@ class JunebugMessageApi(BaseWorker):
         Send the vumi message as an HTTP request to the configured URL.
         """
         logger.debug("Consuming inbound message %s", message)
-        msg = junebug_inbound_from_msg(message, message.transport_name)
+        msg = turn_inbound_from_msg(message, message.transport_name)
         await self.state_cache.store_inbound(message)
 
         headers = {}
@@ -163,11 +163,11 @@ class JunebugMessageApi(BaseWorker):
                 logger.warning(LOG_EV_URL_MISSING, {"event": event})
                 return
             # We have a default event URL and maybe an auth token too, so use it.
-            event_hi = junebug_state_cache.EventHttpInfo(
+            event_hi = state_cache.EventHttpInfo(
                 self.config.default_event_url, self.config.default_event_auth_token
             )
 
-        ev = junebug_event_from_ev(event, self.config.connector_name)
+        ev = turn_event_from_ev(event, self.config.connector_name)
 
         headers = {}
         if event_hi.auth_token is not None:
@@ -199,35 +199,35 @@ class JunebugMessageApi(BaseWorker):
 
                 logger.debug("Received outbound message: %s", msg_dict)
 
-                jom = JunebugOutboundMessage.deserialise(
+                tom = TurnOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-                msg = await self.build_outbound(jom)
+                msg = await self.build_outbound(tom)
 
-                if jom.event_url is not None:
+                if tom.event_url is not None:
                     await self.state_cache.store_event_http_info(
-                        msg.message_id, jom.event_url, jom.event_auth_token
+                        msg.message_id, tom.event_url, tom.event_auth_token
                     )
 
                 await self.connector.publish_outbound(msg)
 
                 # TODO: Special handling of outbound messages?
-                rmsg = junebug_outbound_from_msg(msg, self.config.connector_name)
+                rmsg = turn_outbound_from_msg(msg, self.config.connector_name)
                 return self._response("message submitted", rmsg, HTTPStatus.CREATED)
         except ApiError as e:
             err = {"type": e.name, "message": str(e)}
             return self._response(e.description, {"errors": [err]}, e.status)
 
-    async def build_outbound(self, jom: JunebugOutboundMessage) -> Message:
-        if (msg_id := jom.reply_to) is not None:
+    async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
+        if (msg_id := tom.reply_to) is not None:
             if (inbound := await self.state_cache.fetch_inbound(msg_id)) is not None:
-                return jom.reply_to_vumi(inbound)
-            if jom.to is None or not self.config.allow_expired_replies:
+                return tom.reply_to_vumi(inbound)
+            if tom.to is None or not self.config.allow_expired_replies:
                 raise MessageNotFound(f"Inbound message with id {msg_id} not found")
             # If we get here, we're allowed to send expired replies as new
             # messages and we have a to address to send this one to. That means
             # we can safely treat this as a non-reply.
-        return jom.to_vumi(self.config.connector_name, self.config.transport_type)
+        return tom.to_vumi(self.config.connector_name, self.config.transport_type)
 
     def _response(
         self,
