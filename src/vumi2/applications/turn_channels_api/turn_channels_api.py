@@ -17,7 +17,7 @@ from vumi2.messages import (
 from vumi2.workers import BaseConfig, BaseWorker
 
 from .. import state_cache
-from ..errors import JsonDecodeError, ApiError, MessageNotFound
+from ..errors import ApiError, JsonDecodeError, MessageNotFound
 from .messages import (
     TurnOutboundMessage,
     turn_event_from_ev,

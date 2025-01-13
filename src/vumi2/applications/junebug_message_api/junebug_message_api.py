@@ -16,8 +16,8 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
+from ..errors import ApiError, JsonDecodeError, MessageNotFound
 from . import junebug_state_cache
-from ..errors import JsonDecodeError, ApiError, MessageNotFound
 from .messages import (
     JunebugOutboundMessage,
     junebug_event_from_ev,

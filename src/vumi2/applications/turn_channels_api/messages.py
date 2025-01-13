@@ -12,12 +12,13 @@ from vumi2.messages import (
     TransportType,
 )
 
-from ..errors import ApiUsageError, InvalidBody
+from ..errors import ApiUsageError
 
 
 def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
     """
-    From https://whatsapp.turn.io/docs/api/channel_api#sending-inbound-messages-to-your-channel
+    From
+    https://whatsapp.turn.io/docs/api/channel_api#sending-inbound-messages-to-your-channel
 
     * contact:
       * id: (str) The Turn contact ID
@@ -29,7 +30,8 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
         * body: (str) The text of the message
       * from: (str) The user ID. A Channel can respond to a user using this ID.
       * id: (str) The ID for the message that was received by the Channel.
-      * timestamp: (int) Unix timestamp indicating when received the message from the user.
+      * timestamp: (int) Unix timestamp indicating when received the message
+      from the user.
     """
     turn_dict = message.serialise()
     msg = {
@@ -89,7 +91,8 @@ def turn_event_from_ev(event: Event, channel_id: str) -> dict:
 @define
 class TurnOutboundMessage:
     """
-    From https://whatsapp.turn.io/docs/api/channel_api#receiving-outbound-messages-from-your-channel
+    From
+    https://whatsapp.turn.io/docs/api/channel_api#receiving-outbound-messages-from-your-channel
 
     * to (str) - the address (e.g. MSISDN) to send the message to.
     * from (str) - the address the message is from. May be null if the
@@ -152,8 +155,8 @@ class TurnOutboundMessage:
             from_addr=default_from,
             group=contact["groups"][0]["name"],
             reply_to=default_from,
-            event_url=data.get("event_url", None),
-            event_auth_token=data.get("event_auth_token", None),
+            event_url=data.get("event_url"),
+            event_auth_token=data.get("event_auth_token"),
             priority=1,
             channel_data={},  # TODO
         )
