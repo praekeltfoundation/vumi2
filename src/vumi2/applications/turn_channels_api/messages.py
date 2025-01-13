@@ -19,11 +19,11 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
     """
     From https://whatsapp.turn.io/docs/api/channel_api#sending-inbound-messages-to-your-channel
 
-    * contact: 
+    * contact:
       * id: (str) The Turn contact ID
       * profile:
         * name: (str) The contact's name
-    * message: 
+    * message:
       * type: text, video, audio, button, image, document, sticker or interactive
       * text: When the message type is text, this must be included
         * body: (str) The text of the message
@@ -34,22 +34,21 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
     turn_dict = message.serialise()
     msg = {
         "contact": {
-          "id": turn_dict["to_addr"],
-          "profile": {
-            "name": turn_dict["to_addr"]
-          }
+            "id": turn_dict["to_addr"],
+            "profile": {"name": turn_dict["to_addr"]},
         },
         "message": {
-          "type": "text",
-          "text": {
-            "body": turn_dict["content"],
-          },
-          "from": turn_dict["from_addr"],
-          "id": turn_dict["message_id"],
-          "timestamp": turn_dict["timestamp"]
-        }
+            "type": "text",
+            "text": {
+                "body": turn_dict["content"],
+            },
+            "from": turn_dict["from_addr"],
+            "id": turn_dict["message_id"],
+            "timestamp": turn_dict["timestamp"],
+        },
     }
     return msg
+
 
 # We currently use the inbound message code for building outbound message
 # responses (because the format of a junebug outbound message is different),
@@ -156,7 +155,7 @@ class TurnOutboundMessage:
             event_url=data.get("event_url", None),
             event_auth_token=data.get("event_auth_token", None),
             priority=1,
-            channel_data={}, # TODO
+            channel_data={},  # TODO
         )
 
     def _shared_vumi_fields(self):

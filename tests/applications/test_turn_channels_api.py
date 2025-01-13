@@ -136,7 +136,11 @@ async def http_server(nursery):
     return await HttpServer.start_new(nursery)
 
 
-def mk_config(http_server: HttpServer, default_from_addr: str | None ="+275554202", **config_update) -> dict:
+def mk_config(
+    http_server: HttpServer,
+    default_from_addr: str | None = "+275554202",
+    **config_update,
+) -> dict:
     config = {
         "connector_name": "tca-test",
         "http_bind": "localhost:0",
@@ -180,13 +184,17 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
     )
 
 
-def mkoutbound(content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw) -> dict:
+def mkoutbound(
+    content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw
+) -> dict:
     return {
         "content": content,
         "to": to,
         "reply_to": reply_to,
         "from": from_addr,
-        "context": {"contact": {"phone": to, "groups": [{"name": kw.get("group", "foo")}]}},
+        "context": {
+            "contact": {"phone": to, "groups": [{"name": kw.get("group", "foo")}]}
+        },
         "turn": {"text": {"body": content}},
         **kw,
     }
@@ -588,7 +596,12 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     """
     body = mkoutbound("foo")
 
-    config = mk_config(http_server, None, default_event_url=f"{http_server.bind}/event", default_event_auth_token=None)
+    config = mk_config(
+        http_server,
+        None,
+        default_event_url=f"{http_server.bind}/event",
+        default_event_auth_token=None,
+    )
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
@@ -601,19 +614,19 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
         "code": "Created",
         "description": "message submitted",
         "result": {
-            'contact': {
-                'id': '+1234',
-                'profile': {
-                   'name': '+1234',
+            "contact": {
+                "id": "+1234",
+                "profile": {
+                    "name": "+1234",
                 },
             },
-           'message': {
-               'from': 'None',
-               'text': {
-                   'body': 'foo',
-               },
-               'type': 'text',
-           },
+            "message": {
+                "from": "None",
+                "text": {
+                    "body": "foo",
+                },
+                "type": "text",
+            },
         },
     }
 
@@ -634,7 +647,12 @@ async def test_send_outbound_event_url(worker_factory, tca_ro, http_server):
     """
     body = mkoutbound("foo", event_url=f"{http_server.bind}/event", reply_to=None)
 
-    config = mk_config(http_server, None, default_event_url=f"{http_server.bind}/event", default_event_auth_token=None)
+    config = mk_config(
+        http_server,
+        None,
+        default_event_url=f"{http_server.bind}/event",
+        default_event_auth_token=None,
+    )
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
@@ -647,19 +665,19 @@ async def test_send_outbound_event_url(worker_factory, tca_ro, http_server):
         "code": "Created",
         "description": "message submitted",
         "result": {
-            'contact': {
-                'id': '+1234',
-                'profile': {
-                   'name': '+1234',
+            "contact": {
+                "id": "+1234",
+                "profile": {
+                    "name": "+1234",
                 },
             },
-           'message': {
-               'from': 'None',
-               'text': {
-                   'body': 'foo',
-               },
-               'type': 'text',
-           },
+            "message": {
+                "from": "None",
+                "text": {
+                    "body": "foo",
+                },
+                "type": "text",
+            },
         },
     }
 
@@ -683,7 +701,12 @@ async def test_send_outbound_event_auth(worker_factory, tca_ro, http_server):
     body = mkoutbound(
         "foo", event_url=f"{http_server.bind}/event", event_auth_token=token
     )
-    config = mk_config(http_server, None, default_event_url=f"{http_server.bind}/event", default_event_auth_token=token)
+    config = mk_config(
+        http_server,
+        None,
+        default_event_url=f"{http_server.bind}/event",
+        default_event_auth_token=token,
+    )
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
@@ -696,19 +719,19 @@ async def test_send_outbound_event_auth(worker_factory, tca_ro, http_server):
         "code": "Created",
         "description": "message submitted",
         "result": {
-            'contact': {
-                'id': '+1234',
-                'profile': {
-                   'name': '+1234',
+            "contact": {
+                "id": "+1234",
+                "profile": {
+                    "name": "+1234",
                 },
             },
-           'message': {
-               'from': 'None',
-               'text': {
-                   'body': 'foo',
-               },
-               'type': 'text',
-           },
+            "message": {
+                "from": "None",
+                "text": {
+                    "body": "foo",
+                },
+                "type": "text",
+            },
         },
     }
 
@@ -752,7 +775,12 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     An outbound group message received over HTTP is forwarded over AMQP.
     """
     body = mkoutbound("foo", group="my-group")
-    config = mk_config(http_server, None, default_event_url=f"{http_server.bind}/event", default_event_auth_token=None)
+    config = mk_config(
+        http_server,
+        None,
+        default_event_url=f"{http_server.bind}/event",
+        default_event_auth_token=None,
+    )
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
@@ -765,19 +793,19 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
         "code": "Created",
         "description": "message submitted",
         "result": {
-            'contact': {
-                'id': '+1234',
-                'profile': {
-                   'name': '+1234',
+            "contact": {
+                "id": "+1234",
+                "profile": {
+                    "name": "+1234",
                 },
             },
-           'message': {
-               'from': 'None',
-               'text': {
-                   'body': 'foo',
-               },
-               'type': 'text',
-           },
+            "message": {
+                "from": "None",
+                "text": {
+                    "body": "foo",
+                },
+                "type": "text",
+            },
         },
     }
 
@@ -798,7 +826,12 @@ async def test_send_outbound_reply(worker_factory, http_server, tca_ro):
     inbound = mkmsg("inbound")
     body = mkreply("late", reply_to=inbound.message_id, to="+6789", **{"from": "+9876"})
 
-    config = mk_config(http_server, inbound.message_id, default_event_url=f"{http_server.bind}/event", default_event_auth_token=None)
+    config = mk_config(
+        http_server,
+        inbound.message_id,
+        default_event_url=f"{http_server.bind}/event",
+        default_event_auth_token=None,
+    )
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
@@ -812,19 +845,14 @@ async def test_send_outbound_reply(worker_factory, http_server, tca_ro):
         "code": "Created",
         "description": "message submitted",
         "result": {
-            "contact": {
-                "id": "456",
-                "profile": {
-                    "name": "456"
-                }
-            },
+            "contact": {"id": "456", "profile": {"name": "456"}},
             "message": {
                 "type": "text",
                 "text": {
                     "body": "late",
                 },
                 "from": "123",
-            }
+            },
         },
     }
 
@@ -842,7 +870,7 @@ async def test_send_outbound_reply_no_stored_inbound(tca_worker):
     An outbound reply message received over HTTP cannot be forwarded
     over AMQP if the original message cannot be found.
     """
-    body = mkreply("foo", reply_to="no-such-message", to= "")
+    body = mkreply("foo", reply_to="no-such-message", to="")
     with fail_after(2):
         response = await post_outbound(tca_worker, body)
 
@@ -867,7 +895,7 @@ async def test_send_outbound_no_to_or_reply(tca_worker, tca_ro):
         response = await post_outbound(tca_worker, {"content": "going nowhere"})
 
     expected_err = {
-        "message": 'Missing key: context',
+        "message": "Missing key: context",
         "type": "ApiUsageError",
     }
     assert json.loads(response) == {
@@ -898,19 +926,14 @@ async def test_send_outbound_expired_allowed(worker_factory, http_server, tca_ro
         "code": "Created",
         "description": "message submitted",
         "result": {
-            "contact": {
-                "id": "+6789",
-                "profile": {
-                    "name": "+6789"
-                }
-            },
+            "contact": {"id": "+6789", "profile": {"name": "+6789"}},
             "message": {
                 "type": "text",
                 "text": {
                     "body": "late",
                 },
                 "from": "+275554202",
-            }
+            },
         },
     }
 
