@@ -2,6 +2,7 @@ import json
 import logging
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from uuid import UUID
 
 import pytest
 from attrs import define, field
@@ -195,12 +196,6 @@ def mkreply(content: str, reply_to: str, **kw) -> dict:
         "turn": {"text": {"body": content}},
         **kw,
     }
-
-
-def parse_send_message_response(resp: bytes) -> dict:
-    rjson = json.loads(resp)
-    [rjson["result"]["message"].pop(key) for key in ["id", "timestamp"]]
-    return rjson
 
 
 async def test_inbound_message_amqp(tca_worker, tca_ro, http_server):
@@ -406,26 +401,13 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
             response = await post_outbound(tca_worker, body)
             outbound = await tca_ro.consume_outbound()
 
-    assert parse_send_message_response(response) == {
-        "status": 201,
-        "code": "Created",
-        "description": "message submitted",
-        "result": {
-            "contact": {
-                "id": "+1234",
-                "profile": {
-                    "name": "+1234",
-                },
-            },
-            "message": {
-                "from": "None",
-                "text": {
-                    "body": "foo",
-                },
-                "type": "text",
-            },
-        },
-    }
+    response = json.loads(response)
+    message_id = response["messages"][0]["id"]
+
+    assert isinstance(message_id, str)
+    uuid = UUID(message_id)
+    assert uuid.hex == message_id
+    assert uuid.version == 4
 
     assert outbound.to_addr == "+1234"
     assert outbound.from_addr == "None"
@@ -477,26 +459,13 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
             response = await post_outbound(tca_worker, body)
             outbound = await tca_ro.consume_outbound()
 
-    assert parse_send_message_response(response) == {
-        "status": 201,
-        "code": "Created",
-        "description": "message submitted",
-        "result": {
-            "contact": {
-                "id": "+1234",
-                "profile": {
-                    "name": "+1234",
-                },
-            },
-            "message": {
-                "from": "None",
-                "text": {
-                    "body": "foo",
-                },
-                "type": "text",
-            },
-        },
-    }
+    response = json.loads(response)
+    message_id = response["messages"][0]["id"]
+
+    assert isinstance(message_id, str)
+    uuid = UUID(message_id)
+    assert uuid.hex == message_id
+    assert uuid.version == 4
 
     assert outbound.to_addr == "+1234"
     assert outbound.from_addr == "None"

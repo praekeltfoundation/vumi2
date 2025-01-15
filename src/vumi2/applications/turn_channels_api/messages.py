@@ -20,6 +20,9 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
     From
     https://whatsapp.turn.io/docs/api/channel_api#sending-inbound-messages-to-your-channel
 
+    * message: The message to send to Turn.
+
+    Returns a dict like:
     * contact:
       * id: (str) The Turn contact ID
       * profile:
@@ -51,10 +54,15 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
     return msg
 
 
-# We currently use the inbound message code for building outbound message
-# responses (because the format of an outbound message is different),
-# but that may change in the future.
-turn_outbound_from_msg = turn_inbound_from_msg
+def turn_outbound_from_msg(message: Message) -> dict:
+    """
+    From https://whatsapp.turn.io/docs/api/channel_api#receiving-outbound-messages-from-your-channel
+
+    * message: The message to send to the subscriber.
+
+    Returns a dict like {"messages": [{"id": message.message_id}]}.
+    """
+    return {"messages": [{"id": message.message_id}]}
 
 
 def turn_event_from_ev(event: Event) -> dict:

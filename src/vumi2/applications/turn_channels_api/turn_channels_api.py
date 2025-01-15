@@ -182,8 +182,8 @@ class TurnChannelsApi(BaseWorker):
                 await self.connector.publish_outbound(msg)
 
                 # TODO: Special handling of outbound messages?
-                rmsg = turn_outbound_from_msg(msg, self.config.connector_name)
-                return self._response("message submitted", rmsg, HTTPStatus.CREATED)
+                rmsg = turn_outbound_from_msg(msg)
+                return rmsg
         except ApiError as e:
             err = {"type": e.name, "message": str(e)}
             return self._response(e.description, {"errors": [err]}, e.status)
