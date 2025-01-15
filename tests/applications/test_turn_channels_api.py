@@ -276,7 +276,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
         with fail_after(5):
-            with pytest.raises(TimeoutError) as e: # noqa: PT012
+            with pytest.raises(TimeoutError) as e:  # noqa: PT012
                 async with handle_inbound(tca_worker, msg):
                     await http_server.receive_req()
                     await http_server.send_rsp(RspInfo(code=502, wait=0.3))
