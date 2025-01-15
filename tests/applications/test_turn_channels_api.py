@@ -401,8 +401,8 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
             response = await post_outbound(tca_worker, body)
             outbound = await tca_ro.consume_outbound()
 
-    response = json.loads(response)
-    message_id = response["messages"][0]["id"]
+    lresponse = json.loads(response)
+    message_id = lresponse["messages"][0]["id"]
 
     assert isinstance(message_id, str)
     uuid = UUID(message_id)
@@ -418,7 +418,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.content == "foo"
 
 
-async def test_send_outbound_invalid_json(tca_worker):
+async def test_send_outbound_invalid_json(tca_worker, caplog):
     """
     An attempted send with a non-json body returns an appropriate error.
     """
@@ -429,16 +429,8 @@ async def test_send_outbound_invalid_json(tca_worker):
             await connection.send_complete()
             response = await connection.receive()
 
-    expected_err = {
-        "message": "Expecting value: line 1 column 1 (char 0)",
-        "type": "JsonDecodeError",
-    }
-    assert json.loads(response) == {
-        "status": 400,
-        "code": "Bad Request",
-        "description": "json decode error",
-        "result": {"errors": [expected_err]},
-    }
+    err = [log for log in caplog.records if log.levelno >= logging.ERROR]
+    assert "Error sending message, got error JsonDecodeError. Message: Expecting value: line 1 column 1 (char 0)" in err[0].getMessage()
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):
@@ -459,8 +451,8 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
             response = await post_outbound(tca_worker, body)
             outbound = await tca_ro.consume_outbound()
 
-    response = json.loads(response)
-    message_id = response["messages"][0]["id"]
+    lresponse = json.loads(response)
+    message_id = lresponse["messages"][0]["id"]
 
     assert isinstance(message_id, str)
     uuid = UUID(message_id)
