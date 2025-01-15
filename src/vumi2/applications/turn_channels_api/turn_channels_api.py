@@ -48,7 +48,7 @@ class TurnChannelsApiConfig(BaseConfig):
     # outbound messages and `channel_id` for events.
     connector_name: str
 
-    # Base URL path for HTTP requests. 
+    # Base URL path for HTTP requests.
     vumi_base_url_path: str = ""
 
     # Base URL path for requests to Turn.

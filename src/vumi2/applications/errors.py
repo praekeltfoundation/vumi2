@@ -27,6 +27,7 @@ class MessageNotFound(ApiUsageError):
 class InvalidBody(ApiUsageError):
     name = "invalid_body"
 
+
 class TimeoutError(ApiUsageError):
     name = "TimeoutError"
     description = "timeout"
