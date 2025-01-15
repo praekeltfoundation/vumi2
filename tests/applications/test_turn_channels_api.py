@@ -1,21 +1,20 @@
 import json
 import logging
-from base64 import b64encode
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 import pytest
 from attrs import define, field
-from http import HTTPStatus
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
 from quart import request
 from quart_trio import QuartTrio
 from trio import fail_after, open_memory_channel, open_nursery, sleep
 from trio.abc import ReceiveChannel, SendChannel
-from vumi2.applications.errors import TimeoutError
 from werkzeug.datastructures import Headers, MultiDict
 
 from vumi2.applications import TurnChannelsApi
+from vumi2.applications.errors import TimeoutError
 from vumi2.messages import (
     DeliveryStatus,
     Event,
@@ -277,7 +276,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
         with fail_after(5):
-            with pytest.raises(TimeoutError) as e:
+            with pytest.raises(TimeoutError) as e: # noqa: PT012
                 async with handle_inbound(tca_worker, msg):
                     await http_server.receive_req()
                     await http_server.send_rsp(RspInfo(code=502, wait=0.3))

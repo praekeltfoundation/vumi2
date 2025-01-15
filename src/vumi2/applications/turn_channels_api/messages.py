@@ -63,12 +63,13 @@ def turn_event_from_ev(event: Event) -> dict:
 
     * id (str) - The UUID of the message the event is for.
     * timestamp (str) - The timestamp at which the event occurred.
-    * status (dict) - The status of the event. Currently only sent, delivered, and read are supported.
+    * status (dict) - The status of the event. Currently only sent, delivered, and read
+      are supported.
     """
     ev = {
         "id": event.user_message_id,
         "timestamp": str(int(event.timestamp.timestamp())),
-        "status": "sent",
+        "status": None,
     }
     if event.event_type == EventType.DELIVERY_REPORT:
         ev["status"] = {
@@ -77,6 +78,8 @@ def turn_event_from_ev(event: Event) -> dict:
             DeliveryStatus.DELIVERED: "delivered",
             None: None,
         }[event.delivery_status]
+    else:
+        ev["status"] = "sent"
     return ev
 
 
