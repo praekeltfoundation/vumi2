@@ -16,8 +16,7 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
-from .. import state_cache
-from ..errors import ApiError, JsonDecodeError, MessageNotFound
+from ..errors import ApiError, JsonDecodeError, TimeoutError
 from .messages import (
     TurnOutboundMessage,
     turn_event_from_ev,
@@ -39,7 +38,6 @@ LOG_EV_HTTP_ERR = (
 LOG_EV_HTTP_TIMEOUT = (
     "Timed out sending event after %(timeout)s seconds. Event: %(event)s"
 )
-LOG_EV_URL_MISSING = "Cannot find event URL, missing user_message_id: %(event)s"
 
 logger = getLogger(__name__)
 
@@ -50,36 +48,21 @@ class TurnChannelsApiConfig(BaseConfig):
     # outbound messages and `channel_id` for events.
     connector_name: str
 
-    # The URL to POST inbound messages to.
-    mo_message_url: str
-    # Authorization token to use for inbound message HTTP requests.
-    mo_message_url_auth_token: str | None = None
+    # Base URL path for HTTP requests. 
+    vumi_base_url_path: str = ""
 
-    # The URL to POST events with no associated message info to.
-    default_event_url: str | None = None
-    # Authorization token to use for events with no associates message info.
-    default_event_auth_token: str | None = None
+    # Base URL path for requests to Turn.
+    turn_base_url_path: str = ""
 
-    # Base URL path for outbound message HTTP requests. This has "/messages"
-    # appended to it. For compatibility with existing Junebug API clients, set
-    # it to "/channels/<channel_id>".
-    base_url_path: str = ""
+    # Auth token for requests to Turn.
+    auth_token: str
 
     # This is a required `Message` field, so we need to set it for non-reply
     # outbound messages.
     transport_type: TransportType = TransportType.SMS
 
-    # If None, all outbound messages must be replies or have a from address.
-    default_from_addr: str | None = None
-
-    # If True, outbound messages with both `to` and `reply_to` set will be sent
-    # as non-reply messages if the `reply_to` message can't be found.
-    allow_expired_replies: bool = False
-
-    # State cache configuration. Currently limited to in-memory storage with a
-    # configurable expiry time.
-    state_cache_class: str = f"{state_cache.__name__}.MemoryStateCache"
-    state_cache_config: dict = field(factory=dict)
+    # All outbound messages must be replies or have a from address.
+    default_from_addr: str
 
     # Maximum time allowed (in seconds) for outbound message request handling.
     request_timeout: float = 4 * 60
@@ -89,8 +72,8 @@ class TurnChannelsApiConfig(BaseConfig):
     mo_message_url_timeout: float = 10
     event_url_timeout: float = 10
 
-    def url(self, path: str) -> str:
-        return "/".join([self.base_url_path.rstrip("/"), path.lstrip("/")])
+    def vumi_url(self, path: str) -> str:
+        return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
 
 
 class TurnChannelsApi(BaseWorker):
@@ -105,19 +88,20 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
-        state_cache_class = class_from_string(self.config.state_cache_class)
-        self.state_cache = state_cache_class(self.config.state_cache_config)
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
             self.handle_inbound_message,
             self.handle_event,
         )
-        self.http.app.add_url_rule(
-            self.config.url("/messages"),
-            view_func=self.http_send_message,
-            methods=["POST"],
-        )
-
+        try:
+            self.http.app.add_url_rule(
+                self.config.vumi_url("/messages"),
+                view_func=self.http_send_message,
+                methods=["POST"],
+            )
+        except Exception as e:
+            logger.exception(e)
+            raise e
         await self.start_consuming()
 
     async def handle_inbound_message(self, message: Message) -> None:
@@ -126,21 +110,21 @@ class TurnChannelsApi(BaseWorker):
         """
         logger.debug("Consuming inbound message %s", message)
         msg = turn_inbound_from_msg(message, message.transport_name)
-        await self.state_cache.store_inbound(message)
 
         headers = {}
-        if self.config.mo_message_url_auth_token is not None:
-            headers["Authorization"] = f"Token {self.config.mo_message_url_auth_token}"
+
+        headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
         timeout = self.config.mo_message_url_timeout
         with move_on_after(timeout) as cs:
             async with AsyncClient() as client:
                 resp = await client.post(
-                    self.config.mo_message_url,
+                    self.config.turn_base_url_path.format(message.message_id),
                     json=msg,
                     headers=headers,
                 )
 
+            # TODO: Deal with API rate limits
             if resp.status_code < 200 or resp.status_code >= 300:
                 logger.error(
                     LOG_MSG_HTTP_ERR,
@@ -149,6 +133,7 @@ class TurnChannelsApi(BaseWorker):
 
         if cs.cancelled_caught:
             logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
+            raise TimeoutError()
 
     async def handle_event(self, event: Event) -> None:
         """
@@ -156,27 +141,18 @@ class TurnChannelsApi(BaseWorker):
         for the associated outbound message.
         """
         logger.debug("Consuming event %s", event)
-        event_hi = await self.state_cache.fetch_event_http_info(event.user_message_id)
 
-        if event_hi is None:
-            if self.config.default_event_url is None:
-                logger.warning(LOG_EV_URL_MISSING, {"event": event})
-                return
-            # We have a default event URL and maybe an auth token too, so use it.
-            event_hi = state_cache.EventHttpInfo(
-                self.config.default_event_url, self.config.default_event_auth_token
-            )
-
-        ev = turn_event_from_ev(event, self.config.connector_name)
+        ev = turn_event_from_ev(event)
 
         headers = {}
-        if event_hi.auth_token is not None:
-            headers["Authorization"] = f"Token {event_hi.auth_token}"
+        url = self.config.turn_base_url_path.format(event.user_message_id)
+
+        headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
         timeout = self.config.event_url_timeout
         with move_on_after(timeout) as cs:
             async with AsyncClient() as client:
-                resp = await client.post(event_hi.url, json=ev, headers=headers)
+                resp = await client.post(url, json=ev, headers=headers)
 
             if resp.status_code < 200 or resp.status_code >= 300:
                 logger.error(
@@ -204,11 +180,6 @@ class TurnChannelsApi(BaseWorker):
                 )
                 msg = await self.build_outbound(tom)
 
-                if tom.event_url is not None:
-                    await self.state_cache.store_event_http_info(
-                        msg.message_id, tom.event_url, tom.event_auth_token
-                    )
-
                 await self.connector.publish_outbound(msg)
 
                 # TODO: Special handling of outbound messages?
@@ -219,14 +190,6 @@ class TurnChannelsApi(BaseWorker):
             return self._response(e.description, {"errors": [err]}, e.status)
 
     async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
-        if (msg_id := tom.reply_to) is not None:
-            if (inbound := await self.state_cache.fetch_inbound(msg_id)) is not None:
-                return tom.reply_to_vumi(inbound)
-            if tom.to is None or not self.config.allow_expired_replies:
-                raise MessageNotFound(f"Inbound message with id {msg_id} not found")
-            # If we get here, we're allowed to send expired replies as new
-            # messages and we have a to address to send this one to. That means
-            # we can safely treat this as a non-reply.
         return tom.to_vumi(self.config.connector_name, self.config.transport_type)
 
     def _response(

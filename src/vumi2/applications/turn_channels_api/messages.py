@@ -33,53 +33,45 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
       * timestamp: (int) Unix timestamp indicating when received the message
       from the user.
     """
-    turn_dict = message.serialise()
     msg = {
         "contact": {
-            "id": turn_dict["to_addr"],
-            "profile": {"name": turn_dict["to_addr"]},
+            "id": message.to_addr,
+            "profile": {"name": message.to_addr},
         },
         "message": {
             "type": "text",
             "text": {
-                "body": turn_dict["content"],
+                "body": message.content,
             },
-            "from": turn_dict["from_addr"],
-            "id": turn_dict["message_id"],
-            "timestamp": turn_dict["timestamp"],
+            "from": message.from_addr,
+            "id": message.message_id,
+            "timestamp": str(int(message.timestamp.timestamp())),
         },
     }
     return msg
 
 
 # We currently use the inbound message code for building outbound message
-# responses (because the format of a junebug outbound message is different),
+# responses (because the format of an outbound message is different),
 # but that may change in the future.
 turn_outbound_from_msg = turn_inbound_from_msg
 
 
-def turn_event_from_ev(event: Event, channel_id: str) -> dict:
+def turn_event_from_ev(event: Event) -> dict:
     """
-    From https://junebug.readthedocs.io/en/latest/http_api.html
+    From https://whatsapp.turn.io/docs/api/channel_api#sending-outbound-message-status-to-your-channel
 
-    * event_type (str) - The type of the event. See the list of event
-      types below.
-    * message_id (str) - The UUID of the message the event is for.
+    * id (str) - The UUID of the message the event is for.
     * timestamp (str) - The timestamp at which the event occurred.
-    * event_details (dict) - Details specific to the event type.
+    * status (dict) - The status of the event. Currently only sent, delivered, and read are supported.
     """
-    turn_dict = event.serialise()
     ev = {
-        "id": turn_dict["user_message_id"],
-        "channel_id": channel_id,
-        "timestamp": turn_dict["timestamp"],
-        "event_details": {},
-        "event_type": "sent",
+        "id": event.user_message_id,
+        "timestamp": str(int(event.timestamp.timestamp())),
+        "status": "sent",
     }
-    if event.event_type == EventType.NACK:
-        ev["event_details"] = {"reason": event.nack_reason}
-    elif event.event_type == EventType.DELIVERY_REPORT:
-        ev["event_type"] = {
+    if event.event_type == EventType.DELIVERY_REPORT:
+        ev["status"] = {
             DeliveryStatus.PENDING: "sent",
             DeliveryStatus.FAILED: "sent",
             DeliveryStatus.DELIVERED: "delivered",
@@ -105,12 +97,6 @@ class TurnOutboundMessage:
       The default settings allow 10 minutes to reply to a
       message, after which an error will be returned.
     * content (str) - The text content of the message. Required.
-    * event_url (str) - URL to call for status events (e.g.
-      acknowledgements and delivery reports) related to this message.
-      The default settings allow 2 days for events to arrive, after
-      which they will no longer be forwarded.
-    * event_auth_token (str) - The token to use for authentication if
-      the event_url requires token auth.
     * priority (int) - Delivery priority from 1 to 5. Higher priority
       messages are delivered first. If omitted, priority is 1. Not yet
       implemented.
@@ -124,8 +110,6 @@ class TurnOutboundMessage:
     from_addr: str | None = None
     group: str | None = None
     reply_to: str | None = None
-    event_url: str | None = None
-    event_auth_token: str | None = None
     priority: int = 1
     channel_data: dict[str, Any] = field(factory=dict)
 
@@ -155,8 +139,6 @@ class TurnOutboundMessage:
             from_addr=default_from,
             group=contact["groups"][0]["name"],
             reply_to=default_from,
-            event_url=data.get("event_url"),
-            event_auth_token=data.get("event_auth_token"),
             priority=1,
             channel_data={},  # TODO
         )

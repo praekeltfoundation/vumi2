@@ -3,8 +3,8 @@ from http import HTTPStatus
 
 # FIXME: Do we need this base class?
 class ApiError(Exception):
-    name = "JunebugError"
-    description = "Generic Junebug Error"
+    name = "ApiError"
+    description = "Generic Error"
     status = HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -26,3 +26,7 @@ class MessageNotFound(ApiUsageError):
 
 class InvalidBody(ApiUsageError):
     name = "invalid_body"
+
+class TimeoutError(ApiUsageError):
+    name = "TimeoutError"
+    description = "timeout"
