@@ -25,7 +25,7 @@ class Request:
     method: str
     headers: Headers
     args: MultiDict
-    data: str
+    data: str | bytes
     event: TrioEvent = Factory(TrioEvent)
 
 
