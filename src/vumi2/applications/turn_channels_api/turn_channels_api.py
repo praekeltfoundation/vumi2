@@ -176,7 +176,9 @@ class TurnChannelsApi(BaseWorker):
             # TODO: Log requests that timed out?
             with move_on_after(self.config.request_timeout):
                 try:
-                    request_data: str = await request.get_data(as_text=True)
+                    request_data = await request.get_data(as_text=True)
+                    if isinstance(request_data, bytes):
+                        request_data = request_data.decode()
                     # Verify the hmac signature
                     h = hmac.new(
                         self.config.secret_key.encode(), request_data.encode(), sha256
