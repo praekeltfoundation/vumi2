@@ -31,3 +31,8 @@ class InvalidBody(ApiUsageError):
 class TimeoutError(ApiUsageError):
     name = "TimeoutError"
     description = "timeout"
+
+
+class SignatureMismatchError(ApiUsageError):
+    name = "SignatureMismatchError"
+    description = "signature mismatch"

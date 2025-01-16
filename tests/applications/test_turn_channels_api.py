@@ -1,6 +1,9 @@
+import base64
+import hmac
 import json
 import logging
 from contextlib import asynccontextmanager
+from hashlib import sha256
 from http import HTTPStatus
 from uuid import UUID
 
@@ -106,10 +109,10 @@ async def handle_event(worker: TurnChannelsApi, ev: Event):
 
 
 async def post_outbound(
-    worker: TurnChannelsApi, msg_dict: dict, path="/messages"
+    worker: TurnChannelsApi, msg_dict: dict, path="/messages", signature=""
 ) -> bytes:
     client = worker.http.app.test_client()
-    headers = {"Content-Type": "application/json"}
+    headers = {"Content-Type": "application/json", "X-Turn-Hook-Signature": signature}
     async with client.request(path=path, method="POST", headers=headers) as connection:
         await connection.send(json.dumps(msg_dict).encode())
         await connection.send_complete()
@@ -133,6 +136,7 @@ def mk_config(
         "auth_token": None,
         "vumi_base_url_path": "",
         "turn_base_url_path": f"{http_server.bind}/message",
+        "secret_key": "supersecret",
     }
     return {**config, **config_update}
 
@@ -398,7 +402,13 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
         with fail_after(2):
-            response = await post_outbound(tca_worker, body)
+            h = hmac.new(
+                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+            ).digest()
+            computed_signature = base64.b64encode(h)
+            response = await post_outbound(
+                tca_worker, body, signature=computed_signature
+            )
             outbound = await tca_ro.consume_outbound()
 
     lresponse = json.loads(response)
@@ -418,19 +428,58 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.content == "foo"
 
 
+async def test_send_outbound_invalid_hmac(tca_worker, caplog):
+    """
+    An outbound message with an invalid hmac generates an error
+    """
+    body = mkoutbound("foo")
+    message = json.dumps(body)
+
+    with fail_after(2):
+        client = tca_worker.http.app.test_client()
+        h = hmac.new(b"fake news", message.encode(), sha256).digest()
+        computed_signature = str(base64.b64encode(h))
+        async with client.request(
+            path="/messages",
+            method="POST",
+            headers={"X-Turn-Hook-Signature": computed_signature},
+        ) as connection:
+            await connection.send(message.encode())
+            await connection.send_complete()
+            await connection.receive()
+
+    err = [log for log in caplog.records if log.levelno >= logging.ERROR]
+    assert (
+        "Error sending message, got error SignatureMismatchError. Message:"
+        in err[0].getMessage()
+    )
+
+
 async def test_send_outbound_invalid_json(tca_worker, caplog):
     """
     An attempted send with a non-json body returns an appropriate error.
     """
+    message = "gimme r00t?"
     with fail_after(2):
         client = tca_worker.http.app.test_client()
-        async with client.request(path="/messages", method="POST") as connection:
-            await connection.send(b"gimme r00t?")
+        h = hmac.new(
+            tca_worker.config.secret_key.encode(), message.encode(), sha256
+        ).digest()
+        computed_signature = str(base64.b64encode(h))
+        async with client.request(
+            path="/messages",
+            method="POST",
+            headers={"X-Turn-Hook-Signature": computed_signature},
+        ) as connection:
+            await connection.send(message.encode())
             await connection.send_complete()
-            response = await connection.receive()
+            await connection.receive()
 
     err = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Error sending message, got error JsonDecodeError. Message: Expecting value: line 1 column 1 (char 0)" in err[0].getMessage()
+    assert (
+        "Error sending message, got error JsonDecodeError. "
+        "Message: Expecting value: line 1 column 1 (char 0)" in err[0].getMessage()
+    )
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):
@@ -448,7 +497,13 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
         with fail_after(2):
-            response = await post_outbound(tca_worker, body)
+            h = hmac.new(
+                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+            ).digest()
+            computed_signature = base64.b64encode(h)
+            response = await post_outbound(
+                tca_worker, body, signature=computed_signature
+            )
             outbound = await tca_ro.consume_outbound()
 
     lresponse = json.loads(response)

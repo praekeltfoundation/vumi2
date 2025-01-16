@@ -1,4 +1,7 @@
+import base64
+import hmac
 import json
+from hashlib import sha256
 from http import HTTPStatus
 from logging import getLogger
 from typing import Any
@@ -16,7 +19,7 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
-from ..errors import ApiError, JsonDecodeError, TimeoutError
+from ..errors import ApiError, JsonDecodeError, SignatureMismatchError, TimeoutError
 from .messages import (
     TurnOutboundMessage,
     turn_event_from_ev,
@@ -38,7 +41,7 @@ LOG_EV_HTTP_ERR = (
 LOG_EV_HTTP_TIMEOUT = (
     "Timed out sending event after %(timeout)s seconds. Event: %(event)s"
 )
-LOG_API_ERR = ("Error sending message, got error %(error)s. Message: %(message)s")
+LOG_API_ERR = "Error sending message, got error %(error)s. Message: %(message)s"
 
 logger = getLogger(__name__)
 
@@ -72,6 +75,9 @@ class TurnChannelsApiConfig(BaseConfig):
     # requests.
     mo_message_url_timeout: float = 10
     event_url_timeout: float = 10
+
+    # Secret key used to sign outbound messages.
+    secret_key: str
 
     def vumi_url(self, path: str) -> str:
         return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
@@ -170,7 +176,17 @@ class TurnChannelsApi(BaseWorker):
             # TODO: Log requests that timed out?
             with move_on_after(self.config.request_timeout):
                 try:
-                    msg_dict = json.loads(await request.get_data(as_text=True))
+                    request_data = await request.get_data(as_text=True)
+                    # Verify the hmac signature
+                    h = hmac.new(
+                        self.config.secret_key.encode(), request_data.encode(), sha256
+                    ).digest()
+                    computed_signature = str(base64.b64encode(h))
+                    signature = request.headers.get("X-Turn-Hook-Signature", "")
+                    if not hmac.compare_digest(computed_signature, signature):
+                        raise SignatureMismatchError()
+
+                    msg_dict = json.loads(request_data)
                 except json.JSONDecodeError as e:
                     raise JsonDecodeError(str(e)) from e
 
@@ -183,7 +199,6 @@ class TurnChannelsApi(BaseWorker):
 
                 await self.connector.publish_outbound(msg)
 
-                # TODO: Special handling of outbound messages?
                 rmsg = turn_outbound_from_msg(msg)
                 return rmsg
         except ApiError as e:
