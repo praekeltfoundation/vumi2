@@ -33,6 +33,7 @@ class TimeoutError(ApiUsageError):
     description = "timeout"
 
 
-class SignatureMismatchError(ApiUsageError):
+class SignatureMismatchError(ApiError):
     name = "SignatureMismatchError"
-    description = "signature mismatch"
+    description = "Authentication failed: Invalid HMAC signature"
+    status = HTTPStatus.UNAUTHORIZED

@@ -211,13 +211,9 @@ async def test_inbound_message_amqp(tca_worker, tca_ro, http_server):
     """
     msg = mkmsg("hello")
     with fail_after(2):
-        print("HERE")
         await tca_ro.publish_inbound(msg)
-        print("HERE2")
         req = await http_server.receive_req()
-        print("HERE3")
         await http_server.send_rsp(RspInfo())
-        print("HERE4")
 
     assert req.path == "message"
     assert req.headers["Content-Type"] == "application/json"
@@ -450,7 +446,7 @@ async def test_send_outbound_invalid_hmac(tca_worker, caplog):
 
     err = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert (
-        "Error sending message, got error SignatureMismatchError. Message:"
+        "Error sending message, received HTTP code 401 with error SignatureMismatchError. Message: Authentication failed: Invalid HMAC signature"
         in err[0].getMessage()
     )
 

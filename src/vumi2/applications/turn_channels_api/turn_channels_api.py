@@ -41,7 +41,7 @@ LOG_EV_HTTP_ERR = (
 LOG_EV_HTTP_TIMEOUT = (
     "Timed out sending event after %(timeout)s seconds. Event: %(event)s"
 )
-LOG_API_ERR = "Error sending message, got error %(error)s. Message: %(message)s"
+LOG_API_ERR = "Error sending message, received HTTP code %(code)s with error %(error)s. Message: %(message)s"
 
 logger = getLogger(__name__)
 
@@ -171,7 +171,6 @@ class TurnChannelsApi(BaseWorker):
             logger.error(LOG_EV_HTTP_TIMEOUT, {"timeout": timeout, "event": ev})
 
     async def http_send_message(self) -> dict[Any, Any]:
-        _message_id = generate_message_id()
         try:
             # TODO: Log requests that timed out?
             with move_on_after(self.config.request_timeout):
@@ -204,23 +203,8 @@ class TurnChannelsApi(BaseWorker):
                 rmsg = turn_outbound_from_msg(msg)
                 return rmsg
         except ApiError as e:
-            logger.error(LOG_API_ERR, {"error": e.name, "message": str(e)})
+            logger.error(LOG_API_ERR, {"code": e.status, "error": e.name, "message": e.description})
             raise e
 
     async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
         return tom.to_vumi(self.config.connector_name, self.config.transport_type)
-
-    def _response(
-        self,
-        description: str,
-        data: dict,
-        status=HTTPStatus.OK,
-    ) -> tuple[str, int, dict[str, str]]:
-        headers = {"Content-Type": "application/json"}
-        body = {
-            "status": status.value,
-            "code": status.phrase,
-            "description": description,
-            "result": data,
-        }
-        return json.dumps(body), status.value, headers

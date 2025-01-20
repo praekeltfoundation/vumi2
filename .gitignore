@@ -130,3 +130,6 @@ dmypy.json
 
 # project
 utils/SMPPSim/
+
+# vscode
+.vscode
