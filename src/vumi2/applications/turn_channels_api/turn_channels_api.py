@@ -2,7 +2,6 @@ import base64
 import hmac
 import json
 from hashlib import sha256
-from http import HTTPStatus
 from logging import getLogger
 from typing import Any
 
@@ -15,7 +14,6 @@ from vumi2.messages import (
     Event,
     Message,
     TransportType,
-    generate_message_id,
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
@@ -41,7 +39,10 @@ LOG_EV_HTTP_ERR = (
 LOG_EV_HTTP_TIMEOUT = (
     "Timed out sending event after %(timeout)s seconds. Event: %(event)s"
 )
-LOG_API_ERR = "Error sending message, received HTTP code %(code)s with error %(error)s. Message: %(message)s"
+LOG_API_ERR = (
+    "Error sending message, received HTTP code %(code)s with"
+    " error %(error)s. Message: %(message)s"
+)
 
 logger = getLogger(__name__)
 
@@ -203,7 +204,10 @@ class TurnChannelsApi(BaseWorker):
                 rmsg = turn_outbound_from_msg(msg)
                 return rmsg
         except ApiError as e:
-            logger.error(LOG_API_ERR, {"code": e.status, "error": e.name, "message": e.description})
+            logger.error(
+                LOG_API_ERR,
+                {"code": e.status, "error": e.name, "message": e.description},
+            )
             raise e
 
     async def build_outbound(self, tom: TurnOutboundMessage) -> Message:

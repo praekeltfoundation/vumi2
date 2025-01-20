@@ -446,7 +446,8 @@ async def test_send_outbound_invalid_hmac(tca_worker, caplog):
 
     err = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert (
-        "Error sending message, received HTTP code 401 with error SignatureMismatchError. Message: Authentication failed: Invalid HMAC signature"
+        "Error sending message, received HTTP code 401 with error "
+        "SignatureMismatchError. Message: Authentication failed: Invalid HMAC signature"
         in err[0].getMessage()
     )
 
@@ -473,8 +474,8 @@ async def test_send_outbound_invalid_json(tca_worker, caplog):
 
     err = [log for log in caplog.records if log.levelno >= logging.ERROR]
     assert (
-        "Error sending message, got error JsonDecodeError. "
-        "Message: Expecting value: line 1 column 1 (char 0)" in err[0].getMessage()
+        "Error sending message, received HTTP code 400 with error JsonDecodeError. "
+        "Message: json decode error" in err[0].getMessage()
     )
 
 
