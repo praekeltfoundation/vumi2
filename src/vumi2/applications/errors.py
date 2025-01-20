@@ -2,13 +2,13 @@ from http import HTTPStatus
 
 
 # FIXME: Do we need this base class?
-class JunebugApiError(Exception):
-    name = "JunebugError"
-    description = "Generic Junebug Error"
+class ApiError(Exception):
+    name = "ApiError"
+    description = "Generic Error"
     status = HTTPStatus.INTERNAL_SERVER_ERROR
 
 
-class ApiUsageError(JunebugApiError):
+class ApiUsageError(ApiError):
     name = "ApiUsageError"
     description = "api usage error"
     status = HTTPStatus.BAD_REQUEST
@@ -26,3 +26,14 @@ class MessageNotFound(ApiUsageError):
 
 class InvalidBody(ApiUsageError):
     name = "invalid_body"
+
+
+class TimeoutError(ApiUsageError):
+    name = "TimeoutError"
+    description = "timeout"
+
+
+class SignatureMismatchError(ApiError):
+    name = "SignatureMismatchError"
+    description = "Authentication failed: Invalid HMAC signature"
+    status = HTTPStatus.UNAUTHORIZED
