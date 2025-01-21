@@ -83,6 +83,9 @@ class TurnChannelsApiConfig(BaseConfig):
     def vumi_url(self, path: str) -> str:
         return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
 
+    def turn_url(self, path: str) -> str:
+        return "/".join([self.turn_base_url_path.rstrip("/"), path.lstrip("/")])
+
 
 class TurnChannelsApi(BaseWorker):
     """
@@ -127,7 +130,7 @@ class TurnChannelsApi(BaseWorker):
         with move_on_after(timeout) as cs:
             async with AsyncClient() as client:
                 resp = await client.post(
-                    self.config.turn_base_url_path.format(message.message_id),
+                    self.config.turn_url("/messages"),
                     json=msg,
                     headers=headers,
                 )
@@ -153,14 +156,15 @@ class TurnChannelsApi(BaseWorker):
         ev = turn_event_from_ev(event)
 
         headers = {}
-        url = self.config.turn_base_url_path.format(event.user_message_id)
 
         headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
         timeout = self.config.event_url_timeout
         with move_on_after(timeout) as cs:
             async with AsyncClient() as client:
-                resp = await client.post(url, json=ev, headers=headers)
+                resp = await client.post(
+                    self.config.turn_url("/statuses"), json=ev, headers=headers
+                )
 
             if resp.status_code < 200 or resp.status_code >= 300:
                 logger.error(

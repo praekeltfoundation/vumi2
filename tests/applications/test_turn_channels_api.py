@@ -135,7 +135,7 @@ def mk_config(
         "default_from_addr": default_from_addr,
         "auth_token": None,
         "vumi_base_url_path": "",
-        "turn_base_url_path": f"{http_server.bind}/message",
+        "turn_base_url_path": f"{http_server.bind}",
         "secret_key": "supersecret",
     }
     return {**config, **config_update}
@@ -215,7 +215,7 @@ async def test_inbound_message_amqp(tca_worker, tca_ro, http_server):
         req = await http_server.receive_req()
         await http_server.send_rsp(RspInfo())
 
-    assert req.path == "message"
+    assert req.path == "messages"
     assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "123"
@@ -347,7 +347,7 @@ async def test_forward_nack(worker_factory, http_server):
     """
     ev = mkev("msg-21", EventType.NACK, nack_reason="KaBooM!")
 
-    config = mk_config(http_server, turn_base_url_path=f"{http_server.bind}/event")
+    config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         with fail_after(2):
@@ -355,7 +355,7 @@ async def test_forward_nack(worker_factory, http_server):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
 
-    assert req.path == "event"
+    assert req.path == "statuses"
     assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["status"] == "sent"
     assert req.body_json["id"] == "msg-21"
@@ -368,7 +368,7 @@ async def test_forward_dr(worker_factory, http_server):
     """
     ev = mkev("m-21", EventType.DELIVERY_REPORT, delivery_status=DeliveryStatus.PENDING)
 
-    config = mk_config(http_server, turn_base_url_path=f"{http_server.bind}/event")
+    config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         with fail_after(2):
@@ -376,7 +376,7 @@ async def test_forward_dr(worker_factory, http_server):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
 
-    assert req.path == "event"
+    assert req.path == "statuses"
     assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["status"] == "sent"
     assert req.body_json["id"] == "m-21"
