@@ -100,8 +100,6 @@ class TurnOutboundMessage:
     * to (str) - the address (e.g. MSISDN) to send the message to.
     * from (str) - the address the message is from. May be null if the
       channel only supports a single from address.
-    * group (str) - If supported by the channel, the group to send the
-      messages to. Not required, and may be null
     * reply_to (str) - the uuid of the message being replied to if this
       is a response to a previous message. Important for session-based
       transports like USSD. Optional.
@@ -119,7 +117,6 @@ class TurnOutboundMessage:
     content: str
     to: str | None = None
     from_addr: str | None = None
-    group: str | None = None
     reply_to: str | None = None
     priority: int = 1
     channel_data: dict[str, Any] = field(factory=dict)
@@ -141,12 +138,10 @@ class TurnOutboundMessage:
             raise ApiUsageError("Missing key: turn.text")
         if "body" not in data["turn"]["text"]:
             raise ApiUsageError("Missing key: turn.text.body")
-        contact = data["context"]["contact"]
         return TurnOutboundMessage(
             content=data["turn"]["text"]["body"],
             to=data["to"],
             from_addr=default_from,
-            group=contact["groups"][0]["name"],
             reply_to=default_from,
             priority=1,
             channel_data={},  # TODO
@@ -171,7 +166,6 @@ class TurnOutboundMessage:
         message = {
             "to_addr": self.to,
             "from_addr": self.from_addr,
-            "group": self.group,
             "content": self.content,
             "transport_name": transport_name,
             "transport_type": transport_type,

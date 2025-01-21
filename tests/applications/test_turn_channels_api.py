@@ -184,7 +184,7 @@ def mkoutbound(
         "reply_to": reply_to,
         "from": from_addr,
         "context": {
-            "contact": {"phone": to, "groups": [{"name": kw.get("group", "foo")}]}
+            "contact": {"phone": to}
         },
         "turn": {"text": {"body": content}},
         **kw,
@@ -196,7 +196,7 @@ def mkreply(content: str, reply_to: str, **kw) -> dict:
         "to": kw["to"],
         "content": content,
         "reply_to": reply_to,
-        "context": {"contact": {"phone": kw["to"], "groups": [{"name": "foo"}]}},
+        "context": {"contact": {"phone": kw["to"]}},
         "turn": {"text": {"body": content}},
         **kw,
     }
@@ -417,7 +417,6 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
 
     assert outbound.to_addr == "+1234"
     assert outbound.from_addr == "None"
-    assert outbound.group == "foo"
     assert outbound.in_reply_to is None
     assert outbound.transport_name == "tca-test"
     assert outbound.helper_metadata == {}
@@ -513,7 +512,6 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
 
     assert outbound.to_addr == "+1234"
     assert outbound.from_addr == "None"
-    assert outbound.group == "my-group"
     assert outbound.in_reply_to is None
     assert outbound.transport_name == "tca-test"
     assert outbound.helper_metadata == {}
