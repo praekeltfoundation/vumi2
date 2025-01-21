@@ -183,9 +183,7 @@ def mkoutbound(
         "to": to,
         "reply_to": reply_to,
         "from": from_addr,
-        "context": {
-            "contact": {"phone": to}
-        },
+        "context": {"contact": {"phone": to}},
         "turn": {"text": {"body": content}},
         **kw,
     }
