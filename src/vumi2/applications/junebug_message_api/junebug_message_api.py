@@ -16,8 +16,8 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
+from ..errors import ApiError, JsonDecodeError, MessageNotFound
 from . import junebug_state_cache
-from .errors import JsonDecodeError, JunebugApiError, MessageNotFound
 from .messages import (
     JunebugOutboundMessage,
     junebug_event_from_ev,
@@ -214,7 +214,7 @@ class JunebugMessageApi(BaseWorker):
                 # TODO: Special handling of outbound messages?
                 rmsg = junebug_outbound_from_msg(msg, self.config.connector_name)
                 return self._response("message submitted", rmsg, HTTPStatus.CREATED)
-        except JunebugApiError as e:
+        except ApiError as e:
             err = {"type": e.name, "message": str(e)}
             return self._response(e.description, {"errors": [err]}, e.status)
 

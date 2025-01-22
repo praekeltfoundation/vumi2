@@ -12,7 +12,7 @@ from vumi2.messages import (
     TransportType,
 )
 
-from .errors import ApiUsageError, InvalidBody
+from ..errors import ApiUsageError, InvalidBody
 
 
 def junebug_inbound_from_msg(message: Message, channel_id: str) -> dict:

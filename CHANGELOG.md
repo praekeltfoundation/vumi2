@@ -1,6 +1,9 @@
 # Changelog
 
 ## [0.3.2.dev0] - UNRELEASED
+### Added
+
+- Add Turn Channels application
 
 
 ## [0.3.1] - 2024-12-04
