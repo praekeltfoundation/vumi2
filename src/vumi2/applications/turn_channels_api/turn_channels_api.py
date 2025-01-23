@@ -187,11 +187,15 @@ class TurnChannelsApi(BaseWorker):
                     if self.config.secret_key:
                         logger.info("Verifying HMAC signature")
                         h = hmac.new(
-                            self.config.secret_key.encode(), request_data.encode(), sha256
+                            self.config.secret_key.encode(),
+                            request_data.encode(),
+                            sha256,
                         ).digest()
                         computed_signature = str(base64.b64encode(h))
                         signature = request.headers.get("X-Turn-Hook-Signature", "")
-                        logger.info(f"Signature from Turn: {signature}. Computed: {computed_signature}")
+                        logger.info(
+                            f"Signature from Turn: {signature}. Computed: {computed_signature}"
+                        )
                         if not hmac.compare_digest(computed_signature, signature):
                             raise SignatureMismatchError()
 
