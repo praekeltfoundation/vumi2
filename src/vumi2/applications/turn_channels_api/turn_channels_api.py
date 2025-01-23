@@ -195,7 +195,7 @@ class TurnChannelsApi(BaseWorker):
                         signature = request.headers.get("X-Turn-Hook-Signature", "")
                         logger.info(
                             f"Signature from Turn: {signature}."
-                            "Computed: {computed_signature}"
+                            f"Computed: {computed_signature}"
                         )
                         if not hmac.compare_digest(computed_signature, signature):
                             raise SignatureMismatchError()
