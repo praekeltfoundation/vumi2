@@ -184,13 +184,16 @@ class TurnChannelsApi(BaseWorker):
                     if isinstance(request_data, bytes):
                         request_data = request_data.decode()
                     # Verify the hmac signature
-                    h = hmac.new(
-                        self.config.secret_key.encode(), request_data.encode(), sha256
-                    ).digest()
-                    computed_signature = str(base64.b64encode(h))
-                    signature = request.headers.get("X-Turn-Hook-Signature", "")
-                    if not hmac.compare_digest(computed_signature, signature):
-                        raise SignatureMismatchError()
+                    if self.config.secret_key:
+                        logger.info("Verifying HMAC signature")
+                        h = hmac.new(
+                            self.config.secret_key.encode(), request_data.encode(), sha256
+                        ).digest()
+                        computed_signature = str(base64.b64encode(h))
+                        signature = request.headers.get("X-Turn-Hook-Signature", "")
+                        logger.info(f"Signature from Turn: {signature}. Computed: {computed_signature}")
+                        if not hmac.compare_digest(computed_signature, signature):
+                            raise SignatureMismatchError()
 
                     msg_dict = json.loads(request_data)
                 except json.JSONDecodeError as e:
