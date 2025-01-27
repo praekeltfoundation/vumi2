@@ -399,7 +399,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
             h = hmac.new(
                 config["secret_key"].encode(), json.dumps(body).encode(), sha256
             ).digest()
-            computed_signature = base64.b64encode(h)
+            computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
                 tca_worker, body, signature=computed_signature
             )
@@ -431,7 +431,7 @@ async def test_send_outbound_invalid_hmac(tca_worker, caplog):
     with fail_after(2):
         client = tca_worker.http.app.test_client()
         h = hmac.new(b"fake news", message.encode(), sha256).digest()
-        computed_signature = str(base64.b64encode(h))
+        computed_signature = base64.b64encode(h).decode("utf-8")
         async with client.request(
             path="/messages",
             method="POST",
@@ -459,7 +459,7 @@ async def test_send_outbound_invalid_json(tca_worker, caplog):
         h = hmac.new(
             tca_worker.config.secret_key.encode(), message.encode(), sha256
         ).digest()
-        computed_signature = str(base64.b64encode(h))
+        computed_signature = base64.b64encode(h).decode("utf-8")
         async with client.request(
             path="/messages",
             method="POST",
@@ -494,7 +494,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
             h = hmac.new(
                 config["secret_key"].encode(), json.dumps(body).encode(), sha256
             ).digest()
-            computed_signature = base64.b64encode(h)
+            computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
                 tca_worker, body, signature=computed_signature
             )
