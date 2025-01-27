@@ -2,7 +2,7 @@ Turn Channels API (EXPERIMENTAL: DO NOT USE IN PRODUCTION)
 -------------------
 
 This application provides bidirectional messaging over HTTP, intended
-for integration with Turn's Channels API.
+for integration with `Turn's Channels API <https://whatsapp.turn.io/docs/api/channel_api>`_.
 
 Currently this only supports text message types. A future iteration will support other types.
 
