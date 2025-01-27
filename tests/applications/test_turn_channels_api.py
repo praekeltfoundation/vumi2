@@ -179,12 +179,17 @@ def mkoutbound(
     content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw
 ) -> dict:
     return {
+        "block": None,
+        "resources": None,
+        "evaluated_resources": None,
         "content": content,
         "to": to,
-        "reply_to": reply_to,
-        "from": from_addr,
-        "context": {"contact": {"phone": to}},
-        "turn": {"text": {"body": content}},
+        # Turn doesn't send these fields
+        #"reply_to": reply_to,
+        #"from": from_addr,
+        # Context from Turn appears to be null, but we were expecting this to be {"contact": {"phone": to}},
+        "context": None,
+        "turn": {"type": "text", "text": {"body": content}},
         **kw,
     }
 
@@ -216,7 +221,7 @@ async def test_inbound_message_amqp(tca_worker, tca_ro, http_server):
     assert req.path == "messages"
     assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["message"]["text"]["body"] == "hello"
-    assert req.body_json["contact"]["id"] == "123"
+    assert req.body_json["contact"]["id"] == "456"
 
 
 async def test_inbound_message(worker_factory, http_server):
@@ -235,7 +240,7 @@ async def test_inbound_message(worker_factory, http_server):
                 await http_server.send_rsp(RspInfo())
 
     assert req.body_json["message"]["text"]["body"] == "hello"
-    assert req.body_json["contact"]["id"] == "123"
+    assert req.body_json["contact"]["id"] == "456"
 
 
 async def test_inbound_bad_response(worker_factory, http_server, caplog):
