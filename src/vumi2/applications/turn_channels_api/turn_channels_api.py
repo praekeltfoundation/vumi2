@@ -191,7 +191,7 @@ class TurnChannelsApi(BaseWorker):
                             request_data.encode(),
                             sha256,
                         ).digest()
-                        computed_signature = str(base64.b64encode(h))
+                        computed_signature = base64.b64encode(h).decode("utf-8")
                         signature = request.headers.get("X-Turn-Hook-Signature", "")
                         logger.info(
                             f"Signature from Turn: {signature}."
