@@ -46,7 +46,7 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
             "text": {
                 "body": message.content,
             },
-            "from": message.to_addr,
+            "from": message.from_addr,
             "id": message.message_id,
             "timestamp": str(int(message.timestamp.timestamp())),
         },
