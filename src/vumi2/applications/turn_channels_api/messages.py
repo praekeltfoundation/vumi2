@@ -132,8 +132,8 @@ class TurnOutboundMessage:
         for key in ["context", "turn", "to"]:
             if key not in data:
                 raise ApiUsageError(f"Missing key: {key}")
-        if "contact" not in data["context"]:
-            raise ApiUsageError("Missing key: context.contact")
+        # if "contact" not in data["context"]:
+        #     raise ApiUsageError("Missing key: context.contact")
         if "text" not in data["turn"]:
             raise ApiUsageError("Missing key: turn.text")
         if "body" not in data["turn"]["text"]:
