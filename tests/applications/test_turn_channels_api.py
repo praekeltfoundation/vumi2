@@ -361,8 +361,8 @@ async def test_forward_nack(worker_factory, http_server):
 
     assert req.path == "statuses"
     assert req.headers["Content-Type"] == "application/json"
-    assert req.body_json["status"] == "sent"
-    assert req.body_json["id"] == "msg-21"
+    assert req.body_json["status"]["status"] == "sent"
+    assert req.body_json["status"]["id"] == "msg-21"
 
 
 async def test_forward_dr(worker_factory, http_server):
@@ -382,8 +382,8 @@ async def test_forward_dr(worker_factory, http_server):
 
     assert req.path == "statuses"
     assert req.headers["Content-Type"] == "application/json"
-    assert req.body_json["status"] == "sent"
-    assert req.body_json["id"] == "m-21"
+    assert req.body_json["status"]["status"] == "sent"
+    assert req.body_json["status"]["id"] == "m-21"
 
 
 async def test_send_outbound(worker_factory, http_server, tca_ro):

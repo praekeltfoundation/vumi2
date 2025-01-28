@@ -75,19 +75,21 @@ def turn_event_from_ev(event: Event) -> dict:
       are supported.
     """
     ev = {
-        "id": event.user_message_id,
-        "timestamp": str(int(event.timestamp.timestamp())),
-        "status": None,
+        "status": {
+            "id": event.user_message_id,
+            "timestamp": str(int(event.timestamp.timestamp())),
+            "status": None,
+        }
     }
     if event.event_type == EventType.DELIVERY_REPORT:
-        ev["status"] = {
+        ev["status"]["status"] = {
             DeliveryStatus.PENDING: "sent",
             DeliveryStatus.FAILED: "sent",
             DeliveryStatus.DELIVERED: "delivered",
             None: None,
         }[event.delivery_status]
     else:
-        ev["status"] = "sent"
+        ev["status"]["status"] = "sent"
     return ev
 
 
