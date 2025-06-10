@@ -44,7 +44,7 @@ The application has the following configuration options:
 .. py:data:: secret_key
    :type: str
 
-   The secret key used to sign outbound messages. Required.
+   The secret key that Turn uses to sign its requests to us. Required.
 
 .. py:data:: request_timeout
    :type: float
@@ -149,12 +149,7 @@ Inbound messages that are ``POST``\ed to :py:data:`turn_base_url_path`/messages 
             "from": "+26612345678",
             "id": "message-uuid-5678",
             "timestamp": "1628345678"
-        },
-        "reply_to": null,
-        "content": "Test message",
-        "channel_data": {
-            "session_event": "new"
-        },
+        }
     }
 
 Event API
