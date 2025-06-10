@@ -84,7 +84,7 @@ def turn_event_from_ev(event: Event) -> dict:
     if event.event_type == EventType.DELIVERY_REPORT:
         ev["status"]["status"] = {
             DeliveryStatus.PENDING: "sent",
-            DeliveryStatus.FAILED: "sent",
+            DeliveryStatus.FAILED: "sent", # TODO: Turn doesn't accept a failed status. Log the failure for now?
             DeliveryStatus.DELIVERED: "delivered",
             None: None,
         }[event.delivery_status]
