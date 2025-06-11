@@ -14,3 +14,4 @@ The following applications are available:
     :maxdepth: 2
 
     applications/junebug_message_api
+    applications/turn_channels_api

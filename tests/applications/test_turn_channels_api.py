@@ -242,6 +242,7 @@ async def test_inbound_message(worker_factory, http_server):
 
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
 
 
 async def test_inbound_bad_response(worker_factory, http_server, caplog):

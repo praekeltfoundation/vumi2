@@ -54,9 +54,11 @@ class TurnChannelsApiConfig(BaseConfig):
     connector_name: str
 
     # Base URL path for HTTP requests.
+    # TODO: change to vumi_api_url
     vumi_base_url_path: str = ""
 
     # Base URL path for requests to Turn.
+    # TODO: change to turn_api_url; Don't default to empty string - should be required
     turn_base_url_path: str = ""
 
     # Auth token for requests to Turn.
@@ -78,6 +80,7 @@ class TurnChannelsApiConfig(BaseConfig):
     event_url_timeout: float = 10
 
     # Secret key used to sign outbound messages.
+    # TODO: Rename to turn_hmac_secret
     secret_key: str
 
     def vumi_url(self, path: str) -> str:
