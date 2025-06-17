@@ -57,7 +57,7 @@ class BaseConfig:
     sentry_dsn: str | None = None
     http_bind: str | None = None
     log_level: str = "INFO"
-    middlewares: list[BaseMiddlewareConfig]
+    middlewares:  list[BaseMiddlewareConfig] = Factory(list)
 
 
 
