@@ -235,11 +235,13 @@ async def test_inbound_message(worker_factory, http_server):
     config = mk_config(http_server, default_from_addr=None)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
         with fail_after(2):
             async with handle_inbound(tca_worker, msg):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
-
+    inbound = await tca_worker.message_cache.fetch_inbound("456")
+    assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
@@ -254,6 +256,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     config = mk_config(http_server, default_from_addr=None)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
         with fail_after(2):
             async with handle_inbound(tca_worker, msg):
                 await http_server.receive_req()
@@ -402,6 +405,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(mkmsg("hello", from_addr="+1234"))
         with fail_after(2):
             h = hmac.new(
                 config["secret_key"].encode(), json.dumps(body).encode(), sha256

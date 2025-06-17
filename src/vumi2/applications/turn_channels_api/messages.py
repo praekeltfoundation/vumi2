@@ -145,7 +145,7 @@ class TurnOutboundMessage:
             content=data["turn"]["text"]["body"],
             to=data["to"],
             from_addr=default_from,
-            reply_to=default_from,
+            reply_to=data.get("reply_to", ""),
             priority=1,
             channel_data={},  # TODO
         )

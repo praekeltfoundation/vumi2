@@ -5,11 +5,13 @@ from hashlib import sha256
 from logging import getLogger
 from typing import Any
 
-from attrs import define
+from attrs import define, field
 from httpx import AsyncClient
 from quart import request
 from trio import move_on_after
 
+import vumi2.message_caches as message_caches
+from vumi2.cli import class_from_string
 from vumi2.messages import (
     Event,
     Message,
@@ -83,6 +85,10 @@ class TurnChannelsApiConfig(BaseConfig):
     # TODO: Rename to turn_hmac_secret
     secret_key: str
 
+    # Message cache class to use for storing inbound messages.
+    message_cache_class: str = f"{message_caches.__name__}.MemoryMessageCache"
+    message_cache_config: dict = field(factory=dict)
+
     def vumi_url(self, path: str) -> str:
         return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
 
@@ -102,6 +108,8 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
+        message_cache_class = class_from_string(self.config.message_cache_class)
+        self.message_cache = message_cache_class(self.config.message_cache_config)
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
             self.handle_inbound_message,
@@ -124,6 +132,7 @@ class TurnChannelsApi(BaseWorker):
         """
         logger.debug("Consuming inbound message %s", message)
         msg = turn_inbound_from_msg(message, message.transport_name)
+        await self.message_cache.store_inbound(message)
 
         headers = {}
 
@@ -208,6 +217,11 @@ class TurnChannelsApi(BaseWorker):
                     raise JsonDecodeError(str(e)) from e
 
                 logger.debug("Received outbound message: %s", msg_dict)
+                if msg_dict.get("reply_to", "") == "":
+                    # get the reply-to for the outbound message from the cached inbound
+                    inbound = await self.message_cache.fetch_inbound(msg_dict["to"])
+                    if inbound is not None:
+                        msg_dict["reply_to"] = inbound.message_id
 
                 tom = TurnOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
