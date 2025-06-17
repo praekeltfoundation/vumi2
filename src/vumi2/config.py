@@ -57,9 +57,7 @@ class BaseConfig:
     sentry_dsn: str | None = None
     http_bind: str | None = None
     log_level: str = "INFO"
-    middlewares:  list[BaseMiddlewareConfig] = Factory(list)
-
-
+    middlewares: list[BaseMiddlewareConfig] = Factory(list)
 
 
 ConfigCallback = Callable[[Attribute, Iterable[str]], Any]

@@ -129,33 +129,40 @@ class BaseWorker(AsyncResource):
     async def setup(self):
         pass
 
-    def middleware_outbound_handler(self, connector_name, middlewares, outbound_handler):
+    def middleware_outbound_handler(
+        self, connector_name, middlewares, outbound_handler
+    ):
         middlewares = [m for m in middlewares if m.outbound_enabled(connector_name)]
+
         @wraps(outbound_handler)
         async def _outbound_handler(msg):
             for middleware in middlewares:
                 msg = await middleware.handle_outbound(msg)
             return await outbound_handler(msg)
+
         return _outbound_handler
-    
+
     def middleware_inbound_handler(self, connector_name, middlewares, inbound_handler):
         middlewares = [m for m in middlewares if m.inbound_enabled(connector_name)]
+
         @wraps(inbound_handler)
         async def _inbound_handler(msg):
             for middleware in middlewares:
                 msg = await middleware.handle_inbound(msg)
             return await inbound_handler(msg)
+
         return _inbound_handler
-    
+
     def middleware_event_handler(self, connector_name, middlewares, event_handler):
         middlewares = [m for m in middlewares if m.event_enabled(connector_name)]
+
         @wraps(event_handler)
         async def _event_handler(msg):
             for middleware in middlewares:
                 msg = await middleware.handle_event(msg)
             return await event_handler(msg)
-        return _event_handler
 
+        return _event_handler
 
     async def start_consuming(self):
         await self._connectors.start_consuming()
@@ -171,7 +178,9 @@ class BaseWorker(AsyncResource):
                 "Attempt to add duplicate receive inbound connector with name"
                 f" {connector_name}"
             )
-        _inbound_handler = self.middleware_outbound_handler(connector_name, self.config.middlewares, inbound_handler )
+        _inbound_handler = self.middleware_outbound_handler(
+            connector_name, self.config.middlewares, inbound_handler
+        )
         connector = ReceiveInboundConnector(
             self.nursery,
             self.connection,
@@ -193,7 +202,9 @@ class BaseWorker(AsyncResource):
                 "Attempt to add duplicate receive outbound connector with name"
                 f" {connector_name}"
             )
-        _outbound_handler = self.middleware_outbound_handler(connector_name, self.config.middlewares, outbound_handler )
+        _outbound_handler = self.middleware_outbound_handler(
+            connector_name, self.config.middlewares, outbound_handler
+        )
 
         connector = ReceiveOutboundConnector(
             self.nursery,

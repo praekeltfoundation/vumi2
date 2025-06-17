@@ -1,6 +1,7 @@
 import re
 from twisted.python import log
 
+
 class LogCatcher(object):
     """Context manager for gathering logs in tests.
 
@@ -32,19 +33,18 @@ class LogCatcher(object):
         return [ev for ev in self.logs if ev["isError"]]
 
     def messages(self):
-        return [" ".join(msg['message']) for msg in self.logs
-                if not msg["isError"]]
+        return [" ".join(msg["message"]) for msg in self.logs if not msg["isError"]]
 
     def _keep_log(self, event_dict):
         if self.system is not None:
-            if not self.system.search(event_dict.get('system', '-')):
+            if not self.system.search(event_dict.get("system", "-")):
                 return False
         if self.message is not None:
-            log_message = " ".join(event_dict.get('message', []))
+            log_message = " ".join(event_dict.get("message", []))
             if not self.message.search(log_message):
                 return False
         if self.log_level is not None:
-            if event_dict.get('logLevel', None) != self.log_level:
+            if event_dict.get("logLevel", None) != self.log_level:
                 return False
         return True
 

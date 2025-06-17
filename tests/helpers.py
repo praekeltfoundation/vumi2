@@ -18,7 +18,6 @@ from twisted.internet.task import deferLater
 from twisted.python.failure import Failure
 
 
-
 from vumi2.amqp import create_amqp_client
 from vumi2.config import load_config, structure_config
 from vumi2.connectors import (
@@ -201,7 +200,7 @@ def get_timeout():
 
     A default of 5 seconds is used if there isn't one there.
     """
-    timeout_str = os.environ.get('VUMI_TEST_TIMEOUT', '5')
+    timeout_str = os.environ.get("VUMI_TEST_TIMEOUT", "5")
     return float(timeout_str)
 
 
@@ -247,6 +246,7 @@ class IHelper(Interface):
         All helpers must implement this even if it does nothing.
         """
 
+
 class IHelperEnabledTestCase(Interface):
     """
     Interface for test cases that use helpers.
@@ -265,6 +265,7 @@ class IHelperEnabledTestCase(Interface):
         Returns the ``helper_object`` passed in or a :class:`Deferred` if
         setup is async.
         """
+
 
 class VumiTestCase(TestCase):
     """
@@ -330,21 +331,21 @@ class VumiTestCase(TestCase):
               stop waiting.
         """
         from twisted.internet import reactor
+
         # Give the reactor a chance to get clean.
         yield deferLater(reactor, 0, lambda: None)
 
         for i in range(self.reactor_check_iterations):
             # There are some internal readers that we want to ignore.
             # Unfortunately they're private.
-            internal_readers = getattr(reactor, '_internalReaders', set())
+            internal_readers = getattr(reactor, "_internalReaders", set())
             selectables = set(reactor.getReaders() + reactor.getWriters())
             if not (selectables - internal_readers):
                 # The reactor's clean, let's go home.
                 return
 
             # We haven't gone home, so wait a bit for selectables to go away.
-            yield deferLater(
-                reactor, self.reactor_check_interval, lambda: None)
+            yield deferLater(reactor, self.reactor_check_interval, lambda: None)
 
     def add_cleanup(self, func, *args, **kw):
         """
@@ -399,11 +400,11 @@ class VumiTestCase(TestCase):
 
         if not IHelper.providedBy(helper_object):
             raise ValueError(
-                "Helper object does not provide the IHelper interface: %s" % (
-                    helper_object,))
+                "Helper object does not provide the IHelper interface: %s"
+                % (helper_object,)
+            )
         self.add_cleanup(helper_object.cleanup)
-        return maybe_async_return(
-            helper_object, helper_object.setup(*args, **kw))
+        return maybe_async_return(helper_object, helper_object.setup(*args, **kw))
 
     def _runFixturesAndTest(self, result):
         """
@@ -418,8 +419,7 @@ class VumiTestCase(TestCase):
         method = getattr(self, self._testMethodName)
         if method.func_code.co_flags & CO_GENERATOR:
             # We have a generator that isn't wrapped in @inlineCallbacks
-            e = ValueError(
-                "Test method is a generator. Missing @inlineCallbacks?")
+            e = ValueError("Test method is a generator. Missing @inlineCallbacks?")
             result.addError(self, Failure(e))
             return
         return super(VumiTestCase, self)._runFixturesAndTest(result)

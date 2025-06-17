@@ -17,8 +17,9 @@ err = error
 
 
 class WrappingLogger(object):
-    '''A logger that will add the additional arguments that it is initialized
-    with to every logging call.'''
+    """A logger that will add the additional arguments that it is initialized
+    with to every logging call."""
+
     def __init__(self, **kwargs):
         self.debug = partial(debug, **kwargs)
         self.info = partial(info, **kwargs)
