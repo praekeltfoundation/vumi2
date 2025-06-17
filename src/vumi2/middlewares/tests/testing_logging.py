@@ -1,8 +1,8 @@
 """Tests from vumi.middleware.logging."""
 
 from vumi2.middlewares.logging import LoggingMiddleware
-from tests.utils import LogCatcher
-from tests.helpers import VumiTestCase
+from vumi2.tests.utils import LogCatcher
+from vumi2.tests.helpers import VumiTestCase
 
 
 class DummyMessage(object):
