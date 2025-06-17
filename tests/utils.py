@@ -1,8 +1,9 @@
 import re
+
 from twisted.python import log
 
 
-class LogCatcher(object):
+class LogCatcher:
     """Context manager for gathering logs in tests.
 
     :param str system:

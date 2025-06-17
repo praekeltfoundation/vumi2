@@ -1,7 +1,7 @@
 import importlib.metadata
+from functools import wraps
 from logging import getLogger
 from typing import TypedDict, TypeVar
-from functools import wraps
 
 import sentry_sdk
 import trio

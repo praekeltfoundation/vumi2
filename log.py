@@ -4,7 +4,6 @@ from functools import partial
 
 from twisted.python import log
 
-
 debug = partial(log.msg, logLevel=logging.DEBUG)
 info = partial(log.msg, logLevel=logging.INFO)
 warning = partial(log.msg, logLevel=logging.WARNING)
@@ -16,7 +15,7 @@ msg = info
 err = error
 
 
-class WrappingLogger(object):
+class WrappingLogger:
     """A logger that will add the additional arguments that it is initialized
     with to every logging call."""
 

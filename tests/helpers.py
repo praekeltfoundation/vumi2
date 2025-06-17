@@ -1,9 +1,8 @@
+import os
 from contextlib import asynccontextmanager
+from inspect import CO_GENERATOR
 from typing import TypeVar
 from warnings import warn
-import os
-from inspect import CO_GENERATOR
-
 
 import pytest
 from async_amqp import AmqpProtocol  # type: ignore
@@ -11,12 +10,11 @@ from async_amqp.exceptions import ChannelClosed  # type: ignore
 from attrs import define, field
 from trio import MemoryReceiveChannel, Nursery, fail_after, open_memory_channel
 from trio.abc import AsyncResource
-from twisted.trial.unittest import TestCase, SkipTest, FailTest
-from zope.interface import Interface, implementer
-from twisted.internet.defer import succeed, inlineCallbacks, Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks
 from twisted.internet.task import deferLater
 from twisted.python.failure import Failure
-
+from twisted.trial.unittest import TestCase
+from zope.interface import Interface, implementer
 
 from vumi2.amqp import create_amqp_client
 from vumi2.config import load_config, structure_config
@@ -348,7 +346,7 @@ class VumiTestCase(TestCase):
             yield deferLater(reactor, self.reactor_check_interval, lambda: None)
 
     def add_cleanup(self, func, *args, **kw):
-        """
+        r"""
         Register a cleanup function to be called at teardown time.
 
         :param callable func:
@@ -368,7 +366,7 @@ class VumiTestCase(TestCase):
         self._cleanup_funcs.append((func, args, kw))
 
     def add_helper(self, helper_object, *args, **kw):
-        """
+        r"""
         Perform setup and register cleanup for the given helper object.
 
         :param helper_object:

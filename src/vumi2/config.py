@@ -1,7 +1,6 @@
 import os
 from argparse import Namespace
 from collections.abc import Callable, Iterable
-from vumi2.middlewares.base import BaseMiddlewareConfig
 from pathlib import Path
 from typing import (
     Any,
@@ -15,6 +14,8 @@ import yaml
 from attrs import Attribute, AttrsInstance, Factory, define, fields
 from attrs import has as is_attrs
 from cattrs import Converter
+
+from vumi2.middlewares.base import BaseMiddlewareConfig
 
 _conv = Converter(prefer_attrib_converters=True)
 

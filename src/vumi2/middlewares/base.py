@@ -7,7 +7,7 @@ class BaseMiddlewareConfig(Config):
     """
 
 
-class BaseMiddleware(object):
+class BaseMiddleware:
     CONFIG_CLASS = BaseMiddlewareConfig
 
     def __init__(self, name, config):

@@ -1,8 +1,8 @@
-from confmodel.fields import ConfigText, ConfigBool, ConfigList
+from confmodel.fields import ConfigBool, ConfigList, ConfigText
 
+from vumi2 import log
 from vumi2.middlewares import BaseMiddleware
 from vumi2.middlewares.base import BaseMiddlewareConfig
-from vumi2 import log
 
 
 class LoggingMiddlewareConfig(BaseMiddlewareConfig):
