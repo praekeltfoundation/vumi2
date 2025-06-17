@@ -1,6 +1,7 @@
 import os
 from argparse import Namespace
 from collections.abc import Callable, Iterable
+from vumi2.middlewares.base import BaseMiddlewareConfig
 from pathlib import Path
 from typing import (
     Any,
@@ -56,6 +57,9 @@ class BaseConfig:
     sentry_dsn: str | None = None
     http_bind: str | None = None
     log_level: str = "INFO"
+    middlewares: list[BaseMiddlewareConfig]
+
+
 
 
 ConfigCallback = Callable[[Attribute, Iterable[str]], Any]
