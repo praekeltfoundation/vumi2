@@ -39,4 +39,4 @@ async def test_base_handle_inbound():
     )
     basemiddleware = BaseMiddleware(config)
     await basemiddleware.setup()
-    assert await basemiddleware.handle_inbound("Hello") == "Hello"
+    assert await basemiddleware.handle_inbound("Hello", "connection2") == "Hello"
