@@ -194,6 +194,9 @@ In the case where the delivery fails, Turn does not currently accept a failed st
 Turn state caches
 ^^^^^^^^^^^^^^^^^
 
-Currently Turn Channels API does not support state caches. 
+A in-memory cache that stores the last inbound message for each user. This is used to link outgoing messages to incoming messages, which is required for USSD flows.
 
-In the near future we will be implementing a state cache for Turn Channels API in order to link outgoing messages to incoming messages, which will allow us to support USSD flows.
+In memory state cache
+"""""""""""""""""""""
+
+See `Message Caches <../message_caches.rst>`_ for more information.
