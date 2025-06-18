@@ -25,7 +25,6 @@ quart-trio = "^0.11.1"
 hypercorn = "^0.16.0"
 "smpp.pdu3" = "^0.6"
 httpx = "^0.26.0"
-confmodel = '0.2.0'
 
 [tool.poetry.group.dev.dependencies]
 mypy = "^1.8.0"

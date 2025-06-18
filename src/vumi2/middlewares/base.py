@@ -1,10 +1,13 @@
-from confmodel import Config
-
-
-class BaseMiddlewareConfig(Config):
+@define
+class BaseMiddlewareConfig:
     """
     Config class for the base middleware.
     """
+    enable_for_connectors: list[str]
+    inbound_enabled: bool = False
+    outbound_enabled: bool = False
+    event_enabled: bool = False
+    
 
 
 class BaseMiddleware:
