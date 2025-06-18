@@ -5,8 +5,9 @@ from collections.abc import Iterable
 
 import trio
 from attrs import Attribute
-from vumi2.class_helpers import class_from_string
+
 from vumi2.amqp import create_amqp_client
+from vumi2.class_helpers import class_from_string
 from vumi2.config import BaseConfig, get_config_class, load_config, walk_config_class
 from vumi2.errors import InvalidWorkerClass
 from vumi2.workers import BaseWorker

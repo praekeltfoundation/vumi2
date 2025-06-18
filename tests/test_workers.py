@@ -5,8 +5,8 @@ import sentry_sdk
 from trio import fail_after, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, TransportType
-from vumi2.workers import BaseWorker
 from vumi2.middlewares.base import BaseMiddleware
+from vumi2.workers import BaseWorker
 
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
 # trio to let us know when all runnable tasks are done. That means we're stuck

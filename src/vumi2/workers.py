@@ -2,7 +2,6 @@ import importlib.metadata
 from functools import wraps
 from logging import getLogger
 from typing import TypedDict, TypeVar
-from vumi2.class_helpers import class_from_string
 
 import sentry_sdk
 import trio
@@ -13,6 +12,7 @@ from hypercorn.trio import serve as hc_serve
 from quart_trio import QuartTrio
 from trio.abc import AsyncResource
 
+from vumi2.class_helpers import class_from_string
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
     ConnectorCollection,

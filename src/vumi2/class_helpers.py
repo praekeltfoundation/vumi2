@@ -1,5 +1,6 @@
-from vumi2.errors import InvalidWorkerClass
 from importlib import import_module
+
+from vumi2.errors import InvalidWorkerClass
 
 
 def _cfs_err(class_path: str, msg: str) -> InvalidWorkerClass:

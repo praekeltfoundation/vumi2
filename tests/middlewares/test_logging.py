@@ -1,5 +1,5 @@
-from vumi2.middlewares.logging import LoggingMiddleware, LoggingMiddlewareConfig
 from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.middlewares.logging import LoggingMiddleware, LoggingMiddlewareConfig
 
 
 def mkmsg(content: str) -> Message:

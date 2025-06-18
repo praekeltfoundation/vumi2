@@ -1,6 +1,8 @@
+from logging import getLevelNamesMapping, getLogger
+
 from attr import define
+
 from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
-from logging import getLogger, getLevelNamesMapping
 
 
 @define
