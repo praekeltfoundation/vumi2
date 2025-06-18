@@ -363,3 +363,10 @@ async def test_middleware_configured(worker_factory):
     [middleware] = worker.middlewares
     assert isinstance(middleware, BaseMiddleware)
     assert middleware.config.enable_for_connectors == ["connection1"]
+
+# async def test_
+
+# creates a worker with a handle inbound out = and event, 2 connectors, one receive, do something to get the messages out of the worker 
+# hvae conncetors send to one aouthe inbound will send to outbound 
+# handle in out event in router, in router tests, hardcode connector name 
+# pass through test, verifying the process of the middleware, verify that the middleware actually did what it was supposed to do

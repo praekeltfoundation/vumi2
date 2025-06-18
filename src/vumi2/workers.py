@@ -183,8 +183,11 @@ class BaseWorker(AsyncResource):
                 "Attempt to add duplicate receive inbound connector with name"
                 f" {connector_name}"
             )
-        _inbound_handler = self.middleware_outbound_handler(
+        _inbound_handler = self.middleware_inbound_handler(
             connector_name, self.middlewares, inbound_handler
+        )
+        _event_handler = self.middleware_inbound_handler(
+            connector_name, self.middlewares, event_handler
         )
         connector = ReceiveInboundConnector(
             self.nursery,
@@ -194,7 +197,7 @@ class BaseWorker(AsyncResource):
         )
         self._connectors.add(connector)
         await connector.setup(
-            inbound_handler=_inbound_handler, event_handler=event_handler
+            inbound_handler=_inbound_handler, event_handler=_event_handler
         )
         self.receive_inbound_connectors[connector_name] = connector
         return connector
