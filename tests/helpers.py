@@ -10,7 +10,6 @@ from attrs import define, field
 from trio import MemoryReceiveChannel, Nursery, fail_after, open_memory_channel
 from trio.abc import AsyncResource
 
-from zope.interface import Interface, implementer
 
 from vumi2.amqp import create_amqp_client
 from vumi2.config import load_config, structure_config
