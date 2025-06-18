@@ -3,10 +3,10 @@ import io
 from argparse import ArgumentParser
 from pathlib import Path
 from textwrap import dedent
-
+from vumi2.class_helpers import class_from_string
 import pytest
 from trio import fail_after
-from vumi2.class_helpers import class_from_string
+
 from vumi2.cli import (
     build_main_parser,
     main,
