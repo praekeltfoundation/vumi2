@@ -1,55 +1,34 @@
-# from confmodel.fields import ConfigBool, ConfigList, ConfigText
+from attr import define
+from vumi2.middlewares.base import  BaseMiddleware, BaseMiddlewareConfig
+from logging import getLogger, getLevelNamesMapping
 
-# from vumi2 import log
-# from vumi2.middlewares import BaseMiddleware
-# from vumi2.middlewares.base import BaseMiddlewareConfig
+@define
+class LoggingMiddlewareConfig(BaseMiddlewareConfig):
+    #TODO: vallidate log level
+    log_level: str = "info"
+    logger_name: str = __name__
+    
+
+class LoggingMiddleware(BaseMiddleware):
+    config: LoggingMiddlewareConfig
+
+    async def setup(self):
+        self.log_level = getLevelNamesMapping()[self.config.log_level.upper()]
+        self.logger = getLogger(self.config.logger_name)
+        
+    def _log_msg(self, direction, msg, connector_name):
+        self.logger.log(self.log_level,
+            f"Processed {direction} message for {connector_name}: {msg}"
+        )
+        return msg
 
 
-# class LoggingMiddlewareConfig(BaseMiddlewareConfig):
+    async def handle_inbound(self, message, connector_name):
+        return self._log_msg("inbound", message, connector_name)
 
+    async def handle_outbound(self, message, connector_name):
+        return self._log_msg("outbound", message, connector_name)
 
-# # class LoggingMiddleware(BaseMiddleware):
-#     CONFIG_CLASS = LoggingMiddlewareConfig
+    async def handle_event(self, event, connector_name):
+        return self._log_msg("event", event, connector_name)
 
-#     def setup_middleware(self):
-#         log_level = self.config.log_level
-#         self.message_logger = getattr(log, log_level)
-#         failure_log_level = self.config.failure_log_level
-#         self.failure_logger = getattr(log, failure_log_level)
-
-#     def _log(self, direction, logger, msg, connector_name):
-#         logger(
-#             "Processed %s message for %s: %s"
-#             % (direction, connector_name, msg.to_json())
-#         )
-#         return msg
-
-#     def allowed_connections(self, connector_name):
-#         return (
-#             not self.config.allowed_connectors
-#             or connector_name in self.config.allowed_connectors
-#         )
-
-#     def handle_inbound(self, message, connector_name):
-#         return self._log("inbound", self.message_logger, message, connector_name)
-
-#     def handle_outbound(self, message, connector_name):
-#         return self._log("outbound", self.message_logger, message, connector_name)
-
-#     def handle_event(self, event, connector_name):
-#         return self._log("event", self.message_logger, event, connector_name)
-
-#     def inbound_enabled(self, connector_name):
-#         if self.config.inbound_enabled and self.allowed_connections(connector_name):
-#             return True
-#         return False
-
-#     def outbound_enabled(self, connector_name):
-#         if self.config.outbound_enabled and self.allowed_connections(connector_name):
-#             return True
-#         return False
-
-#     def event_enabled(self, connector_name):
-#         if self.config.inbound_enabled and self.allowed_connections(connector_name):
-#             return True
-#         return False
