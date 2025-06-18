@@ -9,6 +9,7 @@ from vumi2.messages import (
     Event,
     EventType,
     Message,
+    Session,
     TransportType,
 )
 
@@ -147,7 +148,11 @@ class TurnOutboundMessage:
             from_addr=default_from,
             reply_to=data.get("reply_to", ""),
             priority=1,
-            channel_data={},  # TODO
+            channel_data={
+                "session_event": Session.RESUME
+                if data.get("waiting_for_user_input", False)
+                else Session.CLOSE,
+            },
         )
 
     def _shared_vumi_fields(self):

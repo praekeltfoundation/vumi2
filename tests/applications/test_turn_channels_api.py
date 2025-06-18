@@ -24,6 +24,7 @@ from vumi2.messages import (
     Event,
     EventType,
     Message,
+    Session,
     TransportType,
     generate_message_id,
 )
@@ -434,8 +435,9 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.from_addr == "None"
     assert outbound.in_reply_to is None
     assert outbound.transport_name == "tca-test"
-    assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
 
 
 async def test_send_outbound_invalid_hmac(tca_worker, caplog):
@@ -497,7 +499,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     """
     An outbound group message received over HTTP is forwarded over AMQP.
     """
-    body = mkoutbound("foo", group="my-group")
+    body = mkoutbound("foo", group="my-group", waiting_for_user_input=True)
     config = mk_config(
         http_server,
         None,
@@ -531,3 +533,4 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     assert outbound.transport_name == "tca-test"
     assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.session_event == Session.RESUME
