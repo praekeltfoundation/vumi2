@@ -56,12 +56,10 @@ class TurnChannelsApiConfig(BaseConfig):
     connector_name: str
 
     # Base URL path for HTTP requests.
-    # TODO: change to vumi_api_url
-    vumi_base_url_path: str = ""
+    vumi_api_url: str = ""
 
     # Base URL path for requests to Turn.
-    # TODO: change to turn_api_url; Don't default to empty string - should be required
-    turn_base_url_path: str = ""
+    turn_api_url: str
 
     # Auth token for requests to Turn.
     auth_token: str
@@ -82,18 +80,17 @@ class TurnChannelsApiConfig(BaseConfig):
     event_url_timeout: float = 10
 
     # Secret key used to sign outbound messages.
-    # TODO: Rename to turn_hmac_secret
-    secret_key: str
+    turn_hmac_secret: str
 
     # Message cache class to use for storing inbound messages.
     message_cache_class: str = f"{message_caches.__name__}.MemoryMessageCache"
     message_cache_config: dict = field(factory=dict)
 
     def vumi_url(self, path: str) -> str:
-        return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.vumi_api_url.rstrip("/"), path.lstrip("/")])
 
     def turn_url(self, path: str) -> str:
-        return "/".join([self.turn_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.turn_api_url.rstrip("/"), path.lstrip("/")])
 
 
 class TurnChannelsApi(BaseWorker):
@@ -196,10 +193,10 @@ class TurnChannelsApi(BaseWorker):
                     if isinstance(request_data, bytes):
                         request_data = request_data.decode()
                     # Verify the hmac signature
-                    if self.config.secret_key:
+                    if self.config.turn_hmac_secret:
                         logger.info("Verifying HMAC signature")
                         h = hmac.new(
-                            self.config.secret_key.encode(),
+                            self.config.turn_hmac_secret.encode(),
                             request_data.encode(),
                             sha256,
                         ).digest()

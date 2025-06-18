@@ -21,12 +21,12 @@ The application has the following configuration options:
 
    The address to bind the HTTP server to. Required.
 
-.. py:data:: vumi_base_url_path
+.. py:data:: vumi_api_url
    :type: str
 
    The base URL path for outbound message HTTP requests. Outbound message requests must be POSTed to ``<base_url_path>/messages``. Defaults to an empty string.
 
-.. py:data:: turn_base_url_path
+.. py:data:: turn_api_url
    :type: str
 
    The base URL path for requests to Turn. Defaults to an empty string.
@@ -41,7 +41,7 @@ The application has the following configuration options:
 
    The authorization token to use for requests to Turn. Required.
 
-.. py:data:: secret_key
+.. py:data:: turn_hmac_secret
    :type: str
 
    The secret key that Turn uses to sign its requests to us. Required.
@@ -113,9 +113,9 @@ For more information see the `Turn Channels API documentation <https://whatsapp.
 Inbound message API
 """""""""""""""""""
 
-Inbound messages that are ``POST``\ed to :py:data:`turn_base_url_path`/messages have the following format:
+Inbound messages that are ``POST``\ed to :py:data:`turn_api_url`/messages have the following format:
 
-.. http:post:: /<turn_base_url_path>/messages
+.. http:post:: /<turn_api_url>/messages
 
    :<json dict contact: Information about the contact who sent the message.
     :<json str contact.id: The Turn contact ID, which is an MSISDN.
@@ -154,9 +154,9 @@ Inbound messages that are ``POST``\ed to :py:data:`turn_base_url_path`/messages 
 
 Event API
 """""""""
-Events ``POST``\ed to :py:data:`turn_base_url_path`/statuses have the following format:
+Events ``POST``\ed to :py:data:`turn_api_url`/statuses have the following format:
 
-.. http:post:: /<turn_base_url_path>/statuses
+.. http:post:: /<turn_api_url>/statuses
 
    :<json str user_message_id: The UUID of the message the event is for.
 

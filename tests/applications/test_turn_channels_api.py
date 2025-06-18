@@ -134,9 +134,9 @@ def mk_config(
         "http_bind": "localhost:0",
         "default_from_addr": default_from_addr,
         "auth_token": None,
-        "vumi_base_url_path": "",
-        "turn_base_url_path": f"{http_server.bind}",
-        "secret_key": "supersecret",
+        "vumi_api_url": "",
+        "turn_api_url": f"{http_server.bind}",
+        "turn_hmac_secret": "supersecret",
     }
     return {**config, **config_update}
 
@@ -176,7 +176,12 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
 
 
 def mkoutbound(
-    content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw
+    content: str,
+    to="+1234",
+    from_addr="+23456",
+    reply_to="+23456",
+    waiting_for_user_input=False,
+    **kw,
 ) -> dict:
     return {
         "block": None,
@@ -191,6 +196,7 @@ def mkoutbound(
         # but we were expecting this to be {"contact": {"phone": to}},
         "context": None,
         "turn": {"type": "text", "text": {"body": content}},
+        "waiting_for_user_input": waiting_for_user_input,
         **kw,
     }
 
@@ -408,7 +414,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
         await tca_worker.message_cache.store_inbound(mkmsg("hello", from_addr="+1234"))
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
@@ -468,7 +474,7 @@ async def test_send_outbound_invalid_json(tca_worker, caplog):
     with fail_after(2):
         client = tca_worker.http.app.test_client()
         h = hmac.new(
-            tca_worker.config.secret_key.encode(), message.encode(), sha256
+            tca_worker.config.turn_hmac_secret.encode(), message.encode(), sha256
         ).digest()
         computed_signature = base64.b64encode(h).decode("utf-8")
         async with client.request(
@@ -503,7 +509,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
         await tca_worker.setup()
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
