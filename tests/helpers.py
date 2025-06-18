@@ -1,4 +1,3 @@
-import os
 from contextlib import asynccontextmanager
 from typing import TypeVar
 from warnings import warn

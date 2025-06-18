@@ -6,7 +6,7 @@ from trio import fail_after, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.workers import BaseWorker
-
+from vumi2.middlewares.base import BaseMiddleware
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
 # trio to let us know when all runnable tasks are done. That means we're stuck
 # with timers to determine whether or not shutdown should have completed.
@@ -347,3 +347,12 @@ async def test_connector_setup_call_start_after_closing(connector_factory):
     ro_ri = await connector_factory.setup_ro("ri")
     await ro_ri.conn.aclose_consumers()
     await ro_ri.conn.start_consuming()
+#test middlewarre configured and check that wwe have that middleware instance
+# test http_server unconfigure, pass middle to config second parameter 
+
+async def test_middleware_configured (worker_factory):
+    middleware_config = {"class_path": "vumi2.middlewares.base.BaseMiddleware", "enable_for_connectors": ["connection1"]}
+    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config]})
+    [middleware] = worker.middlewares
+    assert isinstance(middleware, BaseMiddleware)
+    assert  middleware.config.enable_for_connectors  == ["connection1"]

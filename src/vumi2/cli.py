@@ -66,6 +66,7 @@ def worker_config_options(
 
     walk_config_class(cls, add_arg, prefix)
 
+
 async def run_worker(
     worker_cls: type[BaseWorker], args: list[str], task_status=trio.TASK_STATUS_IGNORED
 ) -> BaseWorker:
