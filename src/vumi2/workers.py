@@ -2,6 +2,7 @@ import importlib.metadata
 from functools import wraps
 from logging import getLogger
 from typing import TypedDict, TypeVar
+#from vumi2.cli import class_from_string
 
 import sentry_sdk
 import trio
@@ -78,6 +79,10 @@ class BaseWorker(AsyncResource):
         self.healthchecks = {"amqp": self._amqp_healthcheck}
         if config.http_bind is not None:
             self._setup_http(config.http_bind)
+        self.middlewares = []
+        # for middleware_config in self.config.middlewares:
+        #     middleware_class = class_from_string(middleware_config.class_path)
+        #     self.middlewares.append(middleware_class(middleware_config))
 
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
@@ -179,7 +184,7 @@ class BaseWorker(AsyncResource):
                 f" {connector_name}"
             )
         _inbound_handler = self.middleware_outbound_handler(
-            connector_name, self.config.middlewares, inbound_handler
+            connector_name, self.middlewares, inbound_handler
         )
         connector = ReceiveInboundConnector(
             self.nursery,
@@ -203,7 +208,7 @@ class BaseWorker(AsyncResource):
                 f" {connector_name}"
             )
         _outbound_handler = self.middleware_outbound_handler(
-            connector_name, self.config.middlewares, outbound_handler
+            connector_name, self.middlewares, outbound_handler
         )
 
         connector = ReceiveOutboundConnector(

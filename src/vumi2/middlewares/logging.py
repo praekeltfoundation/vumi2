@@ -6,29 +6,7 @@ from vumi2.middlewares.base import BaseMiddlewareConfig
 
 
 class LoggingMiddlewareConfig(BaseMiddlewareConfig):
-    """
-    Configuration class for the logging middleware.
-    """
-
-    log_level = ConfigText(
-        "Log level from :mod:`vumi.log` to log inbound and outbound messages "
-        "and events at",
-        default="info",
-        static=True,
-    )
-    failure_log_level = ConfigText(
-        "Log level from :mod:`vumi.log` to log failure messages at",
-        default="error",
-        static=True,
-    )
-
-    inbound_enabled = ConfigBool(default=True)
-
-    outbound_enabled = ConfigBool(default=True)
-
-    event_enabled = ConfigBool(default=True)
-
-    allowed_connectors = ConfigList(default=[])
+   
 
 
 class LoggingMiddleware(BaseMiddleware):

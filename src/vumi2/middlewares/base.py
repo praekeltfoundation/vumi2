@@ -1,8 +1,8 @@
+from attr import define
+
 @define
 class BaseMiddlewareConfig:
-    """
-    Config class for the base middleware.
-    """
+    class_path: str 
     enable_for_connectors: list[str]
     inbound_enabled: bool = False
     outbound_enabled: bool = False
@@ -11,32 +11,39 @@ class BaseMiddlewareConfig:
 
 
 class BaseMiddleware:
-    CONFIG_CLASS = BaseMiddlewareConfig
+    config: BaseMiddlewareConfig
 
     def __init__(self, name, config):
         self.name = name
-        self.config = self.CONFIG_CLASS(config, static=True)
+        self.config = config
 
-    def setup(self):
+    async def setup(self):
         pass
 
-    def teardown_middleware(self):
+    async def teardown_middleware(self):
         pass
 
     def inbound_enabled(self, connector_name):
+        if self.config.inbound_enabled and connector_name in self.config.enable_for_connectors:
+            return True
         return False
 
     def outbound_enabled(self, connector_name):
+        if self.config.outbound_enabled and connector_name in self.config.enable_for_connectors:
+            return True
         return False
 
     def event_enabled(self, connector_name):
+        if self.config.event_enabled and connector_name in self.config.enable_for_connectors:
+            return True
         return False
 
-    def handle_inbound(self, message):
+
+    async def handle_inbound(self, message):
         return message
 
-    def handle_outbound(self, message):
+    async def handle_outbound(self, message):
         return message
 
-    def handle_event(self, message):
+    async def handle_event(self, message):
         return message
