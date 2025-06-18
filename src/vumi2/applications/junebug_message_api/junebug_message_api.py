@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from quart import request
 from trio import move_on_after
 
-from vumi2.cli import class_from_string
+from vumi2.class_helpers import class_from_string
 from vumi2.messages import (
     Event,
     Message,
