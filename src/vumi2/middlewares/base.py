@@ -49,8 +49,8 @@ class BaseMiddleware:
     async def handle_inbound(self, message, connector_name):
         return message
 
-    async def handle_outbound(self, message,connector_name):
+    async def handle_outbound(self, message, connector_name):
         return message
 
-    async def handle_event(self, message,connector_name):
+    async def handle_event(self, message, connector_name):
         return message

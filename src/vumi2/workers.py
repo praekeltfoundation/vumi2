@@ -153,7 +153,7 @@ class BaseWorker(AsyncResource):
         @wraps(inbound_handler)
         async def _inbound_handler(msg):
             for middleware in middlewares:
-                msg = await middleware.handle_inbound(msg,connector_name)
+                msg = await middleware.handle_inbound(msg, connector_name)
             return await inbound_handler(msg)
 
         return _inbound_handler
