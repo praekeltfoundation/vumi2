@@ -123,6 +123,7 @@ class TurnOutboundMessage:
     from_addr: str | None = None
     reply_to: str | None = None
     priority: int = 1
+    waiting_for_user_input: bool = False
     channel_data: dict[str, Any] = field(factory=dict)
 
     def __attrs_post_init__(self):
@@ -148,11 +149,8 @@ class TurnOutboundMessage:
             from_addr=default_from,
             reply_to=data.get("reply_to", ""),
             priority=1,
-            channel_data={
-                "session_event": Session.RESUME
-                if data.get("waiting_for_user_input", False)
-                else Session.CLOSE,
-            },
+            waiting_for_user_input=data.get("waiting_for_user_input", False),
+            channel_data={},
         )
 
     def _shared_vumi_fields(self):
@@ -177,6 +175,9 @@ class TurnOutboundMessage:
             "content": self.content,
             "transport_name": transport_name,
             "transport_type": transport_type,
+            "session_event": Session.RESUME
+            if self.waiting_for_user_input
+            else Session.CLOSE,
             **self._shared_vumi_fields(),
         }
 

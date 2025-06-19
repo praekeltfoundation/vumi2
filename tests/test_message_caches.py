@@ -96,7 +96,12 @@ async def test_memory_cache_and_fetch_inbound(
     """
     inbound = create_inbound()
     await memory_message_cache.store_inbound(inbound)
-    returned_inbound = await memory_message_cache.fetch_inbound(inbound.from_addr)
+    returned_inbound = await memory_message_cache.fetch_inbound(inbound.message_id)
+    assert inbound == returned_inbound
+
+    returned_inbound = await memory_message_cache.fetch_last_inbound_by_from_address(
+        inbound.from_addr
+    )
     assert inbound == returned_inbound
 
 
@@ -111,20 +116,22 @@ async def test_memory_timeout_inbound(
     await memory_message_cache.store_inbound(oldmsg)
     await trio.sleep(memory_message_cache.config.timeout - 1)
 
+    newmsg = create_inbound()
+    await memory_message_cache.store_inbound(newmsg)
+
     # Message has not expired yet.
-    assert await memory_message_cache.fetch_inbound(oldmsg.from_addr) == oldmsg
+    assert await memory_message_cache.fetch_inbound(oldmsg.message_id) == oldmsg
+    assert await memory_message_cache.fetch_inbound(newmsg.message_id) == newmsg
+    assert (
+        await memory_message_cache.fetch_last_inbound_by_from_address(oldmsg.from_addr)
+        == newmsg
+    )
 
     # Wait until oldmsg expires.
     await trio.sleep(2)
-    assert await memory_message_cache.fetch_inbound(oldmsg.from_addr) is None
-
-
-async def test_memory_overwrite_inbound(memory_message_cache: MemoryMessageCache):
-    """
-    New messages overwrite old messages
-    """
-    oldmsg = create_inbound()
-    await memory_message_cache.store_inbound(oldmsg)
-    newmsg = create_inbound()
-    await memory_message_cache.store_inbound(newmsg)
-    assert await memory_message_cache.fetch_inbound(oldmsg.from_addr) == newmsg
+    assert await memory_message_cache.fetch_inbound(oldmsg.message_id) is None
+    assert await memory_message_cache.fetch_inbound(newmsg.message_id) == newmsg
+    assert (
+        await memory_message_cache.fetch_last_inbound_by_from_address(oldmsg.from_addr)
+        == newmsg
+    )

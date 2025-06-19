@@ -74,6 +74,12 @@ class MessageCache(ABC):  # pragma: no cover
     async def fetch_inbound(self, message_id: str) -> Message | None:
         ...
 
+    @abstractmethod
+    async def fetch_last_inbound_by_from_address(
+        self, from_addr: str
+    ) -> Message | None:
+        ...
+
 
 @define
 class MemoryMessageCacheConfig:
@@ -94,7 +100,19 @@ class MemoryMessageCache(MessageCache):
         return self._outbounds.get(message_id)
 
     async def store_inbound(self, inbound: Message) -> None:
-        self._inbounds[inbound.from_addr] = inbound
+        self._inbounds[inbound.message_id] = inbound
 
-    async def fetch_inbound(self, from_addr: str) -> Message | None:
-        return self._inbounds.get(from_addr)
+    async def fetch_inbound(self, message_id: str) -> Message | None:
+        return self._inbounds.get(message_id)
+
+    async def fetch_last_inbound_by_from_address(
+        self, from_addr: str
+    ) -> Message | None:
+        messages = [
+            msg
+            for msg in self._inbounds.values()
+            if msg is not None and msg.from_addr == from_addr
+        ]
+        if not messages:
+            return None
+        return max(messages, key=lambda x: x.timestamp)

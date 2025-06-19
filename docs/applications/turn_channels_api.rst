@@ -21,7 +21,7 @@ The application has the following configuration options:
 
    The address to bind the HTTP server to. Required.
 
-.. py:data:: vumi_api_url
+.. py:data:: vumi_api_path
    :type: str
 
    The base URL path for outbound message HTTP requests. Outbound message requests must be POSTed to ``<base_url_path>/messages``. Defaults to an empty string.

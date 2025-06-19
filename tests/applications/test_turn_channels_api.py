@@ -135,7 +135,7 @@ def mk_config(
         "http_bind": "localhost:0",
         "default_from_addr": default_from_addr,
         "auth_token": None,
-        "vumi_api_url": "",
+        "vumi_api_path": "",
         "turn_api_url": f"{http_server.bind}",
         "turn_hmac_secret": "supersecret",
     }
@@ -247,7 +247,7 @@ async def test_inbound_message(worker_factory, http_server):
             async with handle_inbound(tca_worker, msg):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
-    inbound = await tca_worker.message_cache.fetch_inbound("456")
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
     assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "456"

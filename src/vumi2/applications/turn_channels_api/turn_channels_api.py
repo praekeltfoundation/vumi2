@@ -56,7 +56,7 @@ class TurnChannelsApiConfig(BaseConfig):
     connector_name: str
 
     # Base URL path for HTTP requests.
-    vumi_api_url: str = ""
+    vumi_api_path: str = ""
 
     # Base URL path for requests to Turn.
     turn_api_url: str
@@ -87,7 +87,7 @@ class TurnChannelsApiConfig(BaseConfig):
     message_cache_config: dict = field(factory=dict)
 
     def vumi_url(self, path: str) -> str:
-        return "/".join([self.vumi_api_url.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.vumi_api_path.rstrip("/"), path.lstrip("/")])
 
     def turn_url(self, path: str) -> str:
         return "/".join([self.turn_api_url.rstrip("/"), path.lstrip("/")])
@@ -216,7 +216,11 @@ class TurnChannelsApi(BaseWorker):
                 logger.debug("Received outbound message: %s", msg_dict)
                 if msg_dict.get("reply_to", "") == "":
                     # get the reply-to for the outbound message from the cached inbound
-                    inbound = await self.message_cache.fetch_inbound(msg_dict["to"])
+                    inbound = (
+                        await self.message_cache.fetch_last_inbound_by_from_address(
+                            msg_dict["to"]
+                        )
+                    )
                     if inbound is not None:
                         msg_dict["reply_to"] = inbound.message_id
 
