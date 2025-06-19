@@ -1,12 +1,18 @@
 import importlib.metadata
+from attr import define
 
 import pytest
 import sentry_sdk
 from trio import fail_after, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, TransportType
-from vumi2.middlewares.base import BaseMiddleware
+from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
 from vumi2.workers import BaseWorker
+
+
+from vumi2.routers import ToAddressRouter
+
+
 
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
 # trio to let us know when all runnable tasks are done. That means we're stuck
@@ -20,6 +26,21 @@ from vumi2.workers import BaseWorker
 # convenience (finishing faster) and may need adjustment from time to time.
 CLOSED_WAIT_TIME = 0.1
 UNCLOSED_WAIT_TIME = 2.5 * CLOSED_WAIT_TIME
+
+TEST_CONFIG = {
+    "transport_names": ["test1", "test2"],
+    "to_address_mappings": [
+        {"name": "app1", "pattern": r"^1"},
+        {"name": "app2", "pattern": r"^2"},
+    ],
+    "default_app": "app3",
+}
+
+
+@pytest.fixture()
+async def to_addr_router(worker_factory):
+    async with worker_factory.with_cleanup(ToAddressRouter, TEST_CONFIG) as worker:
+        yield worker
 
 
 class FailingHealthcheckWorker(BaseWorker):
@@ -370,3 +391,65 @@ async def test_middleware_configured(worker_factory):
 # hvae conncetors send to one aouthe inbound will send to outbound 
 # handle in out event in router, in router tests, hardcode connector name 
 # pass through test, verifying the process of the middleware, verify that the middleware actually did what it was supposed to do
+
+
+# create a dummy base worker that will reverse the message 
+# redo the handle_inbound and out bound to reverse the text in a message 
+# create the router for inbound and outbound so that we can receive and send the message 
+
+@define
+class ToyConfig(BaseMiddlewareConfig):
+    # TODO: vallidate log level
+    test: str = "test"
+
+class ToyMiddleware(BaseMiddleware):
+    config: ToyConfig
+
+    async def setup(self):
+        self.test = self.config.test
+
+    async def handle_inbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+    
+    async def handle_outbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+
+    async def handle_event(self, event, connector_name):
+        if event.content:
+            event.content = event.content[::-1]
+        return event
+
+async def test_middle_inbound(worker_factory,to_addr_router, connector_factory):
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["connection1"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True
+
+    }
+    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config]})
+    [middleware] = worker.middlewares
+    assert isinstance(middleware, ToyMiddleware)
+    assert middleware.config.enable_for_connectors == ["connection1"]
+    
+    await to_addr_router.setup()
+
+    inbound = Message(
+        to_addr="+27820001001",
+        from_addr="12345",
+        transport_name="test1",
+        transport_type=TransportType.SMS,
+    )
+    ri_app1 = await connector_factory.setup_ri("app1")
+    await middleware.handle_inbound(inbound,"connection1")
+    await to_addr_router.handle_inbound_message(inbound)
+    
+
+    #await to_addr_router.handle_event(event)
+
+    assert inbound == await ri_app1.consume_inbound()
