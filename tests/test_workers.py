@@ -27,20 +27,14 @@ from vumi2.routers import ToAddressRouter
 CLOSED_WAIT_TIME = 0.1
 UNCLOSED_WAIT_TIME = 2.5 * CLOSED_WAIT_TIME
 
-TEST_CONFIG = {
-    "transport_names": ["test1", "test2"],
-    "to_address_mappings": [
-        {"name": "app1", "pattern": r"^1"},
-        {"name": "app2", "pattern": r"^2"},
-    ],
-    "default_app": "app3",
-}
 
 
-@pytest.fixture()
-async def to_addr_router(worker_factory):
-    async with worker_factory.with_cleanup(ToAddressRouter, TEST_CONFIG) as worker:
-        yield worker
+@pytest.fixture
+async def timeout():
+    with fail_after(1):
+        yield
+
+
 
 
 class FailingHealthcheckWorker(BaseWorker):
@@ -419,37 +413,91 @@ class ToyMiddleware(BaseMiddleware):
         return message
 
     async def handle_event(self, event, connector_name):
-        if event.content:
-            event.content = event.content[::-1]
+        event.helper_metadata["test"] = "event"
+
         return event
 
-async def test_middle_inbound(worker_factory,to_addr_router, connector_factory):
+async def test_middle_inbound(worker_factory, connector_factory, timeout):
+    """ 
+        Testing that middleware is run when the worker recieves the inbound message - 
+        we are publishing the message for the worker to recieve
+    """
     middleware_config = {
         "class_path": "tests.test_workers.ToyMiddleware",
-        "enable_for_connectors": ["connection1"],
+        "enable_for_connectors": ["test", "app"],
         "inbound_enabled": True,
         "outbound_enabled": True,
         "event_enabled": True
 
     }
-    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config]})
-    [middleware] = worker.middlewares
-    assert isinstance(middleware, ToyMiddleware)
-    assert middleware.config.enable_for_connectors == ["connection1"]
-    
-    await to_addr_router.setup()
 
-    inbound = Message(
-        to_addr="+27820001001",
-        from_addr="12345",
-        transport_name="test1",
-        transport_type=TransportType.SMS,
-    )
-    ri_app1 = await connector_factory.setup_ri("app1")
-    await middleware.handle_inbound(inbound,"connection1")
-    await to_addr_router.handle_inbound_message(inbound)
-    
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config]
+    }
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        await ro_test.publish_inbound(mkmsg("Hello"))
+        message = await ri_app.consume_inbound()
+    assert message.content == "olleH"
 
-    #await to_addr_router.handle_event(event)
 
-    assert inbound == await ri_app1.consume_inbound()
+async def test_middle_outbound(worker_factory, connector_factory, timeout):
+    """ 
+        Testing that middleware is run when the worker recieves outbound message - 
+        we are publishing the message for the worker to recieve
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True
+
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config]
+    }
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        await ri_app.publish_outbound(mkmsg("Goodbye"))
+        message = await ro_test.consume_outbound()
+    assert message.content == "eybdooG"
+
+async def test_middle_event(worker_factory, connector_factory, timeout):
+    """ 
+        Testing that middleware is run when the worker recieves outbound message - 
+        we are publishing the message for the worker to recieve
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True
+
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config]
+    }
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message = mkmsg("Goodbye")
+        message_id = message.message_id
+        await ri_app.publish_outbound(message)
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert event.helper_metadata == {"test": "event"}

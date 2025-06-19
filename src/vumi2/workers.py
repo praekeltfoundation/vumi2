@@ -142,7 +142,7 @@ class BaseWorker(AsyncResource):
         @wraps(outbound_handler)
         async def _outbound_handler(msg):
             for middleware in middlewares:
-                msg = await middleware.handle_outbound(msg)
+                msg = await middleware.handle_outbound(msg, connector_name)
             return await outbound_handler(msg)
 
         return _outbound_handler
@@ -153,7 +153,7 @@ class BaseWorker(AsyncResource):
         @wraps(inbound_handler)
         async def _inbound_handler(msg):
             for middleware in middlewares:
-                msg = await middleware.handle_inbound(msg)
+                msg = await middleware.handle_inbound(msg,connector_name)
             return await inbound_handler(msg)
 
         return _inbound_handler
@@ -164,7 +164,7 @@ class BaseWorker(AsyncResource):
         @wraps(event_handler)
         async def _event_handler(msg):
             for middleware in middlewares:
-                msg = await middleware.handle_event(msg)
+                msg = await middleware.handle_event(msg, connector_name)
             return await event_handler(msg)
 
         return _event_handler
@@ -186,7 +186,7 @@ class BaseWorker(AsyncResource):
         _inbound_handler = self.middleware_inbound_handler(
             connector_name, self.middlewares, inbound_handler
         )
-        _event_handler = self.middleware_inbound_handler(
+        _event_handler = self.middleware_event_handler(
             connector_name, self.middlewares, event_handler
         )
         connector = ReceiveInboundConnector(
