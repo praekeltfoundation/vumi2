@@ -227,7 +227,7 @@ class TurnChannelsApi(BaseWorker):
                 tom = TurnOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-                msg = await self.build_outbound(tom)
+                msg = await self.build_outbound(tom, inbound)
 
                 await self.connector.publish_outbound(msg)
 
@@ -240,5 +240,9 @@ class TurnChannelsApi(BaseWorker):
             )
             raise e
 
-    async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
+    async def build_outbound(
+        self, tom: TurnOutboundMessage, inbound: Message | None = None
+    ) -> Message:
+        if inbound is not None:
+            return tom.reply_to_vumi(inbound)
         return tom.to_vumi(self.config.connector_name, self.config.transport_type)

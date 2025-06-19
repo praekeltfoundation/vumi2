@@ -179,8 +179,6 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
 def mkoutbound(
     content: str,
     to="+1234",
-    from_addr="+23456",
-    reply_to="+23456",
     waiting_for_user_input=False,
     **kw,
 ) -> dict:
@@ -412,7 +410,6 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
-        await tca_worker.message_cache.store_inbound(mkmsg("hello", from_addr="+1234"))
         with fail_after(2):
             h = hmac.new(
                 config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
@@ -434,6 +431,50 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.to_addr == "+1234"
     assert outbound.from_addr == "None"
     assert outbound.in_reply_to is None
+    assert outbound.transport_name == "tca-test"
+    assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
+
+
+async def test_send_outbound_reply(worker_factory, http_server, tca_ro):
+    """
+    An outbound message received over HTTP is forwarded over AMQP.
+
+    We don't store anything if event_url is unset.
+    """
+    inbound = mkmsg("hello", from_addr="+1234")
+    body = mkoutbound("foo")
+
+    config = mk_config(
+        http_server,
+        None,
+    )
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(inbound)
+        with fail_after(2):
+            h = hmac.new(
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
+            ).digest()
+            computed_signature = base64.b64encode(h).decode("utf-8")
+            response = await post_outbound(
+                tca_worker, body, signature=computed_signature
+            )
+            outbound = await tca_ro.consume_outbound()
+
+    lresponse = json.loads(response)
+    message_id = lresponse["messages"][0]["id"]
+
+    assert isinstance(message_id, str)
+    uuid = UUID(message_id)
+    assert uuid.hex == message_id
+    assert uuid.version == 4
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "123"
+    assert outbound.in_reply_to == inbound.message_id
     assert outbound.transport_name == "tca-test"
     assert outbound.content == "foo"
     assert outbound.helper_metadata == {}

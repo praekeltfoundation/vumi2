@@ -187,7 +187,10 @@ class TurnOutboundMessage:
         """
         Build a vumi outbound message that's a reply to the given inbound message.
         """
-        return in_msg.reply(self.content, **self._shared_vumi_fields())
+        session_event = Session.RESUME if self.waiting_for_user_input else Session.CLOSE
+        return in_msg.reply(
+            self.content, session_event=session_event, **self._shared_vumi_fields()
+        )
 
 
 st_hook = make_dict_structure_fn(
