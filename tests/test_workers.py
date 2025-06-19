@@ -474,8 +474,8 @@ async def test_middle_outbound(worker_factory, connector_factory, timeout):
 
 async def test_middle_event(worker_factory, connector_factory, timeout):
     """ 
-        Testing that middleware is run when the worker recieves outbound message - 
-        we are publishing the message for the worker to recieve
+        Testing that middleware is run when the worker recieves an event- 
+        we are publishing the event for the worker to recieve
     """
     middleware_config = {
         "class_path": "tests.test_workers.ToyMiddleware",
@@ -499,5 +499,6 @@ async def test_middle_event(worker_factory, connector_factory, timeout):
         message_id = message.message_id
         await ri_app.publish_outbound(message)
         await ro_test.publish_event(mkev(message_id))
+        await ro_test.consume_outbound()
         event = await ri_app.consume_event()
     assert event.helper_metadata == {"test": "event"}
