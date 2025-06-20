@@ -4,7 +4,7 @@ from async_amqp import AmqpProtocol  # type: ignore
 from attrs import Factory, define
 from trio import MemoryReceiveChannel, Nursery, open_memory_channel, open_tcp_stream
 
-from vumi2.cli import class_from_string
+from vumi2.class_helpers import class_from_string
 from vumi2.messages import Event, Message, MessageType
 from vumi2.workers import BaseConfig, BaseWorker
 

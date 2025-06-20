@@ -2,9 +2,12 @@ import importlib.metadata
 
 import pytest
 import sentry_sdk
+from attr import define
 from trio import fail_after, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
+from vumi2.routers import ToAddressRouter
 from vumi2.workers import BaseWorker
 
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
@@ -29,6 +32,39 @@ class FailingHealthcheckWorker(BaseWorker):
         return {"health": "down"}
 
 
+class AMiddlewareWorker(BaseWorker):
+    """
+    A worker with a pair of connectors for use in shutdown/aclose tests.
+
+    In order for tests to control message handling, each consumer sends
+    its message/event to a memory channel (for the test to receive) and
+    waits for a response on another channel.
+    """
+
+    test: str = "test"
+    app: str = "app"
+
+    async def setup(self):
+        # TODO: call superclass setup here
+        # await super().setup()
+        self.ro_test = await self.setup_receive_inbound_connector(
+            self.test, self.handle_in, self.handle_ev
+        )
+        self.r1_app = await self.setup_receive_outbound_connector(
+            self.app, self.handle_out
+        )
+        await self.start_consuming()
+
+    async def handle_in(self, message: Message):
+        await self.ro_test.publish_outbound(message)
+
+    async def handle_ev(self, event: Event):
+        await self.r1_app.publish_event(event)
+
+    async def handle_out(self, message: Message):
+        await self.r1_app.publish_inbound(message)
+
+
 class AcloseWorker(BaseWorker):
     """
     A worker with a pair of connectors for use in shutdown/aclose tests.
@@ -39,6 +75,7 @@ class AcloseWorker(BaseWorker):
     """
 
     async def setup(self):
+        # TODO: call superclass setup here
         # Make sure we haven't added this to the base class since these tests
         # were written.
         assert not hasattr(self, "is_closed")
@@ -347,3 +384,202 @@ async def test_connector_setup_call_start_after_closing(connector_factory):
     ro_ri = await connector_factory.setup_ro("ri")
     await ro_ri.conn.aclose_consumers()
     await ro_ri.conn.start_consuming()
+
+
+# test middlewarre configured and check that wwe have that middleware instance
+# test http_server unconfigure, pass middle to config second parameter
+
+
+async def test_middleware_configured(worker_factory):
+    middleware_config = {
+        "class_path": "vumi2.middlewares.base.BaseMiddleware",
+        "enable_for_connectors": ["connection1"],
+    }
+    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config]})
+    [middleware] = worker.middlewares
+    assert isinstance(middleware, BaseMiddleware)
+    assert middleware.config.enable_for_connectors == ["connection1"]
+
+
+@define
+class ToyConfig(BaseMiddlewareConfig):
+    # TODO: vallidate log level
+    test: str = "test"
+
+
+class ToyMiddleware(BaseMiddleware):
+    config: ToyConfig
+
+    async def setup(self):
+        self.test = self.config.test
+
+    async def handle_inbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+
+    async def handle_outbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+
+    async def handle_event(self, event, connector_name):
+        event.helper_metadata["test"] = "event"
+
+        return event
+
+
+@define
+class ToyConfig2(BaseMiddlewareConfig):
+    # TODO: vallidate log level
+    test: str = "test2"
+
+
+class ToyMiddleware2(BaseMiddleware):
+    config: ToyConfig
+
+    async def setup(self):
+        self.test = self.config.test
+
+    async def handle_inbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content + " 1"
+        return message
+
+    async def handle_outbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content + " 1"
+        return message
+
+    async def handle_event(self, event, connector_name):
+        event.helper_metadata["test"] = "event"
+
+        return event
+
+
+async def test_middle_inbound(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves the inbound message -
+    we are publishing the message for the worker to recieve
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(AMiddlewareWorker, config) as worker:
+        await worker.setup()
+        # ri_app = await connector_factory.setup_ri("app")
+        # ro_test = await connector_factory.setup_ro("test")
+        await worker.ro_test.publish_outbound(mkmsg("Hello"))
+        print(await worker.ro_test.publish_outbound(mkmsg("Hello")))
+        message = await worker.r1_app.publish_inbound(mkmsg("Hello"))
+        print(message)
+    assert message.content == "olleH"
+
+
+async def test_middle_outbound(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves outbound message -
+    we are publishing the message for the worker to recieve
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        await ri_app.publish_outbound(mkmsg("Goodbye"))
+        message = await ro_test.consume_outbound()
+    assert message.content == "eybdooG"
+
+
+async def test_middle_event(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves an event-
+    we are publishing the event for the worker to recieve
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config],
+    }
+
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message = mkmsg("Goodbye")
+        message_id = message.message_id
+        await ri_app.publish_outbound(message)
+        await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+
+        event = await ri_app.consume_event()
+    assert event.helper_metadata == {"test": "event"}
+
+
+async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
+    """
+    This test is to check if middleware is called in
+    the order that they added to the router
+    """
+
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+        await worker.setup()
+        print("A")
+        ri_app = await connector_factory.setup_ri("app")
+        print("b")
+        ro_test = await connector_factory.setup_ro("test")
+        print("c")
+        await ro_test.publish_inbound(mkmsg("Hello"))
+        print("d")
+        message = await ri_app.consume_inbound()
+    assert message.content == "olleH 1"

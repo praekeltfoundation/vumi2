@@ -15,6 +15,8 @@ from attrs import Attribute, AttrsInstance, Factory, define, fields
 from attrs import has as is_attrs
 from cattrs import Converter
 
+from vumi2.middlewares.base import BaseMiddlewareConfig
+
 _conv = Converter(prefer_attrib_converters=True)
 
 CT = TypeVar("CT", bound=AttrsInstance)
@@ -56,6 +58,7 @@ class BaseConfig:
     sentry_dsn: str | None = None
     http_bind: str | None = None
     log_level: str = "INFO"
+    middlewares: list[BaseMiddlewareConfig] = Factory(list)
 
 
 ConfigCallback = Callable[[Attribute, Iterable[str]], Any]
