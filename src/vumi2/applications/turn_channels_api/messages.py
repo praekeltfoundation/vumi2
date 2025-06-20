@@ -9,6 +9,7 @@ from vumi2.messages import (
     Event,
     EventType,
     Message,
+    Session,
     TransportType,
 )
 
@@ -122,6 +123,7 @@ class TurnOutboundMessage:
     from_addr: str | None = None
     reply_to: str | None = None
     priority: int = 1
+    waiting_for_user_input: bool = False
     channel_data: dict[str, Any] = field(factory=dict)
 
     def __attrs_post_init__(self):
@@ -145,9 +147,10 @@ class TurnOutboundMessage:
             content=data["turn"]["text"]["body"],
             to=data["to"],
             from_addr=default_from,
-            reply_to=default_from,
+            reply_to=data.get("reply_to", ""),
             priority=1,
-            channel_data={},  # TODO
+            waiting_for_user_input=data.get("waiting_for_user_input", False),
+            channel_data={},
         )
 
     def _shared_vumi_fields(self):
@@ -172,6 +175,9 @@ class TurnOutboundMessage:
             "content": self.content,
             "transport_name": transport_name,
             "transport_type": transport_type,
+            "session_event": Session.RESUME
+            if self.waiting_for_user_input
+            else Session.CLOSE,
             **self._shared_vumi_fields(),
         }
 
@@ -181,7 +187,10 @@ class TurnOutboundMessage:
         """
         Build a vumi outbound message that's a reply to the given inbound message.
         """
-        return in_msg.reply(self.content, **self._shared_vumi_fields())
+        session_event = Session.RESUME if self.waiting_for_user_input else Session.CLOSE
+        return in_msg.reply(
+            self.content, session_event=session_event, **self._shared_vumi_fields()
+        )
 
 
 st_hook = make_dict_structure_fn(

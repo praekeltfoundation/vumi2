@@ -24,6 +24,7 @@ from vumi2.messages import (
     Event,
     EventType,
     Message,
+    Session,
     TransportType,
     generate_message_id,
 )
@@ -134,9 +135,9 @@ def mk_config(
         "http_bind": "localhost:0",
         "default_from_addr": default_from_addr,
         "auth_token": None,
-        "vumi_base_url_path": "",
-        "turn_base_url_path": f"{http_server.bind}",
-        "secret_key": "supersecret",
+        "vumi_api_path": "",
+        "turn_api_url": f"{http_server.bind}",
+        "turn_hmac_secret": "supersecret",
     }
     return {**config, **config_update}
 
@@ -176,7 +177,10 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
 
 
 def mkoutbound(
-    content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw
+    content: str,
+    to="+1234",
+    waiting_for_user_input=False,
+    **kw,
 ) -> dict:
     return {
         "block": None,
@@ -191,6 +195,7 @@ def mkoutbound(
         # but we were expecting this to be {"contact": {"phone": to}},
         "context": None,
         "turn": {"type": "text", "text": {"body": content}},
+        "waiting_for_user_input": waiting_for_user_input,
         **kw,
     }
 
@@ -235,11 +240,13 @@ async def test_inbound_message(worker_factory, http_server):
     config = mk_config(http_server, default_from_addr=None)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
         with fail_after(2):
             async with handle_inbound(tca_worker, msg):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
-
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
@@ -254,6 +261,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     config = mk_config(http_server, default_from_addr=None)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
         with fail_after(2):
             async with handle_inbound(tca_worker, msg):
                 await http_server.receive_req()
@@ -404,7 +412,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
         await tca_worker.setup()
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
@@ -424,8 +432,53 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.from_addr == "None"
     assert outbound.in_reply_to is None
     assert outbound.transport_name == "tca-test"
-    assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
+
+
+async def test_send_outbound_reply(worker_factory, http_server, tca_ro):
+    """
+    An outbound message received over HTTP is forwarded over AMQP.
+
+    We don't store anything if event_url is unset.
+    """
+    inbound = mkmsg("hello", from_addr="+1234")
+    body = mkoutbound("foo")
+
+    config = mk_config(
+        http_server,
+        None,
+    )
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(inbound)
+        with fail_after(2):
+            h = hmac.new(
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
+            ).digest()
+            computed_signature = base64.b64encode(h).decode("utf-8")
+            response = await post_outbound(
+                tca_worker, body, signature=computed_signature
+            )
+            outbound = await tca_ro.consume_outbound()
+
+    lresponse = json.loads(response)
+    message_id = lresponse["messages"][0]["id"]
+
+    assert isinstance(message_id, str)
+    uuid = UUID(message_id)
+    assert uuid.hex == message_id
+    assert uuid.version == 4
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "123"
+    assert outbound.in_reply_to == inbound.message_id
+    assert outbound.transport_name == "tca-test"
+    assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
 
 
 async def test_send_outbound_invalid_hmac(tca_worker, caplog):
@@ -464,7 +517,7 @@ async def test_send_outbound_invalid_json(tca_worker, caplog):
     with fail_after(2):
         client = tca_worker.http.app.test_client()
         h = hmac.new(
-            tca_worker.config.secret_key.encode(), message.encode(), sha256
+            tca_worker.config.turn_hmac_secret.encode(), message.encode(), sha256
         ).digest()
         computed_signature = base64.b64encode(h).decode("utf-8")
         async with client.request(
@@ -487,7 +540,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     """
     An outbound group message received over HTTP is forwarded over AMQP.
     """
-    body = mkoutbound("foo", group="my-group")
+    body = mkoutbound("foo", group="my-group", waiting_for_user_input=True)
     config = mk_config(
         http_server,
         None,
@@ -499,7 +552,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
         await tca_worker.setup()
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
@@ -521,3 +574,4 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     assert outbound.transport_name == "tca-test"
     assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.session_event == Session.RESUME

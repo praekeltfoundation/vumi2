@@ -5,11 +5,13 @@ from hashlib import sha256
 from logging import getLogger
 from typing import Any
 
-from attrs import define
+from attrs import define, field
 from httpx import AsyncClient
 from quart import request
 from trio import move_on_after
 
+import vumi2.message_caches as message_caches
+from vumi2.cli import class_from_string
 from vumi2.messages import (
     Event,
     Message,
@@ -54,12 +56,10 @@ class TurnChannelsApiConfig(BaseConfig):
     connector_name: str
 
     # Base URL path for HTTP requests.
-    # TODO: change to vumi_api_url
-    vumi_base_url_path: str = ""
+    vumi_api_path: str = ""
 
     # Base URL path for requests to Turn.
-    # TODO: change to turn_api_url; Don't default to empty string - should be required
-    turn_base_url_path: str = ""
+    turn_api_url: str
 
     # Auth token for requests to Turn.
     auth_token: str
@@ -80,14 +80,17 @@ class TurnChannelsApiConfig(BaseConfig):
     event_url_timeout: float = 10
 
     # Secret key used to sign outbound messages.
-    # TODO: Rename to turn_hmac_secret
-    secret_key: str
+    turn_hmac_secret: str
+
+    # Message cache class to use for storing inbound messages.
+    message_cache_class: str = f"{message_caches.__name__}.MemoryMessageCache"
+    message_cache_config: dict = field(factory=dict)
 
     def vumi_url(self, path: str) -> str:
-        return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.vumi_api_path.rstrip("/"), path.lstrip("/")])
 
     def turn_url(self, path: str) -> str:
-        return "/".join([self.turn_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.turn_api_url.rstrip("/"), path.lstrip("/")])
 
 
 class TurnChannelsApi(BaseWorker):
@@ -102,6 +105,8 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
+        message_cache_class = class_from_string(self.config.message_cache_class)
+        self.message_cache = message_cache_class(self.config.message_cache_config)
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
             self.handle_inbound_message,
@@ -124,6 +129,7 @@ class TurnChannelsApi(BaseWorker):
         """
         logger.debug("Consuming inbound message %s", message)
         msg = turn_inbound_from_msg(message, message.transport_name)
+        await self.message_cache.store_inbound(message)
 
         headers = {}
 
@@ -187,10 +193,10 @@ class TurnChannelsApi(BaseWorker):
                     if isinstance(request_data, bytes):
                         request_data = request_data.decode()
                     # Verify the hmac signature
-                    if self.config.secret_key:
+                    if self.config.turn_hmac_secret:
                         logger.info("Verifying HMAC signature")
                         h = hmac.new(
-                            self.config.secret_key.encode(),
+                            self.config.turn_hmac_secret.encode(),
                             request_data.encode(),
                             sha256,
                         ).digest()
@@ -208,11 +214,20 @@ class TurnChannelsApi(BaseWorker):
                     raise JsonDecodeError(str(e)) from e
 
                 logger.debug("Received outbound message: %s", msg_dict)
+                if msg_dict.get("reply_to", "") == "":
+                    # get the reply-to for the outbound message from the cached inbound
+                    inbound = (
+                        await self.message_cache.fetch_last_inbound_by_from_address(
+                            msg_dict["to"]
+                        )
+                    )
+                    if inbound is not None:
+                        msg_dict["reply_to"] = inbound.message_id
 
                 tom = TurnOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-                msg = await self.build_outbound(tom)
+                msg = await self.build_outbound(tom, inbound)
 
                 await self.connector.publish_outbound(msg)
 
@@ -225,5 +240,9 @@ class TurnChannelsApi(BaseWorker):
             )
             raise e
 
-    async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
+    async def build_outbound(
+        self, tom: TurnOutboundMessage, inbound: Message | None = None
+    ) -> Message:
+        if inbound is not None:
+            return tom.reply_to_vumi(inbound)
         return tom.to_vumi(self.config.connector_name, self.config.transport_type)
