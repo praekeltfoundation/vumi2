@@ -134,6 +134,12 @@ class BaseWorker(AsyncResource):
     async def setup(self):
         pass
 
+    #  #TODO: call middleware set-up here
+    #     for middleware in self.middlewares:
+    #        await middleware.setup()
+    # #call the middleware setup iterate thriogh middleware
+    #  list call set_up for each middleware
+
     def middleware_outbound_handler(
         self, connector_name, middlewares, outbound_handler
     ):
