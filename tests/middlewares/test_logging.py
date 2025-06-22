@@ -26,7 +26,7 @@ async def test_handle_inbound():
     config = LoggingMiddlewareConfig(
         "vumi2.middlewares.logging.LoggingMiddleware",
         enable_for_connectors=["connection2"],
-        inbound_enabled=False,
+        inbound_enabled=True,
     )
     middleware = LoggingMiddleware(config)
     await middleware.setup()

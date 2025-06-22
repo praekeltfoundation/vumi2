@@ -12,6 +12,8 @@ from hypercorn.trio import serve as hc_serve
 from quart_trio import QuartTrio
 from trio.abc import AsyncResource
 
+from attrs import asdict
+
 from vumi2.class_helpers import class_from_string
 from vumi2.config import BaseConfig
 from vumi2.connectors import (
@@ -81,8 +83,17 @@ class BaseWorker(AsyncResource):
             self._setup_http(config.http_bind)
         self.middlewares = []
         for middleware_config in self.config.middlewares:
-            middleware_class = class_from_string(middleware_config.class_path)
-            self.middlewares.append(middleware_class(middleware_config))
+            print(f"Config: {middleware_config}")
+            middleware_class = class_from_string(middleware_config["class_path"])
+            print(f"Class {middleware_class}")
+            config_class = middleware_class.__annotations__.get("config",  middleware_config)
+            print(f"Annotated config: {config_class}")
+            #config_dict = asdict(middleware_config)
+            #print(f"Config dict {config_dict}")
+            correct_config = config_class(**middleware_config)
+            #print(f"Correct config {correct_config}")
+            middleware = middleware_class(correct_config)
+            self.middlewares.append(middleware)
 
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
@@ -132,11 +143,9 @@ class BaseWorker(AsyncResource):
         self._closed.set()
 
     async def setup(self):
-        pass
-
-    #  #TODO: call middleware set-up here
-    #     for middleware in self.middlewares:
-    #        await middleware.setup()
+         for middleware in self.middlewares:
+            print(f" Instantiated class: {middleware}")
+            await middleware.setup()
     # #call the middleware setup iterate thriogh middleware
     #  list call set_up for each middleware
 
