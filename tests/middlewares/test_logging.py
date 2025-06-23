@@ -90,7 +90,7 @@ async def test_message_is_logged_event(caplog):
     await middleware.setup()
     message = mkev("54321")
     with caplog.at_level(logging.INFO):
-        assert await middleware.handle_outbound(message, "connection2") == message
+        assert await middleware.handle_event(message, "connection2") == message
     [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
-    assert "Processed event for connection2:" in log.getMessage()
+    assert "Processed event message for connection2" in log.getMessage()
     assert "sent_message_id='54321'" in log.getMessage()
