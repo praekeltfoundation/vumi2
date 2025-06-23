@@ -85,7 +85,9 @@ class BaseWorker(AsyncResource):
         self.middlewares = []
         for middleware_config in self.config.middlewares:
             middleware_class = class_from_string(middleware_config["class_path"])
-            config_class = middleware_class.__annotations__.get("config",  BaseMiddlewareConfig)
+            config_class = middleware_class.__annotations__.get(
+                "config", BaseMiddlewareConfig
+            )
             correct_config = config_class(**middleware_config)
             middleware = middleware_class(correct_config)
             self.middlewares.append(middleware)
@@ -138,7 +140,7 @@ class BaseWorker(AsyncResource):
         self._closed.set()
 
     async def setup(self):
-         for middleware in self.middlewares:
+        for middleware in self.middlewares:
             await middleware.setup()
 
     def middleware_outbound_handler(

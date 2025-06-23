@@ -21,7 +21,8 @@ class LoggingMiddleware(BaseMiddleware):
 
     def _log_msg(self, direction, msg, connector_name):
         self.logger.log(
-            self.log_level, f"Processed {direction} message for {connector_name}: {msg.content}"
+            self.log_level,
+            f"Processed {direction} message for {connector_name}: {msg.content}",
         )
         return msg
 

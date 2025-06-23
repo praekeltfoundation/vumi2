@@ -32,7 +32,7 @@ class FailingHealthcheckWorker(BaseWorker):
         return {"health": "down"}
 
 
-class AMiddlewareWorker(BaseWorker):
+class MiddlewareWorker(BaseWorker):
     """
     A worker with a pair of connectors for use in shutdown/aclose tests.
 
@@ -41,28 +41,24 @@ class AMiddlewareWorker(BaseWorker):
     waits for a response on another channel.
     """
 
-    test: str = "test"
-    app: str = "app"
-
     async def setup(self):
-        # TODO: call superclass setup here
-        # await super().setup()
-        self.ro_test = await self.setup_receive_inbound_connector(
-            self.test, self.handle_in, self.handle_ev
+        await super().setup()
+        self.ri_test = await self.setup_receive_inbound_connector(
+            "test", self.handle_in, self.handle_ev
         )
-        self.r1_app = await self.setup_receive_outbound_connector(
-            self.app, self.handle_out
+        self.ro_app = await self.setup_receive_outbound_connector(
+            "app", self.handle_out
         )
         await self.start_consuming()
 
     async def handle_in(self, message: Message):
-        await self.ro_test.publish_outbound(message)
+        await self.ro_app.publish_inbound(message)
 
     async def handle_ev(self, event: Event):
-        await self.r1_app.publish_event(event)
+        await self.ro_app.publish_event(event)
 
     async def handle_out(self, message: Message):
-        await self.r1_app.publish_inbound(message)
+        await self.ri_test.publish_outbound(message)
 
 
 class AcloseWorker(BaseWorker):
@@ -403,7 +399,6 @@ async def test_middleware_configured(worker_factory):
 
 @define
 class ToyConfig(BaseMiddlewareConfig):
-    # TODO: vallidate log level
     test: str = "test1"
 
 
@@ -411,7 +406,7 @@ class ToyMiddleware(BaseMiddleware):
     config: ToyConfig
 
     async def setup(self):
-       self.test = self.config.test
+        self.test = self.config.test
 
     async def handle_inbound(self, message, connector_name):
         if message.content:
@@ -457,37 +452,10 @@ class ToyMiddleware2(BaseMiddleware):
         return event
 
 
-# async def test_middle_inbound(worker_factory, connector_factory):
-#     """
-#     Testing that middleware is run when the worker recieves the inbound message -
-#     we are publishing the message for the worker to recieve
-#     """
-#     middleware_config = {
-#         "class_path": "tests.test_workers.ToyMiddleware",
-#         "enable_for_connectors": ["test", "app"],
-#         "inbound_enabled": True,
-#         "outbound_enabled": True,
-#         "event_enabled": True,
-#     }
-
-#     config = {
-#         "middlewares": [middleware_config],
-#     }
-#     async with worker_factory.with_cleanup(AMiddlewareWorker, config) as worker:
-#         await worker.setup()
-#         # ri_app = await connector_factory.setup_ri("app")
-#         # ro_test = await connector_factory.setup_ro("test")
-#         await worker.ro_test.publish_outbound(mkmsg("Hello"))
-#         print(await worker.ro_test.publish_outbound(mkmsg("Hello")))
-#         message = await worker.r1_app.publish_inbound(mkmsg("Hello"))
-#         print(message)
-#     assert message.content == "olleH"
-
-
 async def test_middle_inbound(worker_factory, connector_factory):
     """
     Testing that middleware is run when the worker recieves the inbound message -
-    we are publishing the message for the worker to recieve and that 
+    we are publishing the message for the worker to recieve and that
     when inbound is enabled and the other message types is not
     the middle is only applied to inbound messages
     """
@@ -504,27 +472,28 @@ async def test_middle_inbound(worker_factory, connector_factory):
         "default_app": "app",
         "middlewares": [middleware_config],
     }
-    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
-       await worker.setup()
-       ri_app = await connector_factory.setup_ri("app")
-       ro_test = await connector_factory.setup_ro("test")
-       message_hello = mkmsg("Hello")
-       message_goodbye = mkmsg("Goodbye") 
-       message_id = message_goodbye.message_id
-       await ro_test.publish_inbound(message_hello)
-       message_hello_test = await ri_app.consume_inbound()
-       await ri_app.publish_outbound(message_goodbye)
-       message_goodbye_test = await ro_test.consume_outbound()
-       await ro_test.publish_event(mkev(message_id))
-       event = await ri_app.consume_event()
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
     assert message_hello_test.content == "olleH"
     assert message_goodbye_test.content == "Goodbye"
     assert event.helper_metadata == {}
 
+
 async def test_middle_outbound(worker_factory, connector_factory):
     """
     Testing that middleware is run when the worker recieves the outbound message -
-    we are publishing the message for the worker to recieve and that 
+    we are publishing the message for the worker to recieve and that
     when outbound is enabled and the other message types is not
     the middle is only applied to outbound messages
     """
@@ -541,30 +510,28 @@ async def test_middle_outbound(worker_factory, connector_factory):
         "default_app": "app",
         "middlewares": [middleware_config],
     }
-    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
-       await worker.setup()
-       ri_app = await connector_factory.setup_ri("app")
-       ro_test = await connector_factory.setup_ro("test")
-       message_hello = mkmsg("Hello")
-       message_goodbye = mkmsg("Goodbye") 
-       message_id = message_goodbye.message_id
-       await ro_test.publish_inbound(message_hello)
-       message_hello_test = await ri_app.consume_inbound()
-       await ri_app.publish_outbound(message_goodbye)
-       message_goodbye_test = await ro_test.consume_outbound()
-       await ro_test.publish_event(mkev(message_id))
-       event = await ri_app.consume_event()
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
     assert message_hello_test.content == "Hello"
     assert message_goodbye_test.content == "eybdooG"
     assert event.helper_metadata == {}
 
 
-
-
 async def test_middle_event(worker_factory, connector_factory):
     """
     Testing that middleware is run when the worker recieves an event -
-    we are publishing the event for the worker to recieve and that 
+    we are publishing the event for the worker to recieve and that
     when event is enabled and the other message types is not
     the middle is only applied to event
     """
@@ -581,22 +548,22 @@ async def test_middle_event(worker_factory, connector_factory):
         "default_app": "app",
         "middlewares": [middleware_config],
     }
-    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
-       await worker.setup()
-       ri_app = await connector_factory.setup_ri("app")
-       ro_test = await connector_factory.setup_ro("test")
-       message_hello = mkmsg("Hello")
-       message_goodbye = mkmsg("Goodbye") 
-       message_id = message_goodbye.message_id
-       await ro_test.publish_inbound(message_hello)
-       message_hello_test = await ri_app.consume_inbound()
-       await ri_app.publish_outbound(message_goodbye)
-       message_goodbye_test = await ro_test.consume_outbound()
-       await ro_test.publish_event(mkev(message_id))
-       event = await ri_app.consume_event()
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
     assert message_hello_test.content == "Hello"
     assert message_goodbye_test.content == "Goodbye"
-    assert event.helper_metadata == {'test': 'event'} 
+    assert event.helper_metadata == {"test": "event"}
 
 
 async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
@@ -615,7 +582,7 @@ async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
 
     middleware_config_2 = {
         "class_path": "tests.test_workers.ToyMiddleware2",
-        "enable_for_connectors": ["test","app"],
+        "enable_for_connectors": ["test", "app"],
         "inbound_enabled": True,
         "outbound_enabled": True,
         "event_enabled": True,
@@ -627,20 +594,18 @@ async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
         "middlewares": [middleware_config, middleware_config_2],
     }
 
-    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
         await worker.setup()
-        print("A")
         ri_app = await connector_factory.setup_ri("app")
-        print("b")
         ro_test = await connector_factory.setup_ro("test")
-        print("c")
         await ro_test.publish_inbound(mkmsg("Hello"))
-        print("d")
         message = await ri_app.consume_inbound()
     assert message.content == "olleH 1"
 
 
-async def test_multiple_middle_wares_on_different_connections(worker_factory, connector_factory):
+async def test_multiple_middle_wares_on_different_connections(
+    worker_factory, connector_factory
+):
     """
     This test is to check if a middleware is only called on
     connections that they are enabled on
@@ -668,7 +633,7 @@ async def test_multiple_middle_wares_on_different_connections(worker_factory, co
         "middlewares": [middleware_config, middleware_config_2],
     }
 
-    async with worker_factory.with_cleanup(ToAddressRouter, config) as worker:
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
         await worker.setup()
         ri_app = await connector_factory.setup_ri("app")
         ro_test = await connector_factory.setup_ro("test")
@@ -691,7 +656,7 @@ async def test_middleware_setup_called(worker_factory, connector_factory):
         "inbound_enabled": False,
         "outbound_enabled": False,
         "event_enabled": True,
-        "test": "test10"
+        "test": "test10",
     }
     middleware_config_2 = {
         "class_path": "tests.test_workers.ToyMiddleware2",
@@ -699,13 +664,13 @@ async def test_middleware_setup_called(worker_factory, connector_factory):
         "inbound_enabled": True,
         "outbound_enabled": True,
         "event_enabled": True,
-        "test": "test"
+        "test": "test",
     }
 
-    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config, middleware_config_2]})
+    worker = worker_factory(
+        BaseWorker, {"middlewares": [middleware_config, middleware_config_2]}
+    )
     await worker.setup()
     middleware = worker.middlewares
-    assert isinstance(middleware[0],ToyMiddleware)
+    assert isinstance(middleware[0], ToyMiddleware)
     assert middleware[0].config.test == "test10"
-
-

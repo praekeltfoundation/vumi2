@@ -2,6 +2,7 @@ from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.middlewares.logging import LoggingMiddleware, LoggingMiddlewareConfig
 import logging
 
+
 def mkmsg(content: str) -> Message:
     return Message(
         to_addr="12345",
@@ -33,10 +34,11 @@ async def test_handle_inbound():
     message = mkmsg("Hello")
     assert await middleware.handle_inbound(message, "connection1") == message
 
+
 async def test_message_is_logged(caplog):
     """
-        This test is to check that the logging message 
-        is actually logged
+    This test is to check that the logging message
+    is actually logged
     """
     config = LoggingMiddlewareConfig(
         "vumi2.middlewares.logging.LoggingMiddleware",
@@ -49,4 +51,3 @@ async def test_message_is_logged(caplog):
     with caplog.at_level(logging.INFO):
         assert await middleware.handle_inbound(message, "connection1") == message
     assert "Processed inbound message for connection1: Hello" in caplog.text
-
