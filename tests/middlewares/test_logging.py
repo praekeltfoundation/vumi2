@@ -55,6 +55,7 @@ async def test_message_is_logged_inbound(caplog):
     assert "Processed inbound message for connection1" in log.getMessage()
     assert "content='Hello'" in log.getMessage()
 
+
 async def test_message_is_logged_outbound(caplog):
     """
     This test is to check that the logging message
@@ -73,6 +74,7 @@ async def test_message_is_logged_outbound(caplog):
     [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
     assert "Processed outbound message for connection2" in log.getMessage()
     assert "content='Goodbye'" in log.getMessage()
+
 
 async def test_message_is_logged_event(caplog):
     """
