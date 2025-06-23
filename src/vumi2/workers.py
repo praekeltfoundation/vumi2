@@ -12,11 +12,8 @@ from hypercorn.trio import serve as hc_serve
 from quart_trio import QuartTrio
 from trio.abc import AsyncResource
 
-from attrs import asdict
-
 from vumi2.class_helpers import class_from_string
 from vumi2.config import BaseConfig
-from vumi2.middlewares.base import BaseMiddlewareConfig
 from vumi2.connectors import (
     ConnectorCollection,
     EventCallbackType,
@@ -25,6 +22,7 @@ from vumi2.connectors import (
     ReceiveOutboundConnector,
 )
 from vumi2.errors import DuplicateConnectorError
+from vumi2.middlewares.base import BaseMiddlewareConfig
 
 ConnectorsType = TypeVar(
     "ConnectorsType",

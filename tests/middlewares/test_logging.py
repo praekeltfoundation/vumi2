@@ -1,6 +1,7 @@
+import logging
+
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.middlewares.logging import LoggingMiddleware, LoggingMiddlewareConfig
-import logging
 
 
 def mkmsg(content: str) -> Message:

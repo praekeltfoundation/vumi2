@@ -7,7 +7,6 @@ from trio import fail_after, open_memory_channel, sleep
 
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
-from vumi2.routers import ToAddressRouter
 from vumi2.workers import BaseWorker
 
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
@@ -34,11 +33,10 @@ class FailingHealthcheckWorker(BaseWorker):
 
 class MiddlewareWorker(BaseWorker):
     """
-    A worker with a pair of connectors for use in shutdown/aclose tests.
+    A worker with a pair of connectors for use in middleware tests.
 
     In order for tests to control message handling, each consumer sends
-    its message/event to a memory channel (for the test to receive) and
-    waits for a response on another channel.
+    its message/event its own connection so that we prevent race conditions
     """
 
     async def setup(self):
