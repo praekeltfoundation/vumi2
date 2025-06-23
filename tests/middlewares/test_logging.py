@@ -36,10 +36,10 @@ async def test_handle_inbound():
     assert await middleware.handle_inbound(message, "connection1") == message
 
 
-async def test_message_is_logged(caplog):
+async def test_message_is_logged_inbound(caplog):
     """
     This test is to check that the logging message
-    is actually logged
+    is actually logged when handling an inbound message
     """
     config = LoggingMiddlewareConfig(
         "vumi2.middlewares.logging.LoggingMiddleware",
@@ -51,4 +51,44 @@ async def test_message_is_logged(caplog):
     message = mkmsg("Hello")
     with caplog.at_level(logging.INFO):
         assert await middleware.handle_inbound(message, "connection1") == message
-    assert "Processed inbound message for connection1: Hello" in caplog.text
+    [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
+    assert "Processed inbound message for connection1" in log.getMessage()
+    assert "content='Hello'" in log.getMessage()
+
+async def test_message_is_logged_outbound(caplog):
+    """
+    This test is to check that the logging message
+    is actually logged when handling an outbound message
+    """
+    config = LoggingMiddlewareConfig(
+        "vumi2.middlewares.logging.LoggingMiddleware",
+        enable_for_connectors=["connection2"],
+        outbound_enabled=True,
+    )
+    middleware = LoggingMiddleware(config)
+    await middleware.setup()
+    message = mkmsg("Goodbye")
+    with caplog.at_level(logging.INFO):
+        assert await middleware.handle_outbound(message, "connection2") == message
+    [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
+    assert "Processed outbound message for connection2" in log.getMessage()
+    assert "content='Goodbye'" in log.getMessage()
+
+async def test_message_is_logged_event(caplog):
+    """
+    This test is to check that the logging message
+    is actually logged when handling an event
+    """
+    config = LoggingMiddlewareConfig(
+        "vumi2.middlewares.logging.LoggingMiddleware",
+        enable_for_connectors=["connection2"],
+        event_enabled=True,
+    )
+    middleware = LoggingMiddleware(config)
+    await middleware.setup()
+    message = mkev("54321")
+    with caplog.at_level(logging.INFO):
+        assert await middleware.handle_outbound(message, "connection2") == message
+    [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
+    assert "Processed event for connection2:" in log.getMessage()
+    assert "sent_message_id='54321'" in log.getMessage()
