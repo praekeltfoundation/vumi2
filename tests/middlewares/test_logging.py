@@ -52,8 +52,9 @@ async def test_message_is_logged_inbound(caplog):
     with caplog.at_level(logging.INFO):
         assert await middleware.handle_inbound(message, "connection1") == message
     [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
-    assert "Processed inbound message for connection1" in log.getMessage()
-    assert "content='Hello'" in log.getMessage()
+    log_message = log.getMessage()
+    assert "Processed inbound message for connection1" in log_message
+    assert "content='Hello'" in log_message
 
 
 async def test_message_is_logged_outbound(caplog):
@@ -72,8 +73,9 @@ async def test_message_is_logged_outbound(caplog):
     with caplog.at_level(logging.INFO):
         assert await middleware.handle_outbound(message, "connection2") == message
     [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
-    assert "Processed outbound message for connection2" in log.getMessage()
-    assert "content='Goodbye'" in log.getMessage()
+    log_message = log.getMessage()
+    assert "Processed outbound message for connection2" in log_message
+    assert "content='Goodbye'" in log_message
 
 
 async def test_message_is_logged_event(caplog):
@@ -92,5 +94,6 @@ async def test_message_is_logged_event(caplog):
     with caplog.at_level(logging.INFO):
         assert await middleware.handle_event(message, "connection2") == message
     [log] = [log for log in caplog.records if log.levelno >= logging.INFO]
-    assert "Processed event message for connection2" in log.getMessage()
-    assert "sent_message_id='54321'" in log.getMessage()
+    log_message = log.getMessage()
+    assert "Processed event message for connection2" in log_message
+    assert "sent_message_id='54321'" in log_message
