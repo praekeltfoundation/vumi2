@@ -417,7 +417,7 @@ class ToyMiddleware(BaseMiddleware):
         return message
 
     async def handle_event(self, event, connector_name):
-        event.helper_metadata["test"] = "event"
+        event.helper_metadata["test"] = "_ToyMiddleWare1"
 
         return event
 
@@ -445,8 +445,8 @@ class ToyMiddleware2(BaseMiddleware):
         return message
 
     async def handle_event(self, event, connector_name):
-        event.helper_metadata["test"] = "event"
-
+        prev_helper = event.helper_metadata["test"]
+        event.helper_metadata["test"] = f"{prev_helper}_ToyMiddleWare2"
         return event
 
 
@@ -561,7 +561,51 @@ async def test_middle_event(worker_factory, connector_factory):
         event = await ri_app.consume_event()
     assert message_hello_test.content == "Hello"
     assert message_goodbye_test.content == "Goodbye"
-    assert event.helper_metadata == {"test": "event"}
+    assert event.helper_metadata == {"test": "_ToyMiddleWare1"}
+
+
+async def test_multiple_middlewares_event(worker_factory, connector_factory):
+    """
+    This test is to check if middleware is called in
+    the order that they added to the router
+    """
+
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": False,
+        "event_enabled": True,
+    }
+
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": False,
+        "event_enabled": True,
+    }
+
+    config = {
+        "transport_names": ["test"],
+        "default_app": "app",
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert event.helper_metadata == {"test": "_ToyMiddleWare1_ToyMiddleWare2"}
 
 
 async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
