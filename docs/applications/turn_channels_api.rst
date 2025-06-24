@@ -66,6 +66,31 @@ The application has the following configuration options:
 
    The transport_type to use for non-reply outbound messages. Defaults to ``sms``.
 
+.. py:data:: message_cache_class
+   :type: str
+
+   The message cache class to use for storing inbound messages. Defaults to ``MemoryMessageCache``.
+
+.. py:data:: message_cache_config
+   :type: dict
+
+   The configuration for the message cache. Defaults to an empty dictionary.
+
+.. py:data:: max_retries
+   :type: int
+
+   The maximum number of retries to attempt for outbound message requests. Defaults to 3.
+
+.. py:data:: retry_delay_exponent
+   :type: int
+
+   The exponent to use for retry delays. Defaults to 2.
+
+.. py:data:: retry_delay_base
+   :type: int
+
+   The base to use for retry delays. Defaults to 2.
+
 
 How it works
 ^^^^^^^^^^^^
