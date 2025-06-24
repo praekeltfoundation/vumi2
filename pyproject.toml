@@ -62,6 +62,9 @@ module = "vumi2.*"
 [tool.pytest.ini_options]
 trio_mode = true
 addopts = "--cov=src --cov-report=term-missing"
+markers = [
+    "asyncio: mark test as asyncio"
+]
 
 [tool.coverage.report]
 exclude_also = ["@overload"]

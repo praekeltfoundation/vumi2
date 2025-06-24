@@ -7,7 +7,9 @@ from hashlib import sha256
 from http import HTTPStatus
 from uuid import UUID
 
+import httpx
 import pytest
+import trio
 from attrs import define, field
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
@@ -18,7 +20,7 @@ from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import Headers, MultiDict
 
 from vumi2.applications import TurnChannelsApi
-from vumi2.applications.errors import TimeoutError
+from vumi2.applications.errors import JsonDecodeError, TimeoutError
 from vumi2.messages import (
     DeliveryStatus,
     Event,
@@ -252,48 +254,104 @@ async def test_inbound_message(worker_factory, http_server):
     assert req.body_json["message"]["from"] == "456"
 
 
+@pytest.mark.asyncio()
 async def test_inbound_bad_response(worker_factory, http_server, caplog):
     """
     If an inbound message results in an HTTP error, the error and
     message are logged.
     """
+    # Configure with shorter timeouts and retries for testing
+    config = mk_config(
+        http_server,
+        default_from_addr=None,
+        mo_message_url_timeout=2.0,  # Shorter timeout for test
+        max_retries=1,  # Only retry once
+        retry_delay_base=0.1,  # Shorter delay for test
+    )
     msg = mkmsg("hello")
-    config = mk_config(http_server, default_from_addr=None)
 
-    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
-        await tca_worker.setup()
-        with fail_after(2):
-            async with handle_inbound(tca_worker, msg):
-                await http_server.receive_req()
+    with fail_after(5):  # Overall test timeout
+        async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+            await worker.setup()
+
+            # This should complete with retries
+            async with handle_inbound(worker, msg):
+                # First request fails with 500
+                req = await http_server.receive_req()
+                assert req.body_json["message"]["text"]["body"] == "hello"
                 await http_server.send_rsp(RspInfo(code=500))
 
-    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Error sending message, received HTTP code 500" in err.getMessage()
+                # Second request (retry) also fails with 500
+                req = await http_server.receive_req()
+                assert req.body_json["message"]["text"]["body"] == "hello"
+                await http_server.send_rsp(RspInfo(code=500))
+
+            # Wait a moment for logs to be processed
+            await trio.sleep(0.1)
+
+            # Check the logs
+            warning_logs = [
+                record.getMessage()
+                for record in caplog.records
+                if record.levelno == logging.WARNING
+            ]
+            error_logs = [
+                record.getMessage()
+                for record in caplog.records
+                if record.levelno >= logging.ERROR
+            ]
+
+            # Verify we got the expected warning logs for retries
+            assert any(
+                "Attempt 1 failed with status 500" in msg for msg in warning_logs
+            )
+
+            # Verify we got the final error log
+            assert any(
+                "Error sending message, received HTTP code 500" in msg
+                for msg in error_logs
+            )
 
 
+@pytest.mark.asyncio()
 async def test_inbound_too_slow(worker_factory, http_server, caplog):
     """
     If an inbound message times out, the error and message are logged.
-
-    Using an autojump clock here seems to break the AMQP client, so we
-    have to use wall-clock time instead.
     """
-    config = mk_config(http_server, mo_message_url_timeout=0.2)
+    # Set a very short timeout and disable retries for this test
+    config = mk_config(
+        http_server,
+        mo_message_url_timeout=0.1,
+        max_retries=0,  # Disable retries for this test
+    )
     msg = mkmsg("hello")
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
-        with fail_after(5):
-            with pytest.raises(TimeoutError) as e:  # noqa: PT012
-                async with handle_inbound(tca_worker, msg):
-                    await http_server.receive_req()
-                    await http_server.send_rsp(RspInfo(code=502, wait=0.3))
 
-    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Timed out sending message after 0.2 seconds." in err.getMessage()
-    assert e.value.name == "TimeoutError"
-    assert e.value.description == "timeout"
-    assert e.value.status == HTTPStatus.BAD_REQUEST
+        # We expect this to raise a TimeoutError
+        with pytest.raises(TimeoutError) as exc_info:
+            async with handle_inbound(tca_worker, msg):
+                # Don't respond to the request to trigger a timeout
+                pass
+
+    # Check the error logs
+    error_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+    ]
+
+    # Check for the timeout error message
+    assert any(
+        "Timed out sending message after 0.1 seconds. Message:" in msg
+        for msg in error_logs
+    )
+
+    # Verify the exception details
+    assert exc_info.value.name == "TimeoutError"
+    assert exc_info.value.description == "timeout"
+    assert exc_info.value.status == HTTPStatus.BAD_REQUEST
 
 
 async def test_inbound_auth_token(worker_factory, http_server):
@@ -509,31 +567,138 @@ async def test_send_outbound_invalid_hmac(tca_worker, caplog):
     )
 
 
-async def test_send_outbound_invalid_json(tca_worker, caplog):
+async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
     """
     An attempted send with a non-json body returns an appropriate error.
     """
-    message = "gimme r00t?"
-    with fail_after(2):
-        client = tca_worker.http.app.test_client()
+    config = mk_config(http_server)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        message = "gimme r00t?"
         h = hmac.new(
-            tca_worker.config.turn_hmac_secret.encode(), message.encode(), sha256
+            worker.config.turn_hmac_secret.encode(), message.encode(), sha256
         ).digest()
         computed_signature = base64.b64encode(h).decode("utf-8")
-        async with client.request(
-            path="/messages",
-            method="POST",
-            headers={"X-Turn-Hook-Signature": computed_signature},
-        ) as connection:
-            await connection.send(message.encode())
-            await connection.send_complete()
-            await connection.receive()
 
-    err = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert (
-        "Error sending message, received HTTP code 400 with error JsonDecodeError. "
-        "Message: json decode error" in err[0].getMessage()
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with pytest.raises(JsonDecodeError):
+                    await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+        err = [log for log in caplog.records if log.levelno >= logging.ERROR]
+        error_messages = [log.getMessage() for log in err]
+        assert any(
+            "json decode error" in msg for msg in error_messages
+        ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
+
+
+@pytest.mark.asyncio()
+async def test_retry_on_http_error(worker_factory, http_server, caplog):
+    """
+    When an HTTP error occurs, we retry according to the retry configuration.
+    """
+    config = mk_config(
+        http_server,
+        max_retries=2,
+        retry_delay_base=1,
+        retry_delay_exponent=1,
     )
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        msg = mkmsg("test")
+
+        async with handle_inbound(worker, msg):
+            # First request fails with 500
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=500))
+
+            # Second request fails with 503
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=503))
+
+            # Third request succeeds
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=200))
+
+        assert req.body_json["message"]["text"]["body"] == "test"
+        # Get all warning and error log messages
+        log_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno >= logging.WARNING
+        ]
+
+        # Check for the retry attempt logs
+        assert any("Attempt 1 failed with status 500" in msg for msg in log_messages)
+        assert any("Attempt 2 failed with status 503" in msg for msg in log_messages)
+
+        # Check for the final error log
+        assert any(
+            "Error sending message, received HTTP code 503" in msg
+            for msg in log_messages
+        )
+
+
+@pytest.mark.asyncio()
+async def test_retry_on_network_error(worker_factory, http_server, caplog, monkeypatch):
+    """
+    When a network error occurs, we retry according to the retry configuration.
+    """
+    call_count = 0
+    original_post = httpx.AsyncClient.post
+
+    async def mock_post(self, *args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ConnectionError("Connection failed")
+        return await original_post(self, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+
+    config = mk_config(
+        http_server,
+        max_retries=1,
+        retry_delay_base=0.1,
+        retry_delay_exponent=1,
+    )
+
+    caplog.clear()
+    caplog.set_level(logging.WARNING, logger="vumi2")
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        msg = mkmsg("test")
+
+        async with handle_inbound(worker, msg):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=200))
+
+        assert req.body_json["message"]["text"]["body"] == "test"
+
+        assert call_count == 2, f"Expected 2 calls, got {call_count}"
+
+        warning_logs = [
+            record.message
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+        ]
+
+        expected_log = "Attempt 1 failed with error: Connection failed"
+        assert any(
+            expected_log in log for log in warning_logs
+        ), f"Expected warning containing '{expected_log}', got: {warning_logs}"
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):

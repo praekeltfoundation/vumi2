@@ -5,6 +5,7 @@ from hashlib import sha256
 from logging import getLogger
 from typing import Any
 
+import trio
 from attrs import define, field
 from httpx import AsyncClient
 from quart import request
@@ -86,6 +87,11 @@ class TurnChannelsApiConfig(BaseConfig):
     message_cache_class: str = f"{message_caches.__name__}.MemoryMessageCache"
     message_cache_config: dict = field(factory=dict)
 
+    # Retries
+    max_retries: int = 3
+    retry_delay_exponent: int = 2
+    retry_delay_base: int = 2
+
     def vumi_url(self, path: str) -> str:
         return "/".join([self.vumi_api_path.rstrip("/"), path.lstrip("/")])
 
@@ -137,18 +143,69 @@ class TurnChannelsApi(BaseWorker):
 
         timeout = self.config.mo_message_url_timeout
         with move_on_after(timeout) as cs:
-            async with AsyncClient() as client:
-                resp = await client.post(
-                    self.config.turn_url("/messages"),
-                    json=msg,
-                    headers=headers,
-                )
+            last_error: dict[str, Any] | str | None = None
+            for attempt in range(self.config.max_retries + 1):
+                try:
+                    async with AsyncClient() as client:
+                        resp = await client.post(
+                            self.config.turn_url("/messages"),
+                            json=msg,
+                            headers=headers,
+                        )
 
-            # TODO: Deal with API rate limits
-            if resp.status_code < 200 or resp.status_code >= 300:
+                    if 200 <= resp.status_code < 300:
+                        # Success
+                        break
+
+                    last_error = {
+                        "code": resp.status_code,
+                        "body": resp.text,
+                        "message": msg,
+                    }
+                    logger.warning(
+                        f"Attempt {attempt + 1} failed with status {resp.status_code}",
+                        extra={
+                            "metric": "turn.rate_limit_retry",
+                            "type": "counter",
+                            "attempt": attempt + 1,
+                            "max_retries": self.config.max_retries,
+                        },
+                    )
+
+                    if attempt < self.config.max_retries:
+                        delay = self.config.retry_delay_base ** (
+                            attempt * self.config.retry_delay_exponent
+                        )
+                        await trio.sleep(delay)
+
+                except Exception as e:
+                    last_error = str(e)
+                    logger.warning(
+                        f"Attempt {attempt + 1} failed with error: {last_error}",
+                        extra={
+                            "metric": "turn.rate_limit_retry",
+                            "type": "counter",
+                            "attempt": attempt + 1,
+                            "max_retries": self.config.max_retries,
+                        },
+                    )
+                    if attempt == self.config.max_retries:
+                        raise
+                    delay = self.config.retry_delay_base ** (
+                        attempt * self.config.retry_delay_exponent
+                    )
+                    await trio.sleep(delay)
+
+            if last_error and isinstance(last_error, dict):
                 logger.error(
                     LOG_MSG_HTTP_ERR,
-                    {"code": resp.status_code, "body": resp.text, "message": msg},
+                    last_error,
+                    extra={
+                        "metric": "turn.rate_limit_retry",
+                        "type": "counter",
+                        "attempt": attempt + 1,
+                        "max_retries": self.config.max_retries,
+                    },
                 )
 
         if cs.cancelled_caught:
@@ -192,22 +249,8 @@ class TurnChannelsApi(BaseWorker):
                     request_data = await request.get_data(as_text=True)
                     if isinstance(request_data, bytes):
                         request_data = request_data.decode()
-                    # Verify the hmac signature
-                    if self.config.turn_hmac_secret:
-                        logger.info("Verifying HMAC signature")
-                        h = hmac.new(
-                            self.config.turn_hmac_secret.encode(),
-                            request_data.encode(),
-                            sha256,
-                        ).digest()
-                        computed_signature = base64.b64encode(h).decode("utf-8")
-                        signature = request.headers.get("X-Turn-Hook-Signature", "")
-                        logger.info(
-                            f"Signature from Turn: {signature}."
-                            f"Computed: {computed_signature}"
-                        )
-                        if not hmac.compare_digest(computed_signature, signature):
-                            raise SignatureMismatchError()
+
+                    await self._verify_hmac(request_data)
 
                     msg_dict = json.loads(request_data)
                 except json.JSONDecodeError as e:
@@ -215,7 +258,6 @@ class TurnChannelsApi(BaseWorker):
 
                 logger.debug("Received outbound message: %s", msg_dict)
                 if msg_dict.get("reply_to", "") == "":
-                    # get the reply-to for the outbound message from the cached inbound
                     inbound = (
                         await self.message_cache.fetch_last_inbound_by_from_address(
                             msg_dict["to"]
@@ -239,6 +281,22 @@ class TurnChannelsApi(BaseWorker):
                 {"code": e.status, "error": e.name, "message": e.description},
             )
             raise e
+
+    async def _verify_hmac(self, request_data: str) -> None:
+        if self.config.turn_hmac_secret:
+            logger.info("Verifying HMAC signature")
+            h = hmac.new(
+                self.config.turn_hmac_secret.encode(),
+                request_data.encode(),
+                sha256,
+            ).digest()
+            computed_signature = base64.b64encode(h).decode("utf-8")
+            signature = request.headers.get("X-Turn-Hook-Signature", "")
+            logger.info(
+                f"Signature from Turn: {signature}." f"Computed: {computed_signature}"
+            )
+            if not hmac.compare_digest(computed_signature, signature):
+                raise SignatureMismatchError()
 
     async def build_outbound(
         self, tom: TurnOutboundMessage, inbound: Message | None = None
