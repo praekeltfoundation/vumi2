@@ -716,3 +716,31 @@ async def test_middleware_setup_called(worker_factory, connector_factory):
     middleware = worker.middlewares
     assert isinstance(middleware[0], ToyMiddleware)
     assert middleware[0].config.test == "test10"
+
+
+async def test_unicoder(worker_factory, connector_factory):
+    middleware_config = {
+        "class_path": "vumi2.middlewares.unidecoder.Unidecoder",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": True,
+        "event_enabled": False,
+    }
+    async with worker_factory.with_cleanup(
+        MiddlewareWorker, middleware_config
+    ) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("до свидания")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert message_hello_test.content == "Hello"
+    assert message_goodbye_test.content == "Goodbye"
+    assert event.helper_metadata == {}
