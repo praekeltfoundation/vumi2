@@ -37,3 +37,13 @@ class SignatureMismatchError(ApiError):
     name = "SignatureMismatchError"
     description = "Authentication failed: Invalid HMAC signature"
     status = HTTPStatus.UNAUTHORIZED
+
+
+class HttpErrorResponse(ApiError):
+    name = "HttpErrorResponse"
+    description = "HTTP error response"
+    code: int
+
+    def __init__(self, code: int):
+        self.code = code
+        super().__init__(f"HTTP error response: {code}")

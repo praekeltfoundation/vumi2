@@ -1,15 +1,20 @@
 import base64
 import hmac
 import json
+import secrets
 from hashlib import sha256
 from logging import getLogger
 from typing import Any
 
-from attrs import define
+import trio
+from attrs import define, field
 from httpx import AsyncClient
+from prometheus_client import Counter
 from quart import request
 from trio import move_on_after
 
+import vumi2.message_caches as message_caches
+from vumi2.cli import class_from_string
 from vumi2.messages import (
     Event,
     Message,
@@ -17,12 +22,22 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
-from ..errors import ApiError, JsonDecodeError, SignatureMismatchError, TimeoutError
+from ..errors import (
+    ApiError,
+    HttpErrorResponse,
+    JsonDecodeError,
+    SignatureMismatchError,
+    TimeoutError,
+)
 from .messages import (
     TurnOutboundMessage,
     turn_event_from_ev,
     turn_inbound_from_msg,
     turn_outbound_from_msg,
+)
+
+turn_rate_limit_retry = Counter(
+    "turn_rate_limit_retry", "Total amount of retries against the Turn API", ["attempt"]
 )
 
 LOG_MSG_HTTP_ERR = (
@@ -54,10 +69,10 @@ class TurnChannelsApiConfig(BaseConfig):
     connector_name: str
 
     # Base URL path for HTTP requests.
-    vumi_base_url_path: str = ""
+    vumi_api_path: str = ""
 
     # Base URL path for requests to Turn.
-    turn_base_url_path: str = ""
+    turn_api_url: str
 
     # Auth token for requests to Turn.
     auth_token: str
@@ -78,13 +93,22 @@ class TurnChannelsApiConfig(BaseConfig):
     event_url_timeout: float = 10
 
     # Secret key used to sign outbound messages.
-    secret_key: str
+    turn_hmac_secret: str
+
+    # Message cache class to use for storing inbound messages.
+    message_cache_class: str = f"{message_caches.__name__}.MemoryMessageCache"
+    message_cache_config: dict = field(factory=dict)
+
+    # Retries
+    max_retries: int = 3
+    retry_delay_exponent: int = 2
+    retry_delay_base: int = 2
 
     def vumi_url(self, path: str) -> str:
-        return "/".join([self.vumi_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.vumi_api_path.rstrip("/"), path.lstrip("/")])
 
     def turn_url(self, path: str) -> str:
-        return "/".join([self.turn_base_url_path.rstrip("/"), path.lstrip("/")])
+        return "/".join([self.turn_api_url.rstrip("/"), path.lstrip("/")])
 
 
 class TurnChannelsApi(BaseWorker):
@@ -99,6 +123,8 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
+        message_cache_class = class_from_string(self.config.message_cache_class)
+        self.message_cache = message_cache_class(self.config.message_cache_config)
         await super().setup()
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
@@ -120,8 +146,17 @@ class TurnChannelsApi(BaseWorker):
         """
         Send the vumi message as an HTTP request to the configured URL.
         """
+
+        async def _backoff(attempt: int) -> None:
+            delay = self.config.retry_delay_base ** (
+                attempt * self.config.retry_delay_exponent
+            )
+            delay = secrets.randbelow(delay)
+            await trio.sleep(delay)
+
         logger.debug("Consuming inbound message %s", message)
         msg = turn_inbound_from_msg(message, message.transport_name)
+        await self.message_cache.store_inbound(message)
 
         headers = {}
 
@@ -129,19 +164,30 @@ class TurnChannelsApi(BaseWorker):
 
         timeout = self.config.mo_message_url_timeout
         with move_on_after(timeout) as cs:
-            async with AsyncClient() as client:
-                resp = await client.post(
-                    self.config.turn_url("/messages"),
-                    json=msg,
-                    headers=headers,
-                )
+            for attempt in range(self.config.max_retries + 1):
+                try:
+                    async with AsyncClient() as client:
+                        resp = await client.post(
+                            self.config.turn_url("/messages"),
+                            json=msg,
+                            headers=headers,
+                        )
 
-            # TODO: Deal with API rate limits
-            if resp.status_code < 200 or resp.status_code >= 300:
-                logger.error(
-                    LOG_MSG_HTTP_ERR,
-                    {"code": resp.status_code, "body": resp.text, "message": msg},
-                )
+                    if 200 <= resp.status_code < 300:
+                        # Success
+                        break
+
+                    raise HttpErrorResponse(resp.status_code)
+
+                except Exception as e:
+                    turn_rate_limit_retry.labels(attempt=attempt + 1).inc()
+                    logger.warning(
+                        f"Attempt {attempt + 1} failed with error: {e}",
+                    )
+                    if attempt < self.config.max_retries:
+                        await _backoff(attempt)
+                    else:
+                        raise
 
         if cs.cancelled_caught:
             logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
@@ -184,33 +230,27 @@ class TurnChannelsApi(BaseWorker):
                     request_data = await request.get_data(as_text=True)
                     if isinstance(request_data, bytes):
                         request_data = request_data.decode()
-                    # Verify the hmac signature
-                    if self.config.secret_key:
-                        logger.info("Verifying HMAC signature")
-                        h = hmac.new(
-                            self.config.secret_key.encode(),
-                            request_data.encode(),
-                            sha256,
-                        ).digest()
-                        computed_signature = base64.b64encode(h).decode("utf-8")
-                        signature = request.headers.get("X-Turn-Hook-Signature", "")
-                        logger.info(
-                            f"Signature from Turn: {signature}."
-                            f"Computed: {computed_signature}"
-                        )
-                        if not hmac.compare_digest(computed_signature, signature):
-                            raise SignatureMismatchError()
+
+                    await self._verify_hmac(request_data)
 
                     msg_dict = json.loads(request_data)
                 except json.JSONDecodeError as e:
                     raise JsonDecodeError(str(e)) from e
 
                 logger.debug("Received outbound message: %s", msg_dict)
+                if msg_dict.get("reply_to", "") == "":
+                    inbound = (
+                        await self.message_cache.fetch_last_inbound_by_from_address(
+                            msg_dict["to"]
+                        )
+                    )
+                    if inbound is not None:
+                        msg_dict["reply_to"] = inbound.message_id
 
                 tom = TurnOutboundMessage.deserialise(
                     msg_dict, default_from=self.config.default_from_addr
                 )
-                msg = await self.build_outbound(tom)
+                msg = await self.build_outbound(tom, inbound)
 
                 await self.connector.publish_outbound(msg)
 
@@ -223,5 +263,25 @@ class TurnChannelsApi(BaseWorker):
             )
             raise e
 
-    async def build_outbound(self, tom: TurnOutboundMessage) -> Message:
+    async def _verify_hmac(self, request_data: str) -> None:
+        if self.config.turn_hmac_secret:
+            logger.info("Verifying HMAC signature")
+            h = hmac.new(
+                self.config.turn_hmac_secret.encode(),
+                request_data.encode(),
+                sha256,
+            ).digest()
+            computed_signature = base64.b64encode(h).decode("utf-8")
+            signature = request.headers.get("X-Turn-Hook-Signature", "")
+            logger.info(
+                f"Signature from Turn: {signature}." f"Computed: {computed_signature}"
+            )
+            if not hmac.compare_digest(computed_signature, signature):
+                raise SignatureMismatchError()
+
+    async def build_outbound(
+        self, tom: TurnOutboundMessage, inbound: Message | None = None
+    ) -> Message:
+        if inbound is not None:
+            return tom.reply_to_vumi(inbound)
         return tom.to_vumi(self.config.connector_name, self.config.transport_type)

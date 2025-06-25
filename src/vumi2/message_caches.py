@@ -66,6 +66,20 @@ class MessageCache(ABC):  # pragma: no cover
     async def fetch_outbound(self, message_id: str) -> Message | None:
         ...
 
+    @abstractmethod
+    async def store_inbound(self, inbound: Message) -> None:
+        ...
+
+    @abstractmethod
+    async def fetch_inbound(self, message_id: str) -> Message | None:
+        ...
+
+    @abstractmethod
+    async def fetch_last_inbound_by_from_address(
+        self, from_addr: str
+    ) -> Message | None:
+        ...
+
 
 @define
 class MemoryMessageCacheConfig:
@@ -77,9 +91,28 @@ class MemoryMessageCache(MessageCache):
         self.config = structure(config, MemoryMessageCacheConfig)
         timeout = self.config.timeout
         self._outbounds: TimeoutDict[Message] = TimeoutDict(timeout)
+        self._inbounds: TimeoutDict[Message] = TimeoutDict(timeout)
 
     async def store_outbound(self, outbound: Message) -> None:
         self._outbounds[outbound.message_id] = outbound
 
     async def fetch_outbound(self, message_id: str) -> Message | None:
         return self._outbounds.get(message_id)
+
+    async def store_inbound(self, inbound: Message) -> None:
+        self._inbounds[inbound.message_id] = inbound
+
+    async def fetch_inbound(self, message_id: str) -> Message | None:
+        return self._inbounds.get(message_id)
+
+    async def fetch_last_inbound_by_from_address(
+        self, from_addr: str
+    ) -> Message | None:
+        messages = [
+            msg
+            for msg in self._inbounds.values()
+            if msg is not None and msg.from_addr == from_addr
+        ]
+        if not messages:
+            return None
+        return max(messages, key=lambda x: x.timestamp)

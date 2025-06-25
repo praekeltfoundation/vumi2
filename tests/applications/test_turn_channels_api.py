@@ -7,6 +7,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from uuid import UUID
 
+import httpx
 import pytest
 from attrs import define, field
 from hypercorn import Config as HypercornConfig
@@ -18,12 +19,13 @@ from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import Headers, MultiDict
 
 from vumi2.applications import TurnChannelsApi
-from vumi2.applications.errors import TimeoutError
+from vumi2.applications.errors import HttpErrorResponse, JsonDecodeError, TimeoutError
 from vumi2.messages import (
     DeliveryStatus,
     Event,
     EventType,
     Message,
+    Session,
     TransportType,
     generate_message_id,
 )
@@ -134,9 +136,9 @@ def mk_config(
         "http_bind": "localhost:0",
         "default_from_addr": default_from_addr,
         "auth_token": None,
-        "vumi_base_url_path": "",
-        "turn_base_url_path": f"{http_server.bind}",
-        "secret_key": "supersecret",
+        "vumi_api_path": "",
+        "turn_api_url": f"{http_server.bind}",
+        "turn_hmac_secret": "supersecret",
     }
     return {**config, **config_update}
 
@@ -176,7 +178,10 @@ def mkev(message_id: str, event_type: EventType, **fields) -> Event:
 
 
 def mkoutbound(
-    content: str, to="+1234", from_addr="+23456", reply_to="+23456", **kw
+    content: str,
+    to="+1234",
+    waiting_for_user_input=False,
+    **kw,
 ) -> dict:
     return {
         "block": None,
@@ -191,6 +196,7 @@ def mkoutbound(
         # but we were expecting this to be {"contact": {"phone": to}},
         "context": None,
         "turn": {"type": "text", "text": {"body": content}},
+        "waiting_for_user_input": waiting_for_user_input,
         **kw,
     }
 
@@ -235,56 +241,94 @@ async def test_inbound_message(worker_factory, http_server):
     config = mk_config(http_server, default_from_addr=None)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
         with fail_after(2):
             async with handle_inbound(tca_worker, msg):
                 req = await http_server.receive_req()
                 await http_server.send_rsp(RspInfo())
-
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
     assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
 
 
+@pytest.mark.asyncio()
 async def test_inbound_bad_response(worker_factory, http_server, caplog):
     """
     If an inbound message results in an HTTP error, the error and
     message are logged.
     """
+    # Configure with shorter timeouts and retries for testing
+    config = mk_config(
+        http_server,
+        default_from_addr=None,
+        mo_message_url_timeout=2.0,  # Shorter timeout for test
+        max_retries=1,  # Only retry once
+        retry_delay_base=0.1,  # Shorter delay for test
+    )
     msg = mkmsg("hello")
-    config = mk_config(http_server, default_from_addr=None)
 
-    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
-        with fail_after(2):
-            async with handle_inbound(tca_worker, msg):
-                await http_server.receive_req()
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        with pytest.raises(HttpErrorResponse):  # noqa: PT012
+            async with handle_inbound(worker, msg):
+                req = await http_server.receive_req()
+                assert req.body_json["message"]["text"]["body"] == "hello"
                 await http_server.send_rsp(RspInfo(code=500))
 
-    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Error sending message, received HTTP code 500" in err.getMessage()
+                req = await http_server.receive_req()
+                assert req.body_json["message"]["text"]["body"] == "hello"
+                await http_server.send_rsp(RspInfo(code=500))
+
+        warning_logs = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+        ]
+
+        assert any(
+            "Attempt 1 failed with error: HTTP error response: 500" in msg
+            for msg in warning_logs
+        )
 
 
+@pytest.mark.asyncio()
 async def test_inbound_too_slow(worker_factory, http_server, caplog):
     """
     If an inbound message times out, the error and message are logged.
-
-    Using an autojump clock here seems to break the AMQP client, so we
-    have to use wall-clock time instead.
     """
-    config = mk_config(http_server, mo_message_url_timeout=0.2)
+    # Set a very short timeout and disable retries for this test
+    config = mk_config(
+        http_server,
+        mo_message_url_timeout=0.1,
+        max_retries=0,  # Disable retries for this test
+    )
     msg = mkmsg("hello")
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
-        with fail_after(5):
-            with pytest.raises(TimeoutError) as e:  # noqa: PT012
-                async with handle_inbound(tca_worker, msg):
-                    await http_server.receive_req()
-                    await http_server.send_rsp(RspInfo(code=502, wait=0.3))
 
-    [err] = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert "Timed out sending message after 0.2 seconds." in err.getMessage()
-    assert e.value.name == "TimeoutError"
-    assert e.value.description == "timeout"
-    assert e.value.status == HTTPStatus.BAD_REQUEST
+        with pytest.raises(TimeoutError) as exc_info:
+            async with handle_inbound(tca_worker, msg):
+                # Don't respond to the request to trigger a timeout
+                pass
+
+    error_logs = [
+        record.getMessage()
+        for record in caplog.records
+        if record.levelno >= logging.ERROR
+    ]
+
+    assert any(
+        "Timed out sending message after 0.1 seconds. Message:" in msg
+        for msg in error_logs
+    )
+
+    assert exc_info.value.name == "TimeoutError"
+    assert exc_info.value.description == "timeout"
+    assert exc_info.value.status == HTTPStatus.BAD_REQUEST
 
 
 async def test_inbound_auth_token(worker_factory, http_server):
@@ -403,7 +447,7 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
         await tca_worker.setup()
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
@@ -423,8 +467,53 @@ async def test_send_outbound(worker_factory, http_server, tca_ro):
     assert outbound.from_addr == "None"
     assert outbound.in_reply_to is None
     assert outbound.transport_name == "tca-test"
-    assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
+
+
+async def test_send_outbound_reply(worker_factory, http_server, tca_ro):
+    """
+    An outbound message received over HTTP is forwarded over AMQP.
+
+    We don't store anything if event_url is unset.
+    """
+    inbound = mkmsg("hello", from_addr="+1234")
+    body = mkoutbound("foo")
+
+    config = mk_config(
+        http_server,
+        None,
+    )
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(inbound)
+        with fail_after(2):
+            h = hmac.new(
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
+            ).digest()
+            computed_signature = base64.b64encode(h).decode("utf-8")
+            response = await post_outbound(
+                tca_worker, body, signature=computed_signature
+            )
+            outbound = await tca_ro.consume_outbound()
+
+    lresponse = json.loads(response)
+    message_id = lresponse["messages"][0]["id"]
+
+    assert isinstance(message_id, str)
+    uuid = UUID(message_id)
+    assert uuid.hex == message_id
+    assert uuid.version == 4
+
+    assert outbound.to_addr == "+1234"
+    assert outbound.from_addr == "123"
+    assert outbound.in_reply_to == inbound.message_id
+    assert outbound.transport_name == "tca-test"
+    assert outbound.content == "foo"
+    assert outbound.helper_metadata == {}
+    assert outbound.session_event == Session.CLOSE
 
 
 async def test_send_outbound_invalid_hmac(tca_worker, caplog):
@@ -455,38 +544,141 @@ async def test_send_outbound_invalid_hmac(tca_worker, caplog):
     )
 
 
-async def test_send_outbound_invalid_json(tca_worker, caplog):
+async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
     """
     An attempted send with a non-json body returns an appropriate error.
     """
-    message = "gimme r00t?"
-    with fail_after(2):
-        client = tca_worker.http.app.test_client()
+    config = mk_config(http_server)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        message = "gimme r00t?"
         h = hmac.new(
-            tca_worker.config.secret_key.encode(), message.encode(), sha256
+            worker.config.turn_hmac_secret.encode(), message.encode(), sha256
         ).digest()
         computed_signature = base64.b64encode(h).decode("utf-8")
-        async with client.request(
-            path="/messages",
-            method="POST",
-            headers={"X-Turn-Hook-Signature": computed_signature},
-        ) as connection:
-            await connection.send(message.encode())
-            await connection.send_complete()
-            await connection.receive()
 
-    err = [log for log in caplog.records if log.levelno >= logging.ERROR]
-    assert (
-        "Error sending message, received HTTP code 400 with error JsonDecodeError. "
-        "Message: json decode error" in err[0].getMessage()
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with pytest.raises(JsonDecodeError):
+                    await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+        err = [log for log in caplog.records if log.levelno >= logging.ERROR]
+        error_messages = [log.getMessage() for log in err]
+        assert any(
+            "json decode error" in msg for msg in error_messages
+        ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
+
+
+@pytest.mark.asyncio()
+async def test_retry_on_http_error(worker_factory, http_server, caplog):
+    """
+    When an HTTP error occurs, we retry according to the retry configuration.
+    """
+    config = mk_config(
+        http_server,
+        max_retries=2,
+        retry_delay_base=1,
+        retry_delay_exponent=1,
     )
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        msg = mkmsg("test")
+
+        async with handle_inbound(worker, msg):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=500))
+
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=503))
+
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=200))
+
+        assert req.body_json["message"]["text"]["body"] == "test"
+
+        log_messages = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno >= logging.WARNING
+        ]
+
+        assert any(
+            "Attempt 1 failed with error: HTTP error response: 500" in msg
+            for msg in log_messages
+        )
+        assert any(
+            "Attempt 2 failed with error: HTTP error response: 503" in msg
+            for msg in log_messages
+        )
+
+
+@pytest.mark.asyncio()
+async def test_retry_on_network_error(worker_factory, http_server, caplog, monkeypatch):
+    """
+    When a network error occurs, we retry according to the retry configuration.
+    """
+    call_count = 0
+    original_post = httpx.AsyncClient.post
+
+    async def mock_post(self, *args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ConnectionError("Connection failed")
+        return await original_post(self, *args, **kwargs)
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+
+    config = mk_config(
+        http_server,
+        max_retries=1,
+        retry_delay_base=0.1,
+        retry_delay_exponent=1,
+    )
+
+    caplog.clear()
+    caplog.set_level(logging.WARNING, logger="vumi2")
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+        msg = mkmsg("test")
+
+        async with handle_inbound(worker, msg):
+            req = await http_server.receive_req()
+            await http_server.send_rsp(RspInfo(code=200))
+
+        assert req.body_json["message"]["text"]["body"] == "test"
+
+        assert call_count == 2, f"Expected 2 calls, got {call_count}"
+
+        warning_logs = [
+            record.message
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+        ]
+
+        expected_log = "Attempt 1 failed with error: Connection failed"
+        assert any(
+            expected_log in log for log in warning_logs
+        ), f"Expected warning containing '{expected_log}', got: {warning_logs}"
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     """
     An outbound group message received over HTTP is forwarded over AMQP.
     """
-    body = mkoutbound("foo", group="my-group")
+    body = mkoutbound("foo", group="my-group", waiting_for_user_input=True)
     config = mk_config(
         http_server,
         None,
@@ -498,7 +690,7 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
         await tca_worker.setup()
         with fail_after(2):
             h = hmac.new(
-                config["secret_key"].encode(), json.dumps(body).encode(), sha256
+                config["turn_hmac_secret"].encode(), json.dumps(body).encode(), sha256
             ).digest()
             computed_signature = base64.b64encode(h).decode("utf-8")
             response = await post_outbound(
@@ -520,3 +712,4 @@ async def test_send_outbound_group(worker_factory, http_server, tca_ro):
     assert outbound.transport_name == "tca-test"
     assert outbound.helper_metadata == {}
     assert outbound.content == "foo"
+    assert outbound.session_event == Session.RESUME
