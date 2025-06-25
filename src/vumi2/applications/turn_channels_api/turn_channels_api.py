@@ -99,6 +99,7 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
+        await super().setup()
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
             self.handle_inbound_message,

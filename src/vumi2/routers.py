@@ -48,6 +48,7 @@ class ToAddressRouter(BaseWorker):
         )
 
     async def setup(self):
+        await super().setup()
         self.mappings: list[tuple[str, Pattern]] = []
 
         for mapping in self.config.to_address_mappings:

@@ -40,6 +40,7 @@ class HttpRpcTransport(BaseWorker):
     config: HttpRpcConfig
 
     async def setup(self) -> None:
+        await super().setup()
         self.requests: dict[str, Request] = {}
         self.results: dict[str, Response] = {}
         self.connector = await self.setup_receive_outbound_connector(

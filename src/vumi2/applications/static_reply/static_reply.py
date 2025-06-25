@@ -20,6 +20,7 @@ class StaticReplyApplication(BaseWorker):
     config: StaticReplyConfig
 
     async def setup(self) -> None:
+        await super().setup()
         self.connector = await self.setup_receive_inbound_connector(
             connector_name=self.config.transport_name,
             inbound_handler=self.handle_inbound_message,

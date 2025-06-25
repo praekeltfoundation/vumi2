@@ -69,6 +69,7 @@ class SmppTransceiverTransport(BaseWorker):
     async def setup(self) -> None:
         # We open the TCP connection first, so that we have a place to send any
         # outbounds once we start receiving them from the AMQP server
+        await super().setup()
         self.stream = await open_tcp_stream(
             host=self.config.host, port=self.config.port
         )

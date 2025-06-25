@@ -22,7 +22,7 @@ def mkev(msg_id: str) -> Event:
 
 async def test_base_inbound_enabled():
     """
-    Test for basemiddle ware when inbound connections are enabled on a connection
+    Test for base middleware when inbound connections are enabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",
@@ -37,7 +37,7 @@ async def test_base_inbound_enabled():
 
 async def test_base_inbound_disabled():
     """
-    Test for basemiddle ware when inbound connections are disabled on a connection
+    Test for base middleware when inbound connections are disabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",
@@ -52,7 +52,7 @@ async def test_base_inbound_disabled():
 
 async def test_base_outbound_enabled():
     """
-    Test for basemiddle ware when inbound connections are enabled on a connection
+    Test for base middleware when inbound connections are enabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",
@@ -67,7 +67,7 @@ async def test_base_outbound_enabled():
 
 async def test_base_outbound_disabled():
     """
-    Test for basemiddle ware when inbound connections are disabled on a connection
+    Test for base middleware when inbound connections are disabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",
@@ -82,7 +82,7 @@ async def test_base_outbound_disabled():
 
 async def test_base_event_enabled():
     """
-    Test for basemiddle ware when inbound connections are enabled on a connection
+    Test for base middleware when inbound connections are enabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",
@@ -97,7 +97,7 @@ async def test_base_event_enabled():
 
 async def test_base_event_disabled():
     """
-    Test for basemiddle ware when inbound connections are disabled on a connection
+    Test for base middleware when inbound connections are disabled on a connection
     """
     config = BaseMiddlewareConfig(
         "vumi2.middlewares.base.BaseMiddleware",

@@ -1,5 +1,6 @@
 import logging
 
+from tests.helpers import MiddlewareWorker
 from vumi2.messages import Event, EventType, Message, TransportType
 from vumi2.middlewares.logging import LoggingMiddleware, LoggingMiddlewareConfig
 
@@ -20,20 +21,6 @@ def mkev(msg_id: str) -> Event:
         event_type=EventType.ACK,
         sent_message_id=msg_id,
     )
-
-
-# Add doc string
-async def test_handle_inbound():
-    # TODO: make sure we actually log the thing assert that message is logged
-    config = LoggingMiddlewareConfig(
-        "vumi2.middlewares.logging.LoggingMiddleware",
-        enable_for_connectors=["connection2"],
-        inbound_enabled=True,
-    )
-    middleware = LoggingMiddleware(config)
-    await middleware.setup()
-    message = mkmsg("Hello")
-    assert await middleware.handle_inbound(message, "connection1") == message
 
 
 async def test_message_is_logged_inbound(caplog):
@@ -97,3 +84,49 @@ async def test_message_is_logged_event(caplog):
     log_message = log.getMessage()
     assert "Processed event message for connection2" in log_message
     assert "sent_message_id='54321'" in log_message
+
+
+async def test_logging_with_worker(worker_factory, connector_factory, caplog):
+    """
+    Adding a logger worker test to test if logger logs correctly
+    in actual vumi2
+    """
+    caplog.set_level(logging.INFO)
+
+    middleware_config = {
+        "class_path": "vumi2.middlewares.logging.LoggingMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+    config = {
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("GoodBye")
+        message_id = message_goodbye.message_id
+        print(f"Message Id: {message_id}")
+        await ro_test.publish_inbound(message_hello)
+        await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        await ri_app.consume_event()
+    assert any(
+        "Processed inbound message for test" and "content='Hello'" in log.getMessage()
+        for log in caplog.records
+    )
+    assert any(
+        "Processed outbound message for app" and "content='GoodBye'" in log.getMessage()
+        for log in caplog.records
+    )
+    assert any(
+        "Processed Processed event message for test"
+        and f"sent_message_id='{message_id}'" in log.getMessage()
+        for log in caplog.records
+    )

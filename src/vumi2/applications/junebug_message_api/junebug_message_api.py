@@ -105,6 +105,7 @@ class JunebugMessageApi(BaseWorker):
     config: JunebugMessageApiConfig
 
     async def setup(self) -> None:
+        await super().setup()
         state_cache_class = class_from_string(self.config.state_cache_class)
         self.state_cache = state_cache_class(self.config.state_cache_config)
         self.connector = await self.setup_receive_inbound_connector(

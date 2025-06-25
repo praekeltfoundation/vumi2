@@ -22,29 +22,17 @@ class BaseMiddleware:
     async def teardown_middleware(self):
         pass
 
+    def _conn_enabled(self, connector_name):
+        return connector_name in self.config.enable_for_connectors
+
     def inbound_enabled(self, connector_name):
-        if (
-            self.config.inbound_enabled
-            and connector_name in self.config.enable_for_connectors
-        ):
-            return True
-        return False
+        return self.config.inbound_enabled and self._conn_enabled(connector_name)
 
     def outbound_enabled(self, connector_name):
-        if (
-            self.config.outbound_enabled
-            and connector_name in self.config.enable_for_connectors
-        ):
-            return True
-        return False
+        return self.config.outbound_enabled and self._conn_enabled(connector_name)
 
     def event_enabled(self, connector_name):
-        if (
-            self.config.event_enabled
-            and connector_name in self.config.enable_for_connectors
-        ):
-            return True
-        return False
+        return self.config.event_enabled and self._conn_enabled(connector_name)
 
     async def handle_inbound(self, message, connector_name):
         return message
