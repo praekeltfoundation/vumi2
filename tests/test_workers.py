@@ -43,9 +43,6 @@ class AcloseWorker(BaseWorker):
     """
 
     async def setup(self):
-        # TODO: call superclass setup here
-        # Make sure we haven't added this to the base class since these tests
-        # were written.
         await super().setup()
         assert not hasattr(self, "is_closed")
         self.is_closed = False
@@ -400,7 +397,6 @@ class ToyMiddleware(BaseMiddleware):
 
 @define
 class ToyConfig2(BaseMiddlewareConfig):
-    # TODO: vallidate log level
     test: str = "test2"
 
 

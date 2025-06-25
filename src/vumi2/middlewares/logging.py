@@ -7,7 +7,6 @@ from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
 
 @define
 class LoggingMiddlewareConfig(BaseMiddlewareConfig):
-    # TODO: vallidate log level
     log_level: str = "info"
     logger_name: str = __name__
 
