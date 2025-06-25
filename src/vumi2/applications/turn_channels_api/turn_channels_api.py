@@ -1,6 +1,7 @@
 import base64
 import hmac
 import json
+import secrets
 from hashlib import sha256
 from logging import getLogger
 from typing import Any
@@ -8,6 +9,7 @@ from typing import Any
 import trio
 from attrs import define, field
 from httpx import AsyncClient
+from prometheus_client import Counter
 from quart import request
 from trio import move_on_after
 
@@ -20,12 +22,22 @@ from vumi2.messages import (
 )
 from vumi2.workers import BaseConfig, BaseWorker
 
-from ..errors import ApiError, JsonDecodeError, SignatureMismatchError, TimeoutError
+from ..errors import (
+    ApiError,
+    HttpErrorResponse,
+    JsonDecodeError,
+    SignatureMismatchError,
+    TimeoutError,
+)
 from .messages import (
     TurnOutboundMessage,
     turn_event_from_ev,
     turn_inbound_from_msg,
     turn_outbound_from_msg,
+)
+
+turn_rate_limit_retry = Counter(
+    "turn_rate_limit_retry", "Total amount of retries against the Turn API", ["attempt"]
 )
 
 LOG_MSG_HTTP_ERR = (
@@ -133,6 +145,14 @@ class TurnChannelsApi(BaseWorker):
         """
         Send the vumi message as an HTTP request to the configured URL.
         """
+
+        async def _backoff(attempt: int) -> None:
+            delay = self.config.retry_delay_base ** (
+                attempt * self.config.retry_delay_exponent
+            )
+            delay = secrets.randbelow(delay)
+            await trio.sleep(delay)
+
         logger.debug("Consuming inbound message %s", message)
         msg = turn_inbound_from_msg(message, message.transport_name)
         await self.message_cache.store_inbound(message)
@@ -143,7 +163,6 @@ class TurnChannelsApi(BaseWorker):
 
         timeout = self.config.mo_message_url_timeout
         with move_on_after(timeout) as cs:
-            last_error: dict[str, Any] | str | None = None
             for attempt in range(self.config.max_retries + 1):
                 try:
                     async with AsyncClient() as client:
@@ -157,56 +176,17 @@ class TurnChannelsApi(BaseWorker):
                         # Success
                         break
 
-                    last_error = {
-                        "code": resp.status_code,
-                        "body": resp.text,
-                        "message": msg,
-                    }
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed with status {resp.status_code}",
-                        extra={
-                            "metric": "turn.rate_limit_retry",
-                            "type": "counter",
-                            "attempt": attempt + 1,
-                            "max_retries": self.config.max_retries,
-                        },
-                    )
-
-                    if attempt < self.config.max_retries:
-                        delay = self.config.retry_delay_base ** (
-                            attempt * self.config.retry_delay_exponent
-                        )
-                        await trio.sleep(delay)
+                    raise HttpErrorResponse(resp.status_code)
 
                 except Exception as e:
-                    last_error = str(e)
+                    turn_rate_limit_retry.labels(attempt=attempt + 1).inc()
                     logger.warning(
-                        f"Attempt {attempt + 1} failed with error: {last_error}",
-                        extra={
-                            "metric": "turn.rate_limit_retry",
-                            "type": "counter",
-                            "attempt": attempt + 1,
-                            "max_retries": self.config.max_retries,
-                        },
+                        f"Attempt {attempt + 1} failed with error: {e}",
                     )
-                    if attempt == self.config.max_retries:
+                    if attempt < self.config.max_retries:
+                        await _backoff(attempt)
+                    else:
                         raise
-                    delay = self.config.retry_delay_base ** (
-                        attempt * self.config.retry_delay_exponent
-                    )
-                    await trio.sleep(delay)
-
-            if last_error and isinstance(last_error, dict):
-                logger.error(
-                    LOG_MSG_HTTP_ERR,
-                    last_error,
-                    extra={
-                        "metric": "turn.rate_limit_retry",
-                        "type": "counter",
-                        "attempt": attempt + 1,
-                        "max_retries": self.config.max_retries,
-                    },
-                )
 
         if cs.cancelled_caught:
             logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})

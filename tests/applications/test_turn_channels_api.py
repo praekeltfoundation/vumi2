@@ -9,7 +9,6 @@ from uuid import UUID
 
 import httpx
 import pytest
-import trio
 from attrs import define, field
 from hypercorn import Config as HypercornConfig
 from hypercorn.trio import serve as hypercorn_serve
@@ -20,7 +19,7 @@ from trio.abc import ReceiveChannel, SendChannel
 from werkzeug.datastructures import Headers, MultiDict
 
 from vumi2.applications import TurnChannelsApi
-from vumi2.applications.errors import JsonDecodeError, TimeoutError
+from vumi2.applications.errors import HttpErrorResponse, JsonDecodeError, TimeoutError
 from vumi2.messages import (
     DeliveryStatus,
     Event,
@@ -270,47 +269,29 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     )
     msg = mkmsg("hello")
 
-    with fail_after(5):  # Overall test timeout
-        async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
-            await worker.setup()
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
 
-            # This should complete with retries
+        with pytest.raises(HttpErrorResponse):  # noqa: PT012
             async with handle_inbound(worker, msg):
-                # First request fails with 500
                 req = await http_server.receive_req()
                 assert req.body_json["message"]["text"]["body"] == "hello"
                 await http_server.send_rsp(RspInfo(code=500))
 
-                # Second request (retry) also fails with 500
                 req = await http_server.receive_req()
                 assert req.body_json["message"]["text"]["body"] == "hello"
                 await http_server.send_rsp(RspInfo(code=500))
 
-            # Wait a moment for logs to be processed
-            await trio.sleep(0.1)
+        warning_logs = [
+            record.getMessage()
+            for record in caplog.records
+            if record.levelno == logging.WARNING
+        ]
 
-            # Check the logs
-            warning_logs = [
-                record.getMessage()
-                for record in caplog.records
-                if record.levelno == logging.WARNING
-            ]
-            error_logs = [
-                record.getMessage()
-                for record in caplog.records
-                if record.levelno >= logging.ERROR
-            ]
-
-            # Verify we got the expected warning logs for retries
-            assert any(
-                "Attempt 1 failed with status 500" in msg for msg in warning_logs
-            )
-
-            # Verify we got the final error log
-            assert any(
-                "Error sending message, received HTTP code 500" in msg
-                for msg in error_logs
-            )
+        assert any(
+            "Attempt 1 failed with error: HTTP error response: 500" in msg
+            for msg in warning_logs
+        )
 
 
 @pytest.mark.asyncio()
@@ -329,26 +310,22 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
 
-        # We expect this to raise a TimeoutError
         with pytest.raises(TimeoutError) as exc_info:
             async with handle_inbound(tca_worker, msg):
                 # Don't respond to the request to trigger a timeout
                 pass
 
-    # Check the error logs
     error_logs = [
         record.getMessage()
         for record in caplog.records
         if record.levelno >= logging.ERROR
     ]
 
-    # Check for the timeout error message
     assert any(
         "Timed out sending message after 0.1 seconds. Message:" in msg
         for msg in error_logs
     )
 
-    # Verify the exception details
     assert exc_info.value.name == "TimeoutError"
     assert exc_info.value.description == "timeout"
     assert exc_info.value.status == HTTPStatus.BAD_REQUEST
@@ -619,33 +596,29 @@ async def test_retry_on_http_error(worker_factory, http_server, caplog):
         msg = mkmsg("test")
 
         async with handle_inbound(worker, msg):
-            # First request fails with 500
             req = await http_server.receive_req()
             await http_server.send_rsp(RspInfo(code=500))
 
-            # Second request fails with 503
             req = await http_server.receive_req()
             await http_server.send_rsp(RspInfo(code=503))
 
-            # Third request succeeds
             req = await http_server.receive_req()
             await http_server.send_rsp(RspInfo(code=200))
 
         assert req.body_json["message"]["text"]["body"] == "test"
-        # Get all warning and error log messages
+
         log_messages = [
             record.getMessage()
             for record in caplog.records
             if record.levelno >= logging.WARNING
         ]
 
-        # Check for the retry attempt logs
-        assert any("Attempt 1 failed with status 500" in msg for msg in log_messages)
-        assert any("Attempt 2 failed with status 503" in msg for msg in log_messages)
-
-        # Check for the final error log
         assert any(
-            "Error sending message, received HTTP code 503" in msg
+            "Attempt 1 failed with error: HTTP error response: 500" in msg
+            for msg in log_messages
+        )
+        assert any(
+            "Attempt 2 failed with error: HTTP error response: 503" in msg
             for msg in log_messages
         )
 
