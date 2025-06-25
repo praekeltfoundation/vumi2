@@ -13,7 +13,7 @@ from quart_trio import QuartTrio
 from trio.abc import AsyncResource
 
 from vumi2.class_helpers import class_from_string
-from vumi2.config import BaseConfig
+from vumi2.config import BaseConfig, structure_config
 from vumi2.connectors import (
     ConnectorCollection,
     EventCallbackType,
@@ -83,13 +83,10 @@ class BaseWorker(AsyncResource):
         self.middlewares = []
         for middleware_config in self.config.middlewares:
             middleware_class = class_from_string(middleware_config["class_path"])
-            config_class = middleware_class.__annotations__.get(
-                "config", BaseMiddlewareConfig
-            )
-            correct_config = config_class(**middleware_config)
-            middleware = middleware_class(correct_config)
+            config = structure_config(middleware_config, middleware_class)
+            middleware = middleware_class(config)
             self.middlewares.append(middleware)
-
+            
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
             return
