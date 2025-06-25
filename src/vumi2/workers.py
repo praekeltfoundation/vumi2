@@ -22,7 +22,6 @@ from vumi2.connectors import (
     ReceiveOutboundConnector,
 )
 from vumi2.errors import DuplicateConnectorError
-from vumi2.middlewares.base import BaseMiddlewareConfig
 
 ConnectorsType = TypeVar(
     "ConnectorsType",
@@ -86,7 +85,7 @@ class BaseWorker(AsyncResource):
             config = structure_config(middleware_config, middleware_class)
             middleware = middleware_class(config)
             self.middlewares.append(middleware)
-            
+
     def _setup_sentry(self):
         if not self.config.sentry_dsn:
             return
