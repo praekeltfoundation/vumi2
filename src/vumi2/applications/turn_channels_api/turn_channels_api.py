@@ -123,9 +123,9 @@ class TurnChannelsApi(BaseWorker):
     config: TurnChannelsApiConfig
 
     async def setup(self) -> None:
+        await super().setup()
         message_cache_class = class_from_string(self.config.message_cache_class)
         self.message_cache = message_cache_class(self.config.message_cache_config)
-        await super().setup()
         self.connector = await self.setup_receive_inbound_connector(
             self.config.connector_name,
             self.handle_inbound_message,

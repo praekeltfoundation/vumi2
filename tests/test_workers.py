@@ -44,6 +44,8 @@ class AcloseWorker(BaseWorker):
 
     async def setup(self):
         await super().setup()
+        # Make sure we haven't added this to the base class since these tests
+        # were written.
         assert not hasattr(self, "is_closed")
         self.is_closed = False
         self.s_consume_in, self.consume_in = open_memory_channel[Message](0)
