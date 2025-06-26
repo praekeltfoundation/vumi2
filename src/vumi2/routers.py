@@ -6,7 +6,7 @@ import trio
 from async_amqp.protocol import AmqpProtocol  # type: ignore
 from attrs import Factory, define
 
-from vumi2.cli import class_from_string
+from vumi2.class_helpers import class_from_string
 from vumi2.config import BaseConfig
 from vumi2.message_caches import MessageCache
 from vumi2.messages import Event, Message
@@ -48,6 +48,7 @@ class ToAddressRouter(BaseWorker):
         )
 
     async def setup(self):
+        await super().setup()
         self.mappings: list[tuple[str, Pattern]] = []
 
         for mapping in self.config.to_address_mappings:

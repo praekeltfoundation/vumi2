@@ -183,3 +183,31 @@ class WorkerFactory:
         worker = self(default_class, default_config)
         async with aclose_with_timeout(worker, timeout=timeout) as worker:
             yield worker
+
+
+class MiddlewareWorker(BaseWorker):
+    """
+    A worker with a pair of connectors for use in middleware tests.
+
+    In order for tests to control message handling, each consumer sends
+    its message/event its own connection so that we prevent race conditions
+    """
+
+    async def setup(self):
+        await super().setup()
+        self.ri_test = await self.setup_receive_inbound_connector(
+            "test", self.handle_in, self.handle_ev
+        )
+        self.ro_app = await self.setup_receive_outbound_connector(
+            "app", self.handle_out
+        )
+        await self.start_consuming()
+
+    async def handle_in(self, message: Message):
+        await self.ro_app.publish_inbound(message)
+
+    async def handle_ev(self, event: Event):
+        await self.ro_app.publish_event(event)
+
+    async def handle_out(self, message: Message):
+        await self.ri_test.publish_outbound(message)
