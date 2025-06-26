@@ -1,8 +1,10 @@
+import logging
 import os
 from argparse import Namespace
 from pathlib import Path
 
 import pytest
+from cattrs import ClassValidationError
 
 from vumi2.config import (
     BaseConfig,
@@ -18,6 +20,9 @@ def deserialise(config: dict) -> BaseConfig:
 
 
 def test_default_base_config():
+    """
+    All fields in BaseConfig have default values.
+    """
     config = deserialise({})
     assert config.amqp.hostname == "127.0.0.1"
     assert config.amqp.port == 5672
@@ -29,6 +34,9 @@ def test_default_base_config():
 
 
 def test_specified_base_config():
+    """
+    Specified values override all defaults.
+    """
     config = deserialise(
         {
             "amqp": {
@@ -52,6 +60,9 @@ def test_specified_base_config():
 
 
 def test_load_config_from_environment():
+    """
+    Config values can be provided in environment variables.
+    """
     environment = {
         "VUMI_AMQP_HOSTNAME": "localhost",
         "VUMI_AMQP_PORT": "1234",
@@ -79,6 +90,9 @@ def test_load_config_from_environment():
 
 
 def test_load_config_from_cli():
+    """
+    Config values can be provided as cli args.
+    """
     # Make sure we don't have a stray config file set in the environment.
     assert "VUMI_CONFIG_FILE" not in os.environ
 
@@ -179,3 +193,50 @@ def test_missing_config_file(monkeypatch, tmp_path):
 
     with pytest.raises(FileNotFoundError):
         load_config(cli=Namespace())
+
+
+def test_extra_field_warnings_logged(caplog):
+    """
+    Extra fields are logged as warnings, but don't fail validation.
+    """
+    config = deserialise(
+        {
+            "amqp": {
+                "vhost": "/vumi",
+                "not_amqp": "blah",
+            },
+            "worker_concurrency": 10,
+            "extra": "value",
+        }
+    )
+    assert config.amqp.vhost == "/vumi"
+    assert config.worker_concurrency == 10
+
+    logs = [log.message for log in caplog.records if log.levelno >= logging.WARNING]
+    assert logs == [
+        "Config error: extra fields found (not_amqp) @ BaseConfig.amqp",
+        "Config error: extra fields found (extra) @ BaseConfig",
+    ]
+
+
+def test_config_validation_warnings_logged(caplog):
+    """
+    All validation failures are logged as warnings.
+    """
+    with pytest.raises(ClassValidationError):
+        deserialise(
+            {
+                "amqp": {
+                    "vhost": "/vumi",
+                    "port": "eleventy one",
+                },
+                "worker_concurrency": 10,
+                "extra": "value",
+            }
+        )
+
+    logs = [log.message for log in caplog.records if log.levelno >= logging.WARNING]
+    assert logs == [
+        "Config error: invalid value for type, expected int @ BaseConfig.amqp.port",
+        "Config error: extra fields found (extra) @ BaseConfig",
+    ]
