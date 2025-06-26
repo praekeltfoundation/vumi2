@@ -1,6 +1,7 @@
 import os
 from argparse import Namespace
 from collections.abc import Callable, Iterable
+from logging import getLogger
 from pathlib import Path
 from typing import (
     Any,
@@ -13,7 +14,9 @@ from typing import (
 import yaml
 from attrs import Attribute, AttrsInstance, Factory, define, fields
 from attrs import has as is_attrs
-from cattrs import Converter
+from cattrs import Converter, transform_error
+
+logger = getLogger(__name__)
 
 _conv = Converter(prefer_attrib_converters=True)
 
@@ -29,6 +32,11 @@ def get_config_class(cls: Configurable[CT] | type[Configurable[CT]]) -> type[CT]
 
 
 def structure(config: dict, cls: type[CT]) -> CT:
+    try:
+        _conv.copy(forbid_extra_keys=True).structure(config, cls)
+    except Exception as e:
+        for err in transform_error(e, cls.__name__):
+            logger.warning(f"Config error: {err}")
     return _conv.structure(config, cls)
 
 
