@@ -5,8 +5,9 @@
 - Message cache for storing inbound messages
 - Link last inbound message to outbound messages for USSD flows
 - Retry messages if Turn rate limits us
+- Warning logs for config errors, including (ignored) extra keys
 
-## [0.3.2] - 2024-01-22
+## [0.3.2] - 2025-01-22
 ### Added
 - Add Turn Channels application
 
