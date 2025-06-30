@@ -15,6 +15,7 @@ Welcome to vumi2's documentation!
    transports
    applications
    message_caches
+   middleware
 
 
 
