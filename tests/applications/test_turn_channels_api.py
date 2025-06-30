@@ -612,6 +612,183 @@ async def test_send_outbound_times_out(worker_factory, http_server, caplog):
     )
 
 
+async def test_verify_hmac_timeout(worker_factory, http_server, caplog):
+    """
+    When _verify_hmac takes too long, we should log an error and raise a TimeoutError.
+    """
+    body = mkoutbound("foo")
+    test_message = json.dumps(body)
+
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        async def mock_verify_hmac(*args, **kwargs):
+            await sleep(0.2)
+            return await original_verify_hmac(*args, **kwargs)
+
+        original_verify_hmac = worker._verify_hmac
+
+        h = hmac.new(
+            worker.config.turn_hmac_secret.encode(), test_message.encode(), sha256
+        ).digest()
+        computed_signature = base64.b64encode(h).decode("utf-8")
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=test_message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with patch.object(worker, "_verify_hmac", new=mock_verify_hmac):
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+    assert any(
+        "Timed out sending message after" in str(record) for record in caplog.records
+    )
+
+
+async def test_fetch_inbound_timeout(worker_factory, http_server, caplog):
+    """
+    When fetch_last_inbound_by_from_address times out,
+    we should log an error and raise a TimeoutError.
+    """
+    body = mkoutbound("foo")
+    test_message = json.dumps(body)
+
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        async def fetch_last_inbound_by_from_address(*args, **kwargs):
+            await sleep(0.2)
+            return None
+
+        h = hmac.new(
+            worker.config.turn_hmac_secret.encode(), test_message.encode(), sha256
+        ).digest()
+        computed_signature = base64.b64encode(h).decode("utf-8")
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=test_message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with patch.object(
+                    worker.message_cache,
+                    "fetch_last_inbound_by_from_address",
+                    new=fetch_last_inbound_by_from_address,
+                ):
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+    assert any(
+        "Timed out sending message after" in str(record) for record in caplog.records
+    )
+
+
+async def test_build_outbound_timeout(worker_factory, http_server, caplog):
+    """
+    When build_outbound times out, we should log an error and raise a TimeoutError.
+    """
+    body = mkoutbound("foo")
+    test_message = json.dumps(body)
+
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        async def mock_build_outbound(*args, **kwargs):
+            await sleep(0.2)
+            return Message("to_addr", "from_addr", "transport_name", TransportType.SMS)
+
+        h = hmac.new(
+            worker.config.turn_hmac_secret.encode(), test_message.encode(), sha256
+        ).digest()
+        computed_signature = base64.b64encode(h).decode("utf-8")
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=test_message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with patch.object(worker, "build_outbound", new=mock_build_outbound):
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+    assert any(
+        "Timed out sending message after" in str(record) for record in caplog.records
+    )
+
+
+async def test_publish_outbound_timeout(worker_factory, http_server, caplog):
+    """
+    When publish_outbound times out, we should log an error and raise a TimeoutError.
+    """
+    body = mkoutbound("foo")
+    test_message = json.dumps(body)
+
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        async def mock_publish_outbound(msg):
+            await sleep(0.2)
+            return None
+
+        h = hmac.new(
+            worker.config.turn_hmac_secret.encode(), test_message.encode(), sha256
+        ).digest()
+        computed_signature = base64.b64encode(h).decode("utf-8")
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=test_message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                with patch.object(
+                    worker.connector, "publish_outbound", new=mock_publish_outbound
+                ):
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+    assert any(
+        "Timed out sending message after" in str(record) for record in caplog.records
+    )
+
+
 @pytest.mark.asyncio()
 async def test_retry_on_http_error(worker_factory, http_server, caplog):
     """
