@@ -5,6 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from hashlib import sha256
 from http import HTTPStatus
+from unittest.mock import patch
 from uuid import UUID
 
 import httpx
@@ -578,6 +579,37 @@ async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
         assert any(
             "json decode error" in msg for msg in error_messages
         ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
+
+
+async def test_send_outbound_times_out(worker_factory, http_server, caplog):
+    """
+    When an HTTP request times out, we log an error and raise a TimeoutError.
+    """
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        # Create a mock for get_data that will sleep longer
+        # than the timeout, causing the request to time out in the move_on_after block
+        async def mock_get_data(as_text=False):
+            await sleep(0.2)
+            return "{}" if as_text else b"{}"
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data="{}",
+            headers={"Content-Type": "application/json"},
+        ) as ctx:
+            await ctx.push()
+            try:
+                with patch("quart.request.get_data", new=mock_get_data):
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+    assert any(
+        "Timed out sending message after" in str(record) for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio()

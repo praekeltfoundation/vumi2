@@ -223,8 +223,10 @@ class TurnChannelsApi(BaseWorker):
 
     async def http_send_message(self) -> dict[Any, Any]:
         try:
-            # TODO: Log requests that timed out?
-            with move_on_after(self.config.request_timeout):
+            timeout = self.config.request_timeout
+            msg: Message | None = None
+
+            with move_on_after(timeout) as cs:
                 try:
                     request_data = await request.get_data(as_text=True)
                     if isinstance(request_data, bytes):
@@ -255,6 +257,10 @@ class TurnChannelsApi(BaseWorker):
 
                 rmsg = turn_outbound_from_msg(msg)
                 return rmsg
+
+            if cs.cancelled_caught:
+                logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
+                raise TimeoutError()
         except ApiError as e:
             logger.error(
                 LOG_API_ERR,
