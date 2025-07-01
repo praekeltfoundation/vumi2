@@ -10,6 +10,9 @@
 - Adding logging and unidecoder middleware
 - Calling BaseWorker setup on all child classes
 
+### Fixed
+- Sphinx builds now fail on warnings, and all existing warnings/errors in the docs have been fixed
+
 ## [0.3.2] - 2025-01-22
 ### Added
 - Add Turn Channels application

@@ -4,14 +4,13 @@ This transport is an `SMPP 3.4`_ client, mostly used for SMS.
 
 .. _SMPP 3.4: https://support.nowsms.com/discus/messages/1/SMPP_v3_4_Issue1_2-24857.pdf
 
+.. py:currentmodule:: vumi2.transports.smpp
 
 Configuration
 ^^^^^^^^^^^^^
 The transport has the following configuration options:
 
 All the configuration items from the base worker, which you can find at :ref:`base-worker-configuration`
-
-.. py:currentmodule:: vumi2.transports.smpp
 
 .. py:data:: transport_name
    :type: str
