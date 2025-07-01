@@ -41,7 +41,7 @@ add_module_names = False
 html_theme = "alabaster"
 ## If we ever need static assets, we can put them in here.
 # html_static_path = ["_static"]
-html_static_path = []
+html_static_path: list[str] = []
 
 # Extension configs
 
