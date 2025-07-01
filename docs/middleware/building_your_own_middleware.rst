@@ -50,8 +50,8 @@ Processes the message before passing it to the next handler.
 
 Example of a simple middleware implementation from ``vumi2.middlewares.logging:``
 
-.. code-block:: python
-    :caption: logging middleware
+.. code-block:: Python
+
     from logging import getLevelNamesMapping, getLogger
 
     from attr import define
