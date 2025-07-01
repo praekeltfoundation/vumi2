@@ -119,7 +119,7 @@ Outbound message API
 
    **Example request**:
 
-   .. sourcecode:: json
+   .. code-block:: json
 
       {
         "to": "+26612345678",
@@ -134,7 +134,7 @@ Outbound message API
 
    **Example response**:
 
-   .. sourcecode:: json
+   .. code-block:: json
 
       {
         "status": 201,
@@ -172,7 +172,7 @@ Inbound messages that are ``POST``\ed to :py:data:`mo_message_url` have the foll
 
 **Request example**:
 
-.. sourcecode:: json
+.. code-block:: json
 
     {
         "to": "+27821234567",
@@ -209,7 +209,7 @@ Events are posted to the message's ``event_url`` after the message is submitted 
 
 **Request example**:
 
-.. sourcecode:: json
+.. code-block:: json
 
    {
      "event_type": "submitted",

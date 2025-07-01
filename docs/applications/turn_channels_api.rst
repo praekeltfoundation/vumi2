@@ -121,7 +121,7 @@ For more information see the `Turn Channels API documentation <https://whatsapp.
 
    **Example request**:
 
-   .. sourcecode:: json
+   .. code-block:: json
 
       {
         "to": "+26612345678",
@@ -131,7 +131,7 @@ For more information see the `Turn Channels API documentation <https://whatsapp.
 
 **Example response**:
 
-   .. sourcecode:: json
+   .. code-block:: json
 
       {
         "messages": [{"id": "message-uuid-5678"}]
@@ -159,7 +159,7 @@ Inbound messages that are ``POST``\ed to :py:data:`turn_api_url`/messages have t
 
 **Example response**:
 
-.. sourcecode:: json
+.. code-block:: json
 
     {
         "contact": {
@@ -195,7 +195,7 @@ Events are posted to the message's ``event_url`` after the message is submitted 
 
 **Request example**:
 
-.. sourcecode:: json
+.. code-block:: json
 
    {
      "user_message_id": "msg-uuid-1234",
