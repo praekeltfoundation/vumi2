@@ -10,8 +10,8 @@ Attaching middleware to your worker is fairly straight forward. Just extend your
 
     middlewares:
     - class_path: vumi2.middlewares.unidecoder.Unidecoder
-        enable_for_connectors: ["mc_qa_expressway"]
-        outbound_enabled: true
+      enable_for_connectors: ["mc_qa_expressway"]
+      outbound_enabled: true
 
 The middleware section contains a list of middleware items. 
 Each item contains a :py:data:`class_path` class_path which is the full Python path to the class implementing the middleware, 
@@ -21,16 +21,16 @@ and :py:data:`{type}_enabled`  fields which describes which type of message the 
 Multiple layers of middleware may be specified as follows:
 
 .. code-block:: YAML
-    
+
     middlewares:
     - class_path: vumi2.middlewares.unidecoder.Unidecoder
-        enable_for_connectors: ["mc_qa_expressway"]
-        outbound_enabled: true
+      enable_for_connectors: ["mc_qa_expressway"]
+      outbound_enabled: true
     - class_path: vumi2.middlewares.logging.LoggingMiddlewarer
-        enable_for_connectors: ["mc_qa_expressway"]
-        outbound_enabled: true
-        inbound_enabled: true
-        event_enabled: true
+      enable_for_connectors: ["mc_qa_expressway"]
+      outbound_enabled: true
+      inbound_enabled: true
+      event_enabled: true
 
 You can think of the layers of middleware sitting on top of the underlying transport or application worker. 
 Messages being consumed by the worker enter from the top and are processed by the middleware in the order you 
