@@ -26,7 +26,7 @@ Multiple layers of middleware may be specified as follows:
     - class_path: vumi2.middlewares.unidecoder.Unidecoder
       enable_for_connectors: ["mc_qa_expressway"]
       outbound_enabled: true
-    - class_path: vumi2.middlewares.logging.LoggingMiddlewarer
+    - class_path: vumi2.middlewares.logging.LoggingMiddleware
       enable_for_connectors: ["mc_qa_expressway"]
       outbound_enabled: true
       inbound_enabled: true
