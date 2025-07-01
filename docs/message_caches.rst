@@ -3,6 +3,8 @@ Message Caches
 
 A message cache will store messages and events to be retrieved at a later stage. Currently it's only being used for the :ref:`to-address-router`, to store outbound messages to reference at a later stage, to route events.
 
+.. py:currentmodule:: vumi2.message_caches
+
 .. _memory-message-cache:
 
 Memory Message Cache

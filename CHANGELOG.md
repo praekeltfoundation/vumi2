@@ -7,6 +7,9 @@
 - Retry messages if Turn rate limits us
 - Warning logs for config errors, including (ignored) extra keys
 
+### Fixed
+- Sphinx builds now fail on warnings, and all existing warnings/errors in the docs have been fixed
+
 ## [0.3.2] - 2025-01-22
 ### Added
 - Add Turn Channels application

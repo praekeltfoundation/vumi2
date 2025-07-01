@@ -1,10 +1,12 @@
 Turn Channels API (EXPERIMENTAL: DO NOT USE IN PRODUCTION)
--------------------
+----------------------------------------------------------
 
 This application provides bidirectional messaging over HTTP, intended
 for integration with `Turn's Channels API <https://whatsapp.turn.io/docs/api/channel_api>`_.
 
 Currently this only supports text message types. A future iteration will support other types.
+
+.. py:currentmodule:: vumi2.applications.turn_channels_api
 
 Configuration
 ^^^^^^^^^^^^^
@@ -143,17 +145,17 @@ Inbound messages that are ``POST``\ed to :py:data:`turn_api_url`/messages have t
 .. http:post:: /<turn_api_url>/messages
 
    :<json dict contact: Information about the contact who sent the message.
-    :<json str contact.id: The Turn contact ID, which is an MSISDN.
-    :<json dict contact.profile: The contact's profile information.
-        :<json str contact.profile.name: The contact's name.
+   :<json str contact.id: The Turn contact ID, which is an MSISDN.
+   :<json dict contact.profile: The contact's profile information.
+   :<json str contact.profile.name: The contact's name.
 
    :<json dict message: The message received from the user.
-    :<json str message.type: The type of message. Currently only ``text`` is supported.
-    :<json dict message.text: Required when message type is ``text``.
-        :<json str message.text.body: The text content of the message.
-    :<json str message.from: The user ID as an MSISDN. A Channel can respond to a user using this ID.
-    :<json str message.id: The ID for the message that was received by the Channel.
-    :<json int message.timestamp: Unix timestamp indicating when the message was received from the user.
+   :<json str message.type: The type of message. Currently only ``text`` is supported.
+   :<json dict message.text: Required when message type is ``text``.
+   :<json str message.text.body: The text content of the message.
+   :<json str message.from: The user ID as an MSISDN. A Channel can respond to a user using this ID.
+   :<json str message.id: The ID for the message that was received by the Channel.
+   :<json int message.timestamp: Unix timestamp indicating when the message was received from the user.
 
 **Example response**:
 

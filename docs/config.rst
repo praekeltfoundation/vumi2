@@ -8,6 +8,8 @@ the previous layer. These layers are, in order of highest to lowest priority:
 #. :ref:`environment-variables`
 #. :ref:`configuration-file`
 
+.. py:currentmodule:: vumi2.config
+
 .. _base-worker-configuration:
 
 Base worker configuration
