@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 from hashlib import sha256
 from http import HTTPStatus
-from unittest.mock import patch
+from unittest.mock import AsyncMock
 from uuid import UUID
 
 import httpx
@@ -581,7 +581,9 @@ async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
         ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
 
 
-async def test_send_outbound_times_out(worker_factory, http_server, caplog):
+async def test_send_outbound_times_out(
+    worker_factory, http_server, caplog, monkeypatch
+):
     """
     When an HTTP request times out, we log an error and raise a TimeoutError.
     """
@@ -601,18 +603,19 @@ async def test_send_outbound_times_out(worker_factory, http_server, caplog):
         ) as ctx:
             await ctx.push()
             try:
-                with patch("quart.request.get_data", new=mock_get_data):
-                    with pytest.raises(TimeoutError):
-                        await worker.http_send_message()
+                monkeypatch.setattr(request, "get_data", mock_get_data)
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
             finally:
                 await ctx.pop()
+                monkeypatch.undo()
 
     assert any(
         "Timed out sending message after" in str(record) for record in caplog.records
     )
 
 
-async def test_verify_hmac_timeout(worker_factory, http_server, caplog):
+async def test_verify_hmac_timeout(worker_factory, http_server, caplog, monkeypatch):
     """
     When _verify_hmac takes too long, we should log an error and raise a TimeoutError.
     """
@@ -645,9 +648,9 @@ async def test_verify_hmac_timeout(worker_factory, http_server, caplog):
         ) as ctx:
             await ctx.push()
             try:
-                with patch.object(worker, "_verify_hmac", new=mock_verify_hmac):
-                    with pytest.raises(TimeoutError):
-                        await worker.http_send_message()
+                monkeypatch.setattr(worker, "_verify_hmac", mock_verify_hmac)
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -656,7 +659,7 @@ async def test_verify_hmac_timeout(worker_factory, http_server, caplog):
     )
 
 
-async def test_fetch_inbound_timeout(worker_factory, http_server, caplog):
+async def test_fetch_inbound_timeout(worker_factory, http_server, caplog, monkeypatch):
     """
     When fetch_last_inbound_by_from_address times out,
     we should log an error and raise a TimeoutError.
@@ -688,13 +691,13 @@ async def test_fetch_inbound_timeout(worker_factory, http_server, caplog):
         ) as ctx:
             await ctx.push()
             try:
-                with patch.object(
+                monkeypatch.setattr(
                     worker.message_cache,
                     "fetch_last_inbound_by_from_address",
-                    new=fetch_last_inbound_by_from_address,
-                ):
-                    with pytest.raises(TimeoutError):
-                        await worker.http_send_message()
+                    fetch_last_inbound_by_from_address,
+                )
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -703,7 +706,7 @@ async def test_fetch_inbound_timeout(worker_factory, http_server, caplog):
     )
 
 
-async def test_build_outbound_timeout(worker_factory, http_server, caplog):
+async def test_build_outbound_timeout(worker_factory, http_server, caplog, monkeypatch):
     """
     When build_outbound times out, we should log an error and raise a TimeoutError.
     """
@@ -734,9 +737,9 @@ async def test_build_outbound_timeout(worker_factory, http_server, caplog):
         ) as ctx:
             await ctx.push()
             try:
-                with patch.object(worker, "build_outbound", new=mock_build_outbound):
-                    with pytest.raises(TimeoutError):
-                        await worker.http_send_message()
+                monkeypatch.setattr(worker, "build_outbound", mock_build_outbound)
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -745,7 +748,9 @@ async def test_build_outbound_timeout(worker_factory, http_server, caplog):
     )
 
 
-async def test_publish_outbound_timeout(worker_factory, http_server, caplog):
+async def test_publish_outbound_timeout(
+    worker_factory, http_server, caplog, monkeypatch
+):
     """
     When publish_outbound times out, we should log an error and raise a TimeoutError.
     """
@@ -776,17 +781,86 @@ async def test_publish_outbound_timeout(worker_factory, http_server, caplog):
         ) as ctx:
             await ctx.push()
             try:
-                with patch.object(
-                    worker.connector, "publish_outbound", new=mock_publish_outbound
-                ):
-                    with pytest.raises(TimeoutError):
-                        await worker.http_send_message()
+                monkeypatch.setattr(
+                    worker.connector, "publish_outbound", mock_publish_outbound
+                )
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
             finally:
                 await ctx.pop()
 
     assert any(
         "Timed out sending message after" in str(record) for record in caplog.records
     )
+
+
+async def test_handle_messages_after_timeout(
+    worker_factory, http_server, caplog, monkeypatch
+):
+    """
+    After a timeout occurs, we should still be able to process new messages.
+    """
+    config = mk_config(http_server, request_timeout=0.1)
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
+        await worker.setup()
+
+        # Test 1: Cause a timeout
+        async def mock_timeout_get_data(as_text=False):
+            await sleep(0.2)
+            return "{}" if as_text else b"{}"
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data="{}",
+            headers={"Content-Type": "application/json"},
+        ) as ctx:
+            await ctx.push()
+            try:
+                monkeypatch.setattr(request, "get_data", mock_timeout_get_data)
+                with pytest.raises(TimeoutError):
+                    await worker.http_send_message()
+            finally:
+                await ctx.pop()
+
+        caplog.clear()
+
+        # Test 2: Send a valid message after timeout
+        body = mkoutbound("test message")
+        test_message = json.dumps(body)
+
+        h = hmac.new(
+            worker.config.turn_hmac_secret.encode(), test_message.encode(), sha256
+        ).digest()
+        computed_signature = base64.b64encode(h).decode("utf-8")
+
+        async def mock_success_get_data(as_text=False):
+            return test_message if as_text else test_message.encode()
+
+        async with worker.http.app.test_request_context(
+            "/messages",
+            method="POST",
+            data=test_message,
+            headers={
+                "Content-Type": "application/json",
+                "X-Turn-Hook-Signature": computed_signature,
+            },
+        ) as ctx:
+            await ctx.push()
+            try:
+                mock_publish = AsyncMock()
+                monkeypatch.setattr(request, "get_data", mock_success_get_data)
+                monkeypatch.setattr(worker.connector, "publish_outbound", mock_publish)
+
+                # This should not raise an exception
+                response = await worker.http_send_message()
+                assert "messages" in response
+                assert len(response["messages"]) == 1
+                assert "id" in response["messages"][0]
+                mock_publish.assert_called_once()
+            finally:
+                await ctx.pop()
+                monkeypatch.undo()
 
 
 @pytest.mark.asyncio()
