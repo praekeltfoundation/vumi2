@@ -34,8 +34,8 @@ Multiple layers of middleware may be specified as follows:
 
 You can think of the layers of middleware sitting on top of the underlying transport or application worker. 
 Messages being consumed by the worker enter from the top and are processed by the middleware in the order you 
-have defined them and eventually reach the worker at the bottom. Messages published by the worker start at the 
-bottom and travel up through the layers of middleware before finally exiting the middleware at the top.
+have defined them and eventually reach the worker at the bottom. Messages published by the worker aren't handled by the middleware. 
+Middleware only applies to consumed messages, not published messages. 
 
 Adding your middleware:
 
