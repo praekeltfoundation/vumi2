@@ -7,7 +7,7 @@ Although transport and application middleware potentially both provide the same 
 
 A middleware is required to subclass BaseMiddleware. This is a convenient definition of and set of common functionality for middleware classes. However you should not override :py:data:`__init__()`. Custom setup should be done in 
 :py:data:`setup()` instead (if required). The config class can be overidden by replacing the :py:data:`config` variable.
- You should also overwrite :py:data:`handle_{type}(self, msg, connection)` in most cases while using :py:data:`{type}_enabled(self, connector_name)` from the base class
+You should also overwrite :py:data:`handle_{type}(self, msg, connection)` in most cases while using :py:data:`{type}_enabled(self, connector_name)` from the base class
 
 
 See logging and unidecoder examples 
