@@ -1,5 +1,5 @@
 Implementing your own middleware
-==========
+=================================
 
 A middleware class provides three handler functions, one for processing each of the three kinds of messages transports, applications and dispatchers typically send and receive (i.e. inbound user messages, outbound user messages, event messages) and three enabled functions for each of the types of messages
 
@@ -51,6 +51,7 @@ Processes the message before passing it to the next handler.
 Example of a simple middleware implementation from ``vumi2.middlewares.logging:``
 
 .. code-block:: python
+    :caption: logging middleware
     from logging import getLevelNamesMapping, getLogger
 
     from attr import define
@@ -88,7 +89,7 @@ Example of a simple middleware implementation from ``vumi2.middlewares.logging:`
             return self._log_msg("event", event, connector_name)
 
 How your middleware is used inside Vumi: 
------------------
+----------------------------------------
 
 While writing complex middleware, it may help to understand how a middleware class is used by Vumi transports and applications.
 
