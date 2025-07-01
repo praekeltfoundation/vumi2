@@ -6,6 +6,7 @@
 - Link last inbound message to outbound messages for USSD flows
 - Retry messages if Turn rate limits us
 - Warning logs for config errors, including (ignored) extra keys
+- Log an error if the outbound request times out
 
 ### Fixed
 - Sphinx builds now fail on warnings, and all existing warnings/errors in the docs have been fixed
