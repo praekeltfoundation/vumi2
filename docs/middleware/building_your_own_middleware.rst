@@ -5,10 +5,10 @@ A middleware class provides three handler functions, one for processing each of 
 
 Although transport and application middleware potentially both provide the same sets of handlers, the two make use of them in slightly different ways. Inbound messages and events are published by transports but consumed by applications while outbound messages are opposite.
 
-A middleware is required to subclass BaseMiddleware. This is a convenient definition of and set of common functionality for middleware classes. However you should not override :py:meth:`__init__()`. Custom setup should be done in 
-:py:meth:`setup()` instead (if required). The config class can be overidden by replacing the :py:meth:`config` variable.
-You should also overwrite :py:meth:`handle_{type}(self, msg, connection)` in most cases while using :py:meth:`{type}_enabled(self, connector_name)` from the base class
-
+A middleware is required to subclass BaseMiddleware. This is a convenient definition of and set of common functionality for middleware classes. Custom setup should be done in 
+:py:meth:`setup()` instead (if required). The config class can be overidden by replacing the :py:data:`config` variable.
+You should overwrite :py:meth:`handle_inbound(self, msg, connection)`, :py:meth:`handle_outbound(self, msg, connection)`, :py:meth:`handle_event(self, event, connection)`. :py:meth:`handle_inbound` and :py:meth:`handle_outbound` return vumi2 Messages 
+:py:meth:`handle_event` returns vumi2 Events
 
 See logging and unidecoder examples 
 
