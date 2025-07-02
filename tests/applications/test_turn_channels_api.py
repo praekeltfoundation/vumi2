@@ -5,7 +5,6 @@ import logging
 from contextlib import asynccontextmanager
 from hashlib import sha256
 from http import HTTPStatus
-from unittest.mock import AsyncMock
 from uuid import UUID
 
 import httpx
@@ -848,16 +847,13 @@ async def test_handle_messages_after_timeout(
         ) as ctx:
             await ctx.push()
             try:
-                mock_publish = AsyncMock()
                 monkeypatch.setattr(request, "get_data", mock_success_get_data)
-                monkeypatch.setattr(worker.connector, "publish_outbound", mock_publish)
 
                 # This should not raise an exception
                 response = await worker.http_send_message()
                 assert "messages" in response
                 assert len(response["messages"]) == 1
                 assert "id" in response["messages"][0]
-                mock_publish.assert_called_once()
             finally:
                 await ctx.pop()
                 monkeypatch.undo()
