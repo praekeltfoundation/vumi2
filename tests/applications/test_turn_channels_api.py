@@ -602,12 +602,12 @@ async def test_send_outbound_times_out(
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(request, "get_data", mock_get_data)
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(request, "get_data", mock_get_data)
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
-                monkeypatch.undo()
 
     assert any(
         "Timed out sending message after" in str(record) for record in caplog.records
@@ -647,9 +647,10 @@ async def test_verify_hmac_timeout(worker_factory, http_server, caplog, monkeypa
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(worker, "_verify_hmac", mock_verify_hmac)
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(worker, "_verify_hmac", mock_verify_hmac)
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -690,13 +691,14 @@ async def test_fetch_inbound_timeout(worker_factory, http_server, caplog, monkey
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(
-                    worker.message_cache,
-                    "fetch_last_inbound_by_from_address",
-                    fetch_last_inbound_by_from_address,
-                )
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(
+                        worker.message_cache,
+                        "fetch_last_inbound_by_from_address",
+                        fetch_last_inbound_by_from_address,
+                    )
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -736,9 +738,10 @@ async def test_build_outbound_timeout(worker_factory, http_server, caplog, monke
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(worker, "build_outbound", mock_build_outbound)
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(worker, "build_outbound", mock_build_outbound)
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -780,11 +783,12 @@ async def test_publish_outbound_timeout(
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(
-                    worker.connector, "publish_outbound", mock_publish_outbound
-                )
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(
+                        worker.connector, "publish_outbound", mock_publish_outbound
+                    )
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -816,9 +820,10 @@ async def test_handle_messages_after_timeout(
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(request, "get_data", mock_timeout_get_data)
-                with pytest.raises(TimeoutError):
-                    await worker.http_send_message()
+                with monkeypatch.context() as mp:
+                    mp.setattr(request, "get_data", mock_timeout_get_data)
+                    with pytest.raises(TimeoutError):
+                        await worker.http_send_message()
             finally:
                 await ctx.pop()
 
@@ -847,16 +852,16 @@ async def test_handle_messages_after_timeout(
         ) as ctx:
             await ctx.push()
             try:
-                monkeypatch.setattr(request, "get_data", mock_success_get_data)
+                with monkeypatch.context() as mp:
+                    mp.setattr(request, "get_data", mock_success_get_data)
 
-                # This should not raise an exception
-                response = await worker.http_send_message()
-                assert "messages" in response
-                assert len(response["messages"]) == 1
-                assert "id" in response["messages"][0]
+                    # This should not raise an exception
+                    response = await worker.http_send_message()
+                    assert "messages" in response
+                    assert len(response["messages"]) == 1
+                    assert "id" in response["messages"][0]
             finally:
                 await ctx.pop()
-                monkeypatch.undo()
 
 
 @pytest.mark.asyncio()
