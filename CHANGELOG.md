@@ -6,6 +6,9 @@
 - Link last inbound message to outbound messages for USSD flows
 - Retry messages if Turn rate limits us
 - Warning logs for config errors, including (ignored) extra keys
+- Adding middleware support 
+- Adding logging and unidecoder middleware
+- Calling BaseWorker setup on all child classes
 
 ### Fixed
 - Sphinx builds now fail on warnings, and all existing warnings/errors in the docs have been fixed

@@ -7,9 +7,9 @@ from textwrap import dedent
 import pytest
 from trio import fail_after
 
+from vumi2.class_helpers import class_from_string
 from vumi2.cli import (
     build_main_parser,
-    class_from_string,
     main,
     root_parser,
     run_worker,

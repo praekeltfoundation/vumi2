@@ -2,9 +2,12 @@ import importlib.metadata
 
 import pytest
 import sentry_sdk
+from attr import define
 from trio import fail_after, open_memory_channel, sleep
 
+from tests.helpers import MiddlewareWorker
 from vumi2.messages import Event, EventType, Message, TransportType
+from vumi2.middlewares.base import BaseMiddleware, BaseMiddlewareConfig
 from vumi2.workers import BaseWorker
 
 # Since we're talking to a real AMQP broker in these tests, we can't rely on
@@ -23,6 +26,7 @@ UNCLOSED_WAIT_TIME = 2.5 * CLOSED_WAIT_TIME
 
 class FailingHealthcheckWorker(BaseWorker):
     async def setup(self):
+        await super().setup()
         self.healthchecks["failing"] = self.failing_healthcheck
 
     async def failing_healthcheck(self):
@@ -39,6 +43,7 @@ class AcloseWorker(BaseWorker):
     """
 
     async def setup(self):
+        await super().setup()
         # Make sure we haven't added this to the base class since these tests
         # were written.
         assert not hasattr(self, "is_closed")
@@ -79,6 +84,7 @@ class SlowSetupWorker(BaseWorker):
     """
 
     async def setup(self):
+        await super().setup()
         self.s_exc, self.exc = open_memory_channel[Exception | None](1)
         await self.setup_receive_inbound_connector("ri", self.handle_in, self.handle_ev)
         await sleep(0.1)
@@ -347,3 +353,332 @@ async def test_connector_setup_call_start_after_closing(connector_factory):
     ro_ri = await connector_factory.setup_ro("ri")
     await ro_ri.conn.aclose_consumers()
     await ro_ri.conn.start_consuming()
+
+
+# test middlewarre configured and check that wwe have that middleware instance
+# test http_server unconfigure, pass middle to config second parameter
+
+
+async def test_middleware_configured(worker_factory):
+    middleware_config = {
+        "class_path": "vumi2.middlewares.base.BaseMiddleware",
+        "enable_for_connectors": ["connection1"],
+    }
+    worker = worker_factory(BaseWorker, {"middlewares": [middleware_config]})
+    [middleware] = worker.middlewares
+    assert isinstance(middleware, BaseMiddleware)
+    assert middleware.config.enable_for_connectors == ["connection1"]
+
+
+@define
+class ToyConfig(BaseMiddlewareConfig):
+    test: str = "test1"
+
+
+class ToyMiddleware(BaseMiddleware):
+    config: ToyConfig
+
+    async def setup(self):
+        self.test = self.config.test
+
+    async def handle_inbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+
+    async def handle_outbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content[::-1]
+        return message
+
+    async def handle_event(self, event, connector_name):
+        event.helper_metadata["test"] = "_ToyMiddleWare1"
+
+        return event
+
+
+@define
+class ToyConfig2(BaseMiddlewareConfig):
+    test: str = "test2"
+
+
+class ToyMiddleware2(BaseMiddleware):
+    config: ToyConfig2
+
+    async def setup(self):
+        self.test = self.config.test
+
+    async def handle_inbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content + " 1"
+        return message
+
+    async def handle_outbound(self, message, connector_name):
+        if message.content:
+            message.content = message.content + " 1"
+        return message
+
+    async def handle_event(self, event, connector_name):
+        prev_helper = event.helper_metadata["test"]
+        event.helper_metadata["test"] = f"{prev_helper}_ToyMiddleWare2"
+        return event
+
+
+async def test_middle_inbound(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves the inbound message -
+    we are publishing the message for the worker to recieve and that
+    when inbound is enabled and the other message types is not
+    the middle is only applied to inbound messages
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": False,
+        "event_enabled": False,
+    }
+
+    config = {
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert message_hello_test.content == "olleH"
+    assert message_goodbye_test.content == "Goodbye"
+    assert event.helper_metadata == {}
+
+
+async def test_middle_outbound(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves the outbound message -
+    we are publishing the message for the worker to recieve and that
+    when outbound is enabled and the other message types is not
+    the middle is only applied to outbound messages
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": True,
+        "event_enabled": False,
+    }
+
+    config = {
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert message_hello_test.content == "Hello"
+    assert message_goodbye_test.content == "eybdooG"
+    assert event.helper_metadata == {}
+
+
+async def test_middle_event(worker_factory, connector_factory):
+    """
+    Testing that middleware is run when the worker recieves an event -
+    we are publishing the event for the worker to recieve and that
+    when event is enabled and the other message types is not
+    the middle is only applied to event
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": False,
+        "event_enabled": True,
+    }
+
+    config = {
+        "middlewares": [middleware_config],
+    }
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        message_hello_test = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert message_hello_test.content == "Hello"
+    assert message_goodbye_test.content == "Goodbye"
+    assert event.helper_metadata == {"test": "_ToyMiddleWare1"}
+
+
+async def test_multiple_middlewares_outbound_and_event(
+    worker_factory, connector_factory
+):
+    """
+    This test is to check if middleware is called in
+    the order that they added to the router
+    """
+
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        message_hello = mkmsg("Hello")
+        message_goodbye = mkmsg("Goodbye")
+        message_id = message_goodbye.message_id
+        await ro_test.publish_inbound(message_hello)
+        await ri_app.consume_inbound()
+        await ri_app.publish_outbound(message_goodbye)
+        message_goodbye_test = await ro_test.consume_outbound()
+        await ro_test.publish_event(mkev(message_id))
+        event = await ri_app.consume_event()
+    assert message_goodbye_test.content == "eybdooG 1"
+    assert event.helper_metadata == {"test": "_ToyMiddleWare1_ToyMiddleWare2"}
+
+
+async def test_multiple_middle_wares_inbound(worker_factory, connector_factory):
+    """
+    This test is to check if middleware is called in
+    the order that they added to the router
+    """
+
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        await ro_test.publish_inbound(mkmsg("Hello"))
+        message = await ri_app.consume_inbound()
+    assert message.content == "olleH 1"
+
+
+async def test_multiple_middle_wares_on_different_connections(
+    worker_factory, connector_factory
+):
+    """
+    This test is to check if a middleware is only called on
+    connections that they are enabled on
+    """
+
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["app"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+    }
+
+    config = {
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        ri_app = await connector_factory.setup_ri("app")
+        ro_test = await connector_factory.setup_ro("test")
+        await ro_test.publish_inbound(mkmsg("Hello"))
+        message = await ri_app.consume_inbound()
+        await ri_app.publish_outbound(mkmsg("GoodBye"))
+        message_goodbye_test = await ro_test.consume_outbound()
+
+    assert message.content == "olleH"
+    assert message_goodbye_test.content == "GoodBye 1"
+
+
+async def test_middleware_setup_called(worker_factory, connector_factory):
+    """
+    This test checks that setup of middleware is called
+    """
+    middleware_config = {
+        "class_path": "tests.test_workers.ToyMiddleware",
+        "enable_for_connectors": ["test", "app"],
+        "inbound_enabled": False,
+        "outbound_enabled": False,
+        "event_enabled": True,
+        "test": "test10",
+    }
+    middleware_config_2 = {
+        "class_path": "tests.test_workers.ToyMiddleware2",
+        "enable_for_connectors": ["test"],
+        "inbound_enabled": True,
+        "outbound_enabled": True,
+        "event_enabled": True,
+        "test": "test",
+    }
+    config = {
+        "middlewares": [middleware_config, middleware_config_2],
+    }
+
+    async with worker_factory.with_cleanup(MiddlewareWorker, config) as worker:
+        await worker.setup()
+        middleware = worker.middlewares
+        assert isinstance(middleware[0], ToyMiddleware)
+        assert middleware[0].config.test == "test10"

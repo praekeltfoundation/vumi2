@@ -133,3 +133,4 @@ utils/SMPPSim/
 
 # vscode
 .vscode
+.DS_Store
