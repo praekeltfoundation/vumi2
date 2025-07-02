@@ -6,6 +6,7 @@
 - Link last inbound message to outbound messages for USSD flows
 - Retry messages if Turn rate limits us
 - Warning logs for config errors, including (ignored) extra keys
+- Log an error if the outbound request times out
 - Adding middleware support 
 - Adding logging and unidecoder middleware
 - Calling BaseWorker setup on all child classes

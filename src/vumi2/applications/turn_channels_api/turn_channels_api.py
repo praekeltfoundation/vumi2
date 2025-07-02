@@ -11,7 +11,7 @@ from attrs import define, field
 from httpx import AsyncClient
 from prometheus_client import Counter
 from quart import request
-from trio import move_on_after
+from trio import fail_after
 
 import vumi2.message_caches as message_caches
 from vumi2.cli import class_from_string
@@ -163,35 +163,35 @@ class TurnChannelsApi(BaseWorker):
         headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
         timeout = self.config.mo_message_url_timeout
-        with move_on_after(timeout) as cs:
-            for attempt in range(self.config.max_retries + 1):
-                try:
-                    async with AsyncClient() as client:
-                        resp = await client.post(
-                            self.config.turn_url("/messages"),
-                            json=msg,
-                            headers=headers,
+        try:
+            with fail_after(timeout):
+                for attempt in range(self.config.max_retries + 1):
+                    try:
+                        async with AsyncClient() as client:
+                            resp = await client.post(
+                                self.config.turn_url("/messages"),
+                                json=msg,
+                                headers=headers,
+                            )
+
+                        if 200 <= resp.status_code < 300:
+                            # Success
+                            break
+
+                        raise HttpErrorResponse(resp.status_code)
+
+                    except Exception as e:
+                        turn_rate_limit_retry.labels(attempt=attempt + 1).inc()
+                        logger.warning(
+                            f"Attempt {attempt + 1} failed with error: {e}",
                         )
-
-                    if 200 <= resp.status_code < 300:
-                        # Success
-                        break
-
-                    raise HttpErrorResponse(resp.status_code)
-
-                except Exception as e:
-                    turn_rate_limit_retry.labels(attempt=attempt + 1).inc()
-                    logger.warning(
-                        f"Attempt {attempt + 1} failed with error: {e}",
-                    )
-                    if attempt < self.config.max_retries:
-                        await _backoff(attempt)
-                    else:
-                        raise
-
-        if cs.cancelled_caught:
+                        if attempt < self.config.max_retries:
+                            await _backoff(attempt)
+                        else:
+                            raise
+        except trio.TooSlowError as e:
             logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
-            raise TimeoutError()
+            raise TimeoutError() from e
 
     async def handle_event(self, event: Event) -> None:
         """
@@ -207,55 +207,62 @@ class TurnChannelsApi(BaseWorker):
         headers["Authorization"] = f"Bearer {self.config.auth_token}"
 
         timeout = self.config.event_url_timeout
-        with move_on_after(timeout) as cs:
-            async with AsyncClient() as client:
-                resp = await client.post(
-                    self.config.turn_url("/statuses"), json=ev, headers=headers
-                )
+        try:
+            with fail_after(timeout):
+                async with AsyncClient() as client:
+                    resp = await client.post(
+                        self.config.turn_url("/statuses"), json=ev, headers=headers
+                    )
 
-            if resp.status_code < 200 or resp.status_code >= 300:
-                logger.error(
-                    LOG_EV_HTTP_ERR,
-                    {"code": resp.status_code, "body": resp.text, "event": ev},
-                )
+                if resp.status_code < 200 or resp.status_code >= 300:
+                    logger.error(
+                        LOG_EV_HTTP_ERR,
+                        {"code": resp.status_code, "body": resp.text, "event": ev},
+                    )
 
-        if cs.cancelled_caught:
+        except trio.TooSlowError:
             logger.error(LOG_EV_HTTP_TIMEOUT, {"timeout": timeout, "event": ev})
 
     async def http_send_message(self) -> dict[Any, Any]:
         try:
-            # TODO: Log requests that timed out?
-            with move_on_after(self.config.request_timeout):
-                try:
-                    request_data = await request.get_data(as_text=True)
-                    if isinstance(request_data, bytes):
-                        request_data = request_data.decode()
+            timeout = self.config.request_timeout
+            msg: Message | None = None
 
-                    await self._verify_hmac(request_data)
+            try:
+                with fail_after(timeout):
+                    try:
+                        request_data = await request.get_data(as_text=True)
+                        if isinstance(request_data, bytes):
+                            request_data = request_data.decode()
 
-                    msg_dict = json.loads(request_data)
-                except json.JSONDecodeError as e:
-                    raise JsonDecodeError(str(e)) from e
+                        await self._verify_hmac(request_data)
 
-                logger.debug("Received outbound message: %s", msg_dict)
-                if msg_dict.get("reply_to", "") == "":
-                    inbound = (
-                        await self.message_cache.fetch_last_inbound_by_from_address(
-                            msg_dict["to"]
+                        msg_dict = json.loads(request_data)
+                    except json.JSONDecodeError as e:
+                        raise JsonDecodeError(str(e)) from e
+
+                    logger.debug("Received outbound message: %s", msg_dict)
+                    if msg_dict.get("reply_to", "") == "":
+                        inbound = (
+                            await self.message_cache.fetch_last_inbound_by_from_address(
+                                msg_dict["to"]
+                            )
                         )
+                        if inbound is not None:
+                            msg_dict["reply_to"] = inbound.message_id
+
+                    tom = TurnOutboundMessage.deserialise(
+                        msg_dict, default_from=self.config.default_from_addr
                     )
-                    if inbound is not None:
-                        msg_dict["reply_to"] = inbound.message_id
+                    msg = await self.build_outbound(tom, inbound)
 
-                tom = TurnOutboundMessage.deserialise(
-                    msg_dict, default_from=self.config.default_from_addr
-                )
-                msg = await self.build_outbound(tom, inbound)
+                    await self.connector.publish_outbound(msg)
 
-                await self.connector.publish_outbound(msg)
-
-                rmsg = turn_outbound_from_msg(msg)
-                return rmsg
+                    rmsg = turn_outbound_from_msg(msg)
+                    return rmsg
+            except trio.TooSlowError as e:
+                logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
+                raise TimeoutError() from e
         except ApiError as e:
             logger.error(
                 LOG_API_ERR,
