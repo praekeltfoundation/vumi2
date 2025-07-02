@@ -803,9 +803,10 @@ async def test_handle_messages_after_timeout(
     """
     After a timeout occurs, we should still be able to process new messages.
     """
-    config = mk_config(http_server, request_timeout=0.1)
+    config = mk_config(http_server, request_timeout=0.1, worker_concurrency=1)
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
         await worker.setup()
+        assert worker.config.worker_concurrency == 1
 
         # Test 1: Cause a timeout
         async def mock_timeout_get_data(as_text=False):
