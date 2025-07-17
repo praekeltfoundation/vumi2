@@ -45,7 +45,10 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
         "message": {
             "type": "text",
             "text": {
-                "body": message.content,
+                # Default to "hi" if content is empty,
+                # which happens at the start of a USSD session.
+                # Turn doesn't allow empty messages.
+                "body": message.content or "hi",
             },
             "from": message.from_addr,
             "id": message.message_id,
