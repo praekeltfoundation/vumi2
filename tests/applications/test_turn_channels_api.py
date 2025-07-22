@@ -156,7 +156,7 @@ async def tca_ro(connector_factory):
     return await connector_factory.setup_ro("tca-test")
 
 
-def mkmsg(content: str, to_addr="123", from_addr="456") -> Message:
+def mkmsg(content: str | None, to_addr="123", from_addr="456") -> Message:
     return Message(
         to_addr=to_addr,
         from_addr=from_addr,
@@ -249,6 +249,50 @@ async def test_inbound_message(worker_factory, http_server):
     inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
     assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
+    assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
+
+
+async def test_inbound_message_empty_content(worker_factory, http_server):
+    """
+    Inbound messages are forwarded to the configured URL.
+
+    This test calls the handler directly so we know when it's finished.
+    """
+    msg = mkmsg("")
+    config = mk_config(http_server, default_from_addr=None)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_inbound(tca_worker, msg):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
+    assert req.body_json["message"]["text"]["body"] == "hi"
+    assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
+
+
+async def test_inbound_message_none_content(worker_factory, http_server):
+    """
+    Inbound messages are forwarded to the configured URL.
+
+    This test calls the handler directly so we know when it's finished.
+    """
+    msg = mkmsg(None)
+    config = mk_config(http_server, default_from_addr=None)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_inbound(tca_worker, msg):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
+    assert req.body_json["message"]["text"]["body"] == "hi"
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
 
