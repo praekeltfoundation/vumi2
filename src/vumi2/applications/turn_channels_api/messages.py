@@ -83,6 +83,7 @@ def turn_event_from_ev(event: Event) -> dict:
             "id": event.user_message_id,
             "timestamp": str(int(event.timestamp.timestamp())),
             "status": None,
+            "recipient_id": event.user_message_id,
         }
     }
     if event.event_type == EventType.DELIVERY_REPORT:
