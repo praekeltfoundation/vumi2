@@ -272,9 +272,7 @@ class TurnChannelsApi(BaseWorker):
 
     async def _verify_hmac(self, request_data: str) -> None:
         if self.config.turn_hmac_secret:
-            logger.info(
-                f"Verifying HMAC signature with secret: {self.config.turn_hmac_secret}"
-            )
+            logger.info("Verifying HMAC signature")
             h = hmac.new(
                 self.config.turn_hmac_secret.encode(),
                 request_data.encode(),
