@@ -200,7 +200,12 @@ class TurnChannelsApi(BaseWorker):
         """
         logger.debug("Consuming event %s", event)
 
-        ev = turn_event_from_ev(event)
+        inbound = await self.message_cache.fetch_inbound(event.sent_message_id)
+        if inbound is None:
+            logger.info("Cannot find inbound for event %s, not routing", event)
+            raise HttpErrorResponse(404)
+
+        ev = turn_event_from_ev(event, inbound)
 
         headers = {}
 

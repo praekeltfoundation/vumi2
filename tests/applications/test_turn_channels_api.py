@@ -400,7 +400,9 @@ async def test_forward_ack_bad_response(tca_worker, http_server, caplog):
     If forwarding an ack results in an HTTP error, the error and event
     are logged.
     """
-    ev = mkev("msg-21", EventType.ACK)
+    inbound = mkmsg("hello", from_addr="+1234")
+    await tca_worker.message_cache.store_inbound(inbound)
+    ev = mkev("msg-21", EventType.ACK, sent_message_id=inbound.message_id)
 
     with fail_after(2):
         async with handle_event(tca_worker, ev):
@@ -418,11 +420,14 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
     Using an autojump clock here seems to break the AMQP client, so we
     have to use wall-clock time instead.
     """
+    inbound = mkmsg("hello", from_addr="+1234")
+
     config = mk_config(http_server, event_url_timeout=0.2)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
-        ev = mkev("msg-21", EventType.ACK)
+        await tca_worker.message_cache.store_inbound(inbound)
+        ev = mkev("msg-21", EventType.ACK, sent_message_id=inbound.message_id)
         with fail_after(5):
             async with handle_event(tca_worker, ev):
                 await http_server.receive_req()
@@ -437,11 +442,19 @@ async def test_forward_nack(worker_factory, http_server):
     A nack event referencing an outbound message we know about is
     forwarded over HTTP.
     """
-    ev = mkev("msg-21", EventType.NACK, nack_reason="KaBooM!")
+    inbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "msg-21",
+        EventType.NACK,
+        nack_reason="KaBooM!",
+        sent_message_id=inbound.message_id,
+    )
 
     config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(inbound)
         with fail_after(2):
             async with handle_event(tca_worker, ev):
                 req = await http_server.receive_req()
@@ -458,11 +471,19 @@ async def test_forward_dr(worker_factory, http_server):
     A delivery report event referencing an outbound message we know
     about is forwarded over HTTP.
     """
-    ev = mkev("m-21", EventType.DELIVERY_REPORT, delivery_status=DeliveryStatus.PENDING)
+    inbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.PENDING,
+        sent_message_id=inbound.message_id,
+    )
 
     config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_inbound(inbound)
         with fail_after(2):
             async with handle_event(tca_worker, ev):
                 req = await http_server.receive_req()
