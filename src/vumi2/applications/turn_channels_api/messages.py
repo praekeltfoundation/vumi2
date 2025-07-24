@@ -69,7 +69,7 @@ def turn_outbound_from_msg(message: Message) -> dict:
     return {"messages": [{"id": message.message_id}]}
 
 
-def turn_event_from_ev(event: Event, inbound: Message) -> dict:
+def turn_event_from_ev(event: Event, outbound: Message) -> dict:
     """
     From https://whatsapp.turn.io/docs/api/channel_api#sending-outbound-message-status-to-your-channel
 
@@ -84,7 +84,7 @@ def turn_event_from_ev(event: Event, inbound: Message) -> dict:
             "id": event.user_message_id,
             "timestamp": str(int(event.timestamp.timestamp())),
             "status": None,
-            "recipient_id": inbound.to_addr,
+            "recipient_id": outbound.to_addr,
         }
     }
     if event.event_type == EventType.DELIVERY_REPORT:
