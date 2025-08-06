@@ -45,10 +45,7 @@ def turn_inbound_from_msg(message: Message, channel_id: str) -> dict:
         "message": {
             "type": "text",
             "text": {
-                # Default to "hi" if content is empty,
-                # which happens at the start of a USSD session.
-                # Turn doesn't allow empty messages.
-                "body": message.content or "hi",
+                "body": message.content,
             },
             "from": message.from_addr,
             "id": message.message_id,
@@ -77,7 +74,7 @@ def turn_event_from_ev(event: Event, outbound: Message) -> dict:
     * timestamp (str) - The timestamp at which the event occurred.
     * status (dict) - The status of the event. Currently only sent, delivered, and read
       are supported.
-    * recipient_id (str) - The UUID of the message the event is for.
+    * recipient_id (str) - The address the message was sent to.
     """
     ev = {
         "status": {

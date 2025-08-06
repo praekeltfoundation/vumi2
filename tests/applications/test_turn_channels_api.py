@@ -270,7 +270,7 @@ async def test_inbound_message_empty_content(worker_factory, http_server):
                 await http_server.send_rsp(RspInfo())
     inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
     assert inbound == msg
-    assert req.body_json["message"]["text"]["body"] == "hi"
+    assert req.body_json["message"]["text"]["body"] == ""
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
 
@@ -292,7 +292,7 @@ async def test_inbound_message_none_content(worker_factory, http_server):
                 await http_server.send_rsp(RspInfo())
     inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
     assert inbound == msg
-    assert req.body_json["message"]["text"]["body"] == "hi"
+    assert req.body_json["message"]["text"]["body"] is None
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
 

@@ -202,9 +202,7 @@ class TurnChannelsApi(BaseWorker):
 
         outbound = await self.message_cache.fetch_outbound(event.sent_message_id)
         if outbound is None:
-            logger.info("Cannot find outbound for event %s, not routing", event)
-            # TODO: Remove this?
-            raise HttpErrorResponse(404)
+            logger.warning("Cannot find outbound for event %s, not processing", event)
 
         ev = turn_event_from_ev(event, outbound)
 
