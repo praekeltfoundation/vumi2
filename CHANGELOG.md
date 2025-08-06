@@ -2,6 +2,7 @@
 
 ## [0.3.3-dev] - UNRELEASED
 ### Added
+- Add handling for failed delivery statuses
 - Message cache for storing inbound messages
 - Link last inbound message to outbound messages for USSD flows
 - Retry messages if Turn rate limits us
