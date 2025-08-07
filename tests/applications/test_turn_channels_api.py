@@ -495,6 +495,31 @@ async def test_forward_dr(worker_factory, http_server):
     assert req.body_json["status"]["id"] == "m-21"
 
 
+async def test_forward_dr_no_outbound(worker_factory, http_server, caplog):
+    """
+    A delivery report event referencing an outbound message we know
+    about is forwarded over HTTP.
+    """
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.PENDING,
+        sent_message_id=outbound.message_id,
+    )
+
+    config = mk_config(http_server)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_event(tca_worker, ev):
+                pass
+
+    err = [log for log in caplog.records if log.levelno >= logging.WARNING]
+    assert "Cannot find outbound for event" in err[0].getMessage()
+
+
 async def test_forward_dr_delivered(worker_factory, http_server):
     """
     A 'delivered' delivery report event referencing an outbound message we know
