@@ -200,7 +200,12 @@ class TurnChannelsApi(BaseWorker):
         """
         logger.debug("Consuming event %s", event)
 
-        ev = turn_event_from_ev(event)
+        outbound = await self.message_cache.fetch_outbound(event.sent_message_id)
+        if outbound is None:
+            logger.warning("Cannot find outbound for event %s, not processing", event)
+            return
+
+        ev = turn_event_from_ev(event, outbound)
 
         headers = {}
 
@@ -226,7 +231,7 @@ class TurnChannelsApi(BaseWorker):
     async def http_send_message(self) -> dict[Any, Any]:
         try:
             timeout = self.config.request_timeout
-            msg: Message | None = None
+            outbound_msg: Message | None = None
 
             try:
                 with fail_after(timeout):
@@ -254,14 +259,17 @@ class TurnChannelsApi(BaseWorker):
                     tom = TurnOutboundMessage.deserialise(
                         msg_dict, default_from=self.config.default_from_addr
                     )
-                    msg = await self.build_outbound(tom, inbound)
+                    outbound_msg = await self.build_outbound(tom, inbound)
+                    await self.message_cache.store_outbound(outbound_msg)
 
-                    await self.connector.publish_outbound(msg)
+                    await self.connector.publish_outbound(outbound_msg)
 
-                    rmsg = turn_outbound_from_msg(msg)
+                    rmsg = turn_outbound_from_msg(outbound_msg)
                     return rmsg
             except trio.TooSlowError as e:
-                logger.error(LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": msg})
+                logger.error(
+                    LOG_MSG_HTTP_TIMEOUT, {"timeout": timeout, "message": outbound_msg}
+                )
                 raise TimeoutError() from e
         except ApiError as e:
             logger.error(

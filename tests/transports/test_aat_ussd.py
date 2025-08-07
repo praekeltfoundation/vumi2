@@ -75,6 +75,7 @@ async def test_inbound_start_session(transport: AatUssdTransport, ri_http_rpc):
         assert inbound.from_addr == "+27820001001"
         assert inbound.provider == "Vodacom"
         assert inbound.session_event == Session.NEW
+        assert inbound.content == "*1234#"
 
         reply = inbound.reply("Test response")
         await ri_http_rpc.publish_outbound(reply)

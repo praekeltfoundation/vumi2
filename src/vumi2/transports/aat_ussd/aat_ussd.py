@@ -46,7 +46,10 @@ class AatUssdTransport(HttpRpcTransport):
         else:
             session_event = Session.NEW
             to_addr = values["request"]
-            content = None
+            # Default content to the request value if content is empty,
+            # which happens at the start of a USSD session.
+            # Turn doesn't allow empty messages.
+            content = values["request"]
 
         message = Message(
             to_addr=to_addr,

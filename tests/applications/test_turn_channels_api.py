@@ -156,7 +156,7 @@ async def tca_ro(connector_factory):
     return await connector_factory.setup_ro("tca-test")
 
 
-def mkmsg(content: str, to_addr="123", from_addr="456") -> Message:
+def mkmsg(content: str | None, to_addr="123", from_addr="456") -> Message:
     return Message(
         to_addr=to_addr,
         from_addr=from_addr,
@@ -249,6 +249,50 @@ async def test_inbound_message(worker_factory, http_server):
     inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
     assert inbound == msg
     assert req.body_json["message"]["text"]["body"] == "hello"
+    assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
+
+
+async def test_inbound_message_empty_content(worker_factory, http_server):
+    """
+    Inbound messages are forwarded to the configured URL.
+
+    This test calls the handler directly so we know when it's finished.
+    """
+    msg = mkmsg("")
+    config = mk_config(http_server, default_from_addr=None)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_inbound(tca_worker, msg):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
+    assert req.body_json["message"]["text"]["body"] == ""
+    assert req.body_json["contact"]["id"] == "456"
+    assert req.body_json["message"]["from"] == "456"
+
+
+async def test_inbound_message_none_content(worker_factory, http_server):
+    """
+    Inbound messages are forwarded to the configured URL.
+
+    This test calls the handler directly so we know when it's finished.
+    """
+    msg = mkmsg(None)
+    config = mk_config(http_server, default_from_addr=None)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_inbound(tca_worker, msg):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+    inbound = await tca_worker.message_cache.fetch_last_inbound_by_from_address("456")
+    assert inbound == msg
+    assert req.body_json["message"]["text"]["body"] is None
     assert req.body_json["contact"]["id"] == "456"
     assert req.body_json["message"]["from"] == "456"
 
@@ -356,7 +400,9 @@ async def test_forward_ack_bad_response(tca_worker, http_server, caplog):
     If forwarding an ack results in an HTTP error, the error and event
     are logged.
     """
-    ev = mkev("msg-21", EventType.ACK)
+    outbound = mkmsg("hello", from_addr="+1234")
+    await tca_worker.message_cache.store_outbound(outbound)
+    ev = mkev("msg-21", EventType.ACK, sent_message_id=outbound.message_id)
 
     with fail_after(2):
         async with handle_event(tca_worker, ev):
@@ -374,11 +420,14 @@ async def test_forward_ack_too_slow(worker_factory, http_server, caplog):
     Using an autojump clock here seems to break the AMQP client, so we
     have to use wall-clock time instead.
     """
+    outbound = mkmsg("hello", from_addr="+1234")
+
     config = mk_config(http_server, event_url_timeout=0.2)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
-        ev = mkev("msg-21", EventType.ACK)
+        await tca_worker.message_cache.store_outbound(outbound)
+        ev = mkev("msg-21", EventType.ACK, sent_message_id=outbound.message_id)
         with fail_after(5):
             async with handle_event(tca_worker, ev):
                 await http_server.receive_req()
@@ -393,11 +442,19 @@ async def test_forward_nack(worker_factory, http_server):
     A nack event referencing an outbound message we know about is
     forwarded over HTTP.
     """
-    ev = mkev("msg-21", EventType.NACK, nack_reason="KaBooM!")
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "msg-21",
+        EventType.NACK,
+        nack_reason="KaBooM!",
+        sent_message_id=outbound.message_id,
+    )
 
     config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_outbound(outbound)
         with fail_after(2):
             async with handle_event(tca_worker, ev):
                 req = await http_server.receive_req()
@@ -414,11 +471,19 @@ async def test_forward_dr(worker_factory, http_server):
     A delivery report event referencing an outbound message we know
     about is forwarded over HTTP.
     """
-    ev = mkev("m-21", EventType.DELIVERY_REPORT, delivery_status=DeliveryStatus.PENDING)
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.PENDING,
+        sent_message_id=outbound.message_id,
+    )
 
     config = mk_config(http_server)
 
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_outbound(outbound)
         with fail_after(2):
             async with handle_event(tca_worker, ev):
                 req = await http_server.receive_req()
@@ -428,6 +493,31 @@ async def test_forward_dr(worker_factory, http_server):
     assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["status"]["status"] == "sent"
     assert req.body_json["status"]["id"] == "m-21"
+
+
+async def test_forward_dr_no_outbound(worker_factory, http_server, caplog):
+    """
+    A delivery report event referencing an outbound message we know
+    about is forwarded over HTTP.
+    """
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.PENDING,
+        sent_message_id=outbound.message_id,
+    )
+
+    config = mk_config(http_server)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        with fail_after(2):
+            async with handle_event(tca_worker, ev):
+                pass
+
+    err = [log for log in caplog.records if log.levelno >= logging.WARNING]
+    assert "Cannot find outbound for event" in err[0].getMessage()
 
 
 async def test_send_outbound(worker_factory, http_server, tca_ro):
