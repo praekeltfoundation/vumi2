@@ -462,6 +462,34 @@ async def test_forward_nack(worker_factory, http_server):
 
     assert req.path == "statuses"
     assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["status"]["status"] == "failed"
+    assert req.body_json["status"]["id"] == "msg-21"
+
+
+async def test_forward_ack(worker_factory, http_server):
+    """
+    An ack event referencing an outbound message we know about is
+    forwarded over HTTP.
+    """
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "msg-21",
+        EventType.ACK,
+        sent_message_id=outbound.message_id,
+    )
+
+    config = mk_config(http_server)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_outbound(outbound)
+        with fail_after(2):
+            async with handle_event(tca_worker, ev):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+
+    assert req.path == "statuses"
+    assert req.headers["Content-Type"] == "application/json"
     assert req.body_json["status"]["status"] == "sent"
     assert req.body_json["status"]["id"] == "msg-21"
 
@@ -518,6 +546,64 @@ async def test_forward_dr_no_outbound(worker_factory, http_server, caplog):
 
     err = [log for log in caplog.records if log.levelno >= logging.WARNING]
     assert "Cannot find outbound for event" in err[0].getMessage()
+
+
+async def test_forward_dr_delivered(worker_factory, http_server):
+    """
+    A 'delivered' delivery report event referencing an outbound message we know
+    about is forwarded over HTTP.
+    """
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.DELIVERED,
+        sent_message_id=outbound.message_id,
+    )
+
+    config = mk_config(http_server)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_outbound(outbound)
+        with fail_after(2):
+            async with handle_event(tca_worker, ev):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+
+    assert req.path == "statuses"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["status"]["status"] == "delivered"
+    assert req.body_json["status"]["id"] == "m-21"
+
+
+async def test_forward_dr_failed(worker_factory, http_server):
+    """
+    A 'failed'delivery report event referencing an outbound message we know
+    about is forwarded over HTTP.
+    """
+    outbound = mkmsg("hello", from_addr="+1234")
+    ev = mkev(
+        "m-21",
+        EventType.DELIVERY_REPORT,
+        delivery_status=DeliveryStatus.FAILED,
+        sent_message_id=outbound.message_id,
+    )
+
+    config = mk_config(http_server)
+
+    async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
+        await tca_worker.setup()
+        await tca_worker.message_cache.store_outbound(outbound)
+        with fail_after(2):
+            async with handle_event(tca_worker, ev):
+                req = await http_server.receive_req()
+                await http_server.send_rsp(RspInfo())
+
+    assert req.path == "statuses"
+    assert req.headers["Content-Type"] == "application/json"
+    assert req.body_json["status"]["status"] == "failed"
+    assert req.body_json["status"]["id"] == "m-21"
 
 
 async def test_send_outbound(worker_factory, http_server, tca_ro):

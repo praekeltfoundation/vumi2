@@ -84,16 +84,19 @@ def turn_event_from_ev(event: Event, outbound: Message) -> dict:
             "recipient_id": outbound.to_addr,
         }
     }
-    if event.event_type == EventType.DELIVERY_REPORT:
-        ev["status"]["status"] = {
-            DeliveryStatus.PENDING: "sent",
-            # TODO: Turn doesn't accept a failed status. Log the failure for now?
-            DeliveryStatus.FAILED: "sent",
-            DeliveryStatus.DELIVERED: "delivered",
-            None: None,
-        }[event.delivery_status]
-    else:
-        ev["status"]["status"] = "sent"
+
+    match event.event_type:
+        case EventType.DELIVERY_REPORT:
+            ev["status"]["status"] = {
+                DeliveryStatus.PENDING: "sent",
+                DeliveryStatus.FAILED: "failed",
+                DeliveryStatus.DELIVERED: "delivered",
+                None: None,
+            }[event.delivery_status]
+        case EventType.NACK:
+            ev["status"]["status"] = "failed"
+        case _:
+            ev["status"]["status"] = "sent"
     return ev
 
 
