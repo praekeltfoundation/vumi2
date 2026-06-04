@@ -1,65 +1,55 @@
-[tool.poetry]
+[project]
 name = "vumi2"
 version = "0.3.3-dev"
 description = "Vumi, but with Python3 and Trio async"
-authors = ["Praekelt.org <dev@praekelt.org>"]
-license = "BSD 3-Clause"
+authors = [
+    { name = "Praekelt.org", email = "dev@praekelt.org" },
+]
+license = { text = "BSD 3-Clause" }
 readme = "README.md"
-repository = "https://github.com/praekeltfoundation/vumi2"
-packages = [
-    { include = "vumi2", from = "src" }
+requires-python = ">=3.11,<4.0"
+dependencies = [
+    "trio>=0.24.0,<0.25.0",
+    "anyio>=4.0.0,<4.9.0",
+    "async-amqp>=0.5.5,<0.6.0",
+    "attrs>=23.2.0,<24.0.0",
+    "cattrs>=23.2.3,<24.0.0",
+    "PyYAML>=6.0.1,<7.0.0",
+    "sentry-sdk>=2.8.0,<3.0.0",
+    "quart-trio>=0.11.1,<0.12.0",
+    "hypercorn>=0.16.0,<0.17.0",
+    "smpp.pdu3>=0.6,<0.7",
+    "httpx>=0.26.0,<0.27.0",
+    "unidecode>=1.3.8,<2.0.0",
+    "prometheus-client>=0.22.1,<0.23.0",
 ]
-include = [
-    { path = "tests", format = "sdist" }
-]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-trio = "^0.24.0"
-async-amqp = "^0.5.5"
-attrs = "^23.2.0"
-cattrs = "^23.2.3"
-PyYAML = "^6.0.1"
-sentry-sdk = "^2.8.0"
-quart-trio = "^0.11.1"
-hypercorn = "^0.16.0"
-"smpp.pdu3" = "^0.6"
-httpx = "^0.26.0"
-unidecode = "^1.3.8"
-prometheus-client = "^0.22.1"
+[project.urls]
+Repository = "https://github.com/praekeltfoundation/vumi2"
 
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.8.0"
-pytest = "^8.0.0"
-pytest-trio = "^0.8.0"
-pytest-cov = "^4.1.0"
-ruff = "^0.2.1"
-Sphinx = "^7.2.6"
-sphinxcontrib-httpdomain = "^1.8.1"
-trio-typing = "^0.10.0"
-types-pyyaml = "^6.0.12.12"
-
-[tool.poetry.scripts]
+[project.scripts]
 vumi2 = "vumi2.cli:main"
 
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0,<9.0.0",
+    "pytest-trio>=0.8.0,<0.9.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "ruff>=0.2.1,<0.3.0",
+    "ty>=0.0.1a0,<1.0.0",
+    "types-pyyaml>=6.0.12.12,<7.0.0",
+]
+docs = [
+    "sphinx>=7.2.6,<8.0.0",
+    "sphinxcontrib-httpdomain>=1.8.1,<2.0.0",
+]
+
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.11.16,<0.12"]
+build-backend = "uv_build"
 
-[tool.black]
-preview = true
-
-[tool.mypy]
-files = "."
-# TODO: Fix the unreachable code and uncomment this.
-# warn_unreachable = true
-ignore_missing_imports = false
-check_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = "vumi2.*"
-# TODO: Fix the untyped defs and uncomment this.
-# disallow_untyped_defs = true
+[tool.uv.build-backend]
+source-include = ["tests/**"]
 
 [tool.pytest.ini_options]
 trio_mode = true
@@ -70,6 +60,28 @@ markers = [
 
 [tool.coverage.report]
 exclude_also = ["@overload"]
+
+[tool.ty.environment]
+root = ["./src", "./"]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.rules]
+empty-body = "warn"
+invalid-argument-type = "warn"
+invalid-assignment = "warn"
+invalid-context-manager = "warn"
+invalid-method-override = "warn"
+unresolved-attribute = "warn"
+unused-type-ignore-comment = "ignore"
+
+[tool.ty.analysis]
+replace-imports-with-any = [
+    "async_amqp.**",
+    "gsm0338",
+    "smpp.**",
+]
 
 [tool.ruff]
 target-version = "py311"

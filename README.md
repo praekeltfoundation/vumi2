@@ -7,42 +7,36 @@ Currently under development.
 - [ ] SMPP SMS transport
 
 ## Development
-This project uses [poetry](https://python-poetry.org/docs/#installation) for packaging and dependancy management, so install that first.
+This project uses [uv](https://docs.astral.sh/uv/) for packaging and dependency management, so install that first.
 
 Ensure you're also running at least python 3.11, `python --version`.
 
 Then you can install the dependencies
 ```bash
-~ poetry install
+~ uv sync --all-groups
 ```
 
 You will also need an AMQP broker (eg. [RabbitMQ](https://www.rabbitmq.com/)) installed and running to be able to run a local worker, or to run the local tests.
 
-To run a local worker, there is the `vumi2` command. First make sure you're in the virtual environment where the project is installed
+To run a local worker, there is the `vumi2` command, eg.
 ```bash
-~ poetry shell
+~ uv run vumi2 worker vumi2.routers.ToAddressRouter
 ```
 
-Then you can run a local worker using the `vumi2` command, eg.
+To run the autoformatting, linting, and type checking, run
 ```bash
-~ vumi2 worker vumi2.routers.ToAddressRouter
-```
-
-To run the autoformatting and linting, run
-```bash
-~ ruff format && ruff check && mypy --install-types
+~ uv run ruff format && uv run ruff check && uv run ty check src tests
 ```
 
 For the test runner, we use [pytest](https://docs.pytest.org/):
 ```bash
-~ pytest
+~ uv run pytest
 ```
 
 ## Generating documentation
 This project uses [sphinx](https://www.sphinx-doc.org/) to generate the documentation. To build, run
 ```bash
-~ cd docs
-~ make html
+~ uv run sphinx-build -b html docs docs/_build/html
 ```
 The built documentation will be in `docs/_build/html`
 
@@ -52,17 +46,18 @@ If you'd like your editor to handle linting and/or formatting for you, here's ho
 
 ### Visual Studio Code
 
-1. Install the Python and Ruff extensions
-1. In settings, check the "Python > Linting: Mypy Enabled" box
-1. In settings, set the "Python > Formatting: Provider" to "black" (apparently "ruff format" isn't supported by the Python extension yet and "black" is probably close enough)
+1. Install the Python, Ruff, and ty extensions
+1. In settings, set Ruff as the default Python formatter
 1. If you want to have formatting automatically apply, in settings, check the "Editor: Format On Save" checkbox
 
 Alternatively, add the following to your `settings.json`:
 ```json
 {
-    "python.linting.mypyEnabled": true,
-    "python.formatting.provider": "black",
-    "editor.formatOnSave": true,
+    "python.defaultInterpreterPath": ".venv/bin/python",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff"
+    },
+    "editor.formatOnSave": true
 }
 ```
 
