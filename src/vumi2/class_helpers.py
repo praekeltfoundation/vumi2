@@ -33,7 +33,7 @@ def class_from_string(class_path: str):
         #   should be handled like any other exception from inside the module
         #   we're importing, so we reraise.
 
-        name = str(e.name)  # This is allowed to be None, so stringify it for mypy
+        name = str(e.name)  # This is allowed to be None, so stringify it.
         if name == module_path:
             # Exact matches are easy.
             raise _cfs_err(class_path, str(e)) from e
