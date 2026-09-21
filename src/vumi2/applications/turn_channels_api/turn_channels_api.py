@@ -8,7 +8,7 @@ from typing import Any
 
 import trio
 from attrs import define, field
-from httpx import AsyncClient
+from httpx2 import AsyncClient
 from prometheus_client import Counter
 from quart import request
 from trio import fail_after

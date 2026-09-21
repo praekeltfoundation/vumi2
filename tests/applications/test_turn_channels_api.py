@@ -7,7 +7,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from uuid import UUID
 
-import httpx
+import httpx2
 import pytest
 from attrs import define, field
 from hypercorn import Config as HypercornConfig
@@ -1091,7 +1091,7 @@ async def test_retry_on_network_error(worker_factory, http_server, caplog, monke
     When a network error occurs, we retry according to the retry configuration.
     """
     call_count = 0
-    original_post = httpx.AsyncClient.post
+    original_post = httpx2.AsyncClient.post
 
     async def mock_post(self, *args, **kwargs):
         nonlocal call_count
@@ -1100,7 +1100,7 @@ async def test_retry_on_network_error(worker_factory, http_server, caplog, monke
             raise ConnectionError("Connection failed")
         return await original_post(self, *args, **kwargs)
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+    monkeypatch.setattr(httpx2.AsyncClient, "post", mock_post)
 
     config = mk_config(
         http_server,

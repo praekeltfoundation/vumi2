@@ -3,7 +3,7 @@ from http import HTTPStatus
 from logging import getLogger
 
 from attrs import define, field
-from httpx import AsyncClient
+from httpx2 import AsyncClient
 from quart import request
 from trio import move_on_after
 
