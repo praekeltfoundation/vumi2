@@ -6,7 +6,7 @@ from vumi2.messages import Message, Session, TransportType
 TEST_CONFIG = {"transport_name": "static_reply_test", "reply_text": "Test reply text"}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def static_reply(worker_factory):
     async with worker_factory.with_cleanup(
         StaticReplyApplication, TEST_CONFIG

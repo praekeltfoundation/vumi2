@@ -7,7 +7,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from uuid import UUID
 
-import httpx
+import httpx2
 import pytest
 from attrs import define, field
 from hypercorn import Config as HypercornConfig
@@ -115,13 +115,13 @@ async def post_outbound(
 ) -> bytes:
     client = worker.http.app.test_client()
     headers = {"Content-Type": "application/json", "X-Turn-Hook-Signature": signature}
-    async with client.request(path=path, method="POST", headers=headers) as connection:
+    async with client.request(path=path, method="POST", headers=headers) as connection:  # type: ignore (type confusion)
         await connection.send(json.dumps(msg_dict).encode())
         await connection.send_complete()
         return await connection.receive()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def http_server(nursery):
     return await HttpServer.start_new(nursery)
 
@@ -143,7 +143,7 @@ def mk_config(
     return {**config, **config_update}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def tca_worker(worker_factory, http_server):
     config = mk_config(http_server)
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
@@ -151,7 +151,7 @@ async def tca_worker(worker_factory, http_server):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def tca_ro(connector_factory):
     return await connector_factory.setup_ro("tca-test")
 
@@ -297,7 +297,7 @@ async def test_inbound_message_none_content(worker_factory, http_server):
     assert req.body_json["message"]["from"] == "456"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_inbound_bad_response(worker_factory, http_server, caplog):
     """
     If an inbound message results in an HTTP error, the error and
@@ -316,7 +316,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
         await worker.setup()
 
-        with pytest.raises(HttpErrorResponse):  # noqa: PT012
+        with pytest.RaisesGroup(HttpErrorResponse):
             async with handle_inbound(worker, msg):
                 req = await http_server.receive_req()
                 assert req.body_json["message"]["text"]["body"] == "hello"
@@ -338,7 +338,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
         )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_inbound_too_slow(worker_factory, http_server, caplog):
     """
     If an inbound message times out, the error and message are logged.
@@ -354,7 +354,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
 
-        with pytest.raises(TimeoutError) as exc_info:
+        with pytest.RaisesGroup(TimeoutError) as exc_info:
             async with handle_inbound(tca_worker, msg):
                 # Don't respond to the request to trigger a timeout
                 pass
@@ -370,9 +370,10 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
         for msg in error_logs
     )
 
-    assert exc_info.value.name == "TimeoutError"
-    assert exc_info.value.description == "timeout"
-    assert exc_info.value.status == HTTPStatus.BAD_REQUEST
+    timeout_error = exc_info.value.exceptions[0]
+    assert timeout_error.name == "TimeoutError"
+    assert timeout_error.description == "timeout"
+    assert timeout_error.status == HTTPStatus.BAD_REQUEST
 
 
 async def test_inbound_auth_token(worker_factory, http_server):
@@ -751,9 +752,9 @@ async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
 
         err = [log for log in caplog.records if log.levelno >= logging.ERROR]
         error_messages = [log.getMessage() for log in err]
-        assert any(
-            "json decode error" in msg for msg in error_messages
-        ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
+        assert any("json decode error" in msg for msg in error_messages), (
+            f"Expected 'json decode error' in error messages, but got: {error_messages}"
+        )
 
 
 async def test_send_outbound_times_out(
@@ -1041,7 +1042,7 @@ async def test_handle_messages_after_timeout(
                 await ctx.pop()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_retry_on_http_error(worker_factory, http_server, caplog):
     """
     When an HTTP error occurs, we retry according to the retry configuration.
@@ -1084,13 +1085,13 @@ async def test_retry_on_http_error(worker_factory, http_server, caplog):
         )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_retry_on_network_error(worker_factory, http_server, caplog, monkeypatch):
     """
     When a network error occurs, we retry according to the retry configuration.
     """
     call_count = 0
-    original_post = httpx.AsyncClient.post
+    original_post = httpx2.AsyncClient.post
 
     async def mock_post(self, *args, **kwargs):
         nonlocal call_count
@@ -1099,7 +1100,7 @@ async def test_retry_on_network_error(worker_factory, http_server, caplog, monke
             raise ConnectionError("Connection failed")
         return await original_post(self, *args, **kwargs)
 
-    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+    monkeypatch.setattr(httpx2.AsyncClient, "post", mock_post)
 
     config = mk_config(
         http_server,
@@ -1130,9 +1131,9 @@ async def test_retry_on_network_error(worker_factory, http_server, caplog, monke
         ]
 
         expected_log = "Attempt 1 failed with error: Connection failed"
-        assert any(
-            expected_log in log for log in warning_logs
-        ), f"Expected warning containing '{expected_log}', got: {warning_logs}"
+        assert any(expected_log in log for log in warning_logs), (
+            f"Expected warning containing '{expected_log}', got: {warning_logs}"
+        )
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):

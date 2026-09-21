@@ -19,7 +19,7 @@ class SmppTransceiverTransportConfig(BaseConfig):
     host: str = "localhost"
     port: int = 2775
     system_id: str = "smppclient1"
-    password: str = "password"
+    password: str = "password"  # noqa: S105 (Hardcoded default password is okay.)
     system_type: str | None = None
     interface_version: int = 34
     address_range: str | None = None

@@ -12,7 +12,7 @@ def msg_ch_pair(bufsize: int):
     return open_memory_channel[MessageType](bufsize)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def transport(worker_factory):
     config = {
         "http_bind": "localhost",
@@ -24,7 +24,7 @@ async def transport(worker_factory):
         yield transport
 
 
-@pytest.fixture()
+@pytest.fixture
 async def ri_http_rpc(connector_factory):
     # connector_factory handles the necessary cleanup.
     return await connector_factory.setup_ri("http_rpc")
@@ -60,7 +60,7 @@ def assert_outbound_message_response(
 
 async def test_inbound_start_session(transport: AatUssdTransport, ri_http_rpc):
     client = transport.http.app.test_client()
-    async with client.request(
+    async with client.request(  # type: ignore (type confusion)
         transport.config.web_path,
         query_string={
             "msisdn": "+27820001001",
@@ -95,7 +95,7 @@ async def test_inbound_start_session(transport: AatUssdTransport, ri_http_rpc):
 
 async def test_close_session(transport: AatUssdTransport, ri_http_rpc):
     client = transport.http.app.test_client()
-    async with client.request(
+    async with client.request(  # type: ignore (type confusion)
         transport.config.web_path,
         query_string={
             "msisdn": "+27820001001",
@@ -133,7 +133,7 @@ async def test_missing_fields(transport: AatUssdTransport):
 
 async def test_inbound_session_resume(transport: AatUssdTransport, ri_http_rpc):
     client = transport.http.app.test_client()
-    async with client.request(
+    async with client.request(  # type: ignore (type confusion)
         transport.config.web_path,
         query_string={
             "msisdn": "+27820001001",

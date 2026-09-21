@@ -2,8 +2,7 @@
 
 
 class Sequencer:  # pragma: no cover
-    def __init__(self, config: dict):
-        ...
+    def __init__(self, config: dict): ...
 
     async def get_next_sequence_number(self) -> int:  # type: ignore
         ...

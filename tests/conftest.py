@@ -8,18 +8,18 @@ from .helpers import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 async def amqp_connection(monkeypatch):
     async with amqp_with_cleanup(monkeypatch) as amqp:
         yield amqp
 
 
-@pytest.fixture()
+@pytest.fixture
 def worker_factory(request, nursery, amqp_connection):
     return WorkerFactory(request, nursery, amqp_connection)
 
 
-@pytest.fixture()
+@pytest.fixture
 async def connector_factory(nursery, amqp_connection):
     cf = ConnectorFactory(nursery, amqp_connection)
     async with aclose_with_timeout(cf):

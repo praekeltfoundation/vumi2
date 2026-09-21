@@ -4,7 +4,7 @@ import trio
 from vumi2.transports.smpp.smpp_cache import InMemorySmppCache
 
 
-@pytest.fixture()
+@pytest.fixture
 async def memory_smpp_cache():
     return InMemorySmppCache({})
 

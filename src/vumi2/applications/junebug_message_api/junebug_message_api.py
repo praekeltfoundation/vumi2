@@ -3,7 +3,7 @@ from http import HTTPStatus
 from logging import getLogger
 
 from attrs import define, field
-from httpx import AsyncClient
+from httpx2 import AsyncClient
 from quart import request
 from trio import move_on_after
 
@@ -188,10 +188,11 @@ class JunebugMessageApi(BaseWorker):
         if cs.cancelled_caught:
             logger.error(LOG_EV_HTTP_TIMEOUT, {"timeout": timeout, "event": ev})
 
-    async def http_send_message(self) -> tuple[str | dict, int, dict[str, str]]:
+    async def http_send_message(self) -> tuple[str | dict, int, dict[str, str]]:  # type: ignore (TODO: Fix this)
         _message_id = generate_message_id()
         try:
-            # TODO: Log requests that timed out?
+            # TODO: Log requests that timed out? We currently do nothing and return
+            # None, which is a type error.
             with move_on_after(self.config.request_timeout):
                 try:
                     msg_dict = json.loads(await request.get_data(as_text=True))

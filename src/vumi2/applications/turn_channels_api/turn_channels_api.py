@@ -8,7 +8,7 @@ from typing import Any
 
 import trio
 from attrs import define, field
-from httpx import AsyncClient
+from httpx2 import AsyncClient
 from prometheus_client import Counter
 from quart import request
 from trio import fail_after
@@ -289,7 +289,7 @@ class TurnChannelsApi(BaseWorker):
             computed_signature = base64.b64encode(h).decode("utf-8")
             signature = request.headers.get("X-Turn-Hook-Signature", "")
             logger.info(
-                f"Signature from Turn: {signature}." f"Computed: {computed_signature}"
+                f"Signature from Turn: {signature}.Computed: {computed_signature}"
             )
             if not hmac.compare_digest(computed_signature, signature):
                 raise SignatureMismatchError()

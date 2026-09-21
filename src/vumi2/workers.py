@@ -1,4 +1,5 @@
 import importlib.metadata
+from collections.abc import Callable
 from functools import wraps
 from logging import getLogger
 from typing import TypedDict, TypeVar
@@ -76,7 +77,7 @@ class BaseWorker(AsyncResource):
         self._closed = trio.Event()
         self.config = config
         self._setup_sentry()
-        self.healthchecks = {"amqp": self._amqp_healthcheck}
+        self.healthchecks: dict[str, Callable] = {"amqp": self._amqp_healthcheck}
         if config.http_bind is not None:
             self._setup_http(config.http_bind)
         self.middlewares = []

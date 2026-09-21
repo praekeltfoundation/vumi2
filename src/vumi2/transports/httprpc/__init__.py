@@ -1,3 +1,3 @@
 from .http_rpc import HttpRpcConfig, HttpRpcTransport, Request
 
-__all__ = ["HttpRpcTransport", "Request", "HttpRpcConfig"]
+__all__ = ["HttpRpcConfig", "HttpRpcTransport", "Request"]

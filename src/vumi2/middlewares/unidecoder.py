@@ -9,13 +9,13 @@ class Unidecoder(BaseMiddleware):
     async def setup(self):
         pass
 
-    async def handle_inbound(self, message, connection):
+    async def handle_inbound(self, message, connector_name):
         if message.content:
             message.content = unidecode(message.content)
             print(f"unidecoded message {message.content}")
         return message
 
-    async def handle_outbound(self, message, connection):
+    async def handle_outbound(self, message, connector_name):
         if message.content:
             message.content = unidecode(message.content)
             print(f"unidecoded message {message.content}")

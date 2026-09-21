@@ -125,13 +125,13 @@ async def post_outbound(
 ) -> bytes:
     client = worker.http.app.test_client()
     headers = {"Content-Type": "application/json"}
-    async with client.request(path=path, method="POST", headers=headers) as connection:
+    async with client.request(path=path, method="POST", headers=headers) as connection:  # type: ignore (type confusion)
         await connection.send(json.dumps(msg_dict).encode())
         await connection.send_complete()
         return await connection.receive()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def http_server(nursery):
     return await HttpServer.start_new(nursery)
 
@@ -145,7 +145,7 @@ def mk_config(http_server: HttpServer, **config_update) -> dict:
     return {**config, **config_update}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def jma_worker(worker_factory, http_server):
     config = mk_config(http_server)
     async with worker_factory.with_cleanup(JunebugMessageApi, config) as worker:
@@ -153,7 +153,7 @@ async def jma_worker(worker_factory, http_server):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def jma_ro(connector_factory):
     return await connector_factory.setup_ro("jma-test")
 
