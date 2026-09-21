@@ -429,7 +429,7 @@ async def test_handle_unbind(client: EsmeClient, smsc: FakeSmsc):
     """
     Unbind should respond, then raise an exception
     """
-    with pytest.raises(SmscUnbind):  # noqa: PT012 (Leaving the nursery raises.)
+    with pytest.RaisesGroup(SmscUnbind):  # noqa: PT012 (Leaving the nursery raises.)
         async with open_autocancel_nursery() as nursery:
             client.nursery = nursery
             await smsc.start_and_bind(client)

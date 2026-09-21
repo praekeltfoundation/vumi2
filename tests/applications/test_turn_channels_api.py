@@ -316,7 +316,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
         await worker.setup()
 
-        with pytest.raises(HttpErrorResponse):  # noqa: PT012
+        with pytest.RaisesGroup(HttpErrorResponse):  # noqa: PT012
             async with handle_inbound(worker, msg):
                 req = await http_server.receive_req()
                 assert req.body_json["message"]["text"]["body"] == "hello"
@@ -354,7 +354,7 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as tca_worker:
         await tca_worker.setup()
 
-        with pytest.raises(TimeoutError) as exc_info:
+        with pytest.RaisesGroup(TimeoutError) as exc_info:
             async with handle_inbound(tca_worker, msg):
                 # Don't respond to the request to trigger a timeout
                 pass
@@ -370,9 +370,10 @@ async def test_inbound_too_slow(worker_factory, http_server, caplog):
         for msg in error_logs
     )
 
-    assert exc_info.value.name == "TimeoutError"
-    assert exc_info.value.description == "timeout"
-    assert exc_info.value.status == HTTPStatus.BAD_REQUEST
+    timeout_error = exc_info.value.exceptions[0]
+    assert timeout_error.name == "TimeoutError"
+    assert timeout_error.description == "timeout"
+    assert timeout_error.status == HTTPStatus.BAD_REQUEST
 
 
 async def test_inbound_auth_token(worker_factory, http_server):
