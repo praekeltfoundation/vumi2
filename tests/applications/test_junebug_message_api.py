@@ -131,7 +131,7 @@ async def post_outbound(
         return await connection.receive()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def http_server(nursery):
     return await HttpServer.start_new(nursery)
 
@@ -145,7 +145,7 @@ def mk_config(http_server: HttpServer, **config_update) -> dict:
     return {**config, **config_update}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def jma_worker(worker_factory, http_server):
     config = mk_config(http_server)
     async with worker_factory.with_cleanup(JunebugMessageApi, config) as worker:
@@ -153,7 +153,7 @@ async def jma_worker(worker_factory, http_server):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def jma_ro(connector_factory):
     return await connector_factory.setup_ro("jma-test")
 

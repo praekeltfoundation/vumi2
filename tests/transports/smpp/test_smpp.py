@@ -17,7 +17,7 @@ from ...helpers import RIConn
 from .helpers import TcpFakeSmsc
 
 
-@pytest.fixture()
+@pytest.fixture
 async def tcp_smsc(nursery):
     """
     Creates a TCP-based FakeSmsc server listening on an arbitrary port.
@@ -27,14 +27,14 @@ async def tcp_smsc(nursery):
     return server
 
 
-@pytest.fixture()
+@pytest.fixture
 async def transport(worker_factory, tcp_smsc):
     config = {"port": tcp_smsc.port}
     async with worker_factory.with_cleanup(SmppTransceiverTransport, config) as tx:
         yield tx
 
 
-@pytest.fixture()
+@pytest.fixture
 async def ri_smpp(connector_factory):
     # connector_factory handles the necessary cleanup.
     return await connector_factory.setup_ri("smpp")

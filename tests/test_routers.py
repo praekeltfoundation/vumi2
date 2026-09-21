@@ -14,13 +14,13 @@ TEST_CONFIG = {
 }
 
 
-@pytest.fixture()
+@pytest.fixture
 async def to_addr_router(worker_factory):
     async with worker_factory.with_cleanup(ToAddressRouter, TEST_CONFIG) as worker:
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def to_addr_router_no_default(worker_factory):
     new_config = TEST_CONFIG.copy()
     del new_config["default_app"]
@@ -28,7 +28,7 @@ async def to_addr_router_no_default(worker_factory):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def to_addr_router_duplicate_default(worker_factory):
     new_config = TEST_CONFIG.copy()
     new_config["default_app"] = "app1"
@@ -36,7 +36,7 @@ async def to_addr_router_duplicate_default(worker_factory):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def to_addr_router_multiple_matches(worker_factory):
     new_config = TEST_CONFIG.copy()
     new_config["to_address_mappings"] = [

@@ -121,7 +121,7 @@ async def post_outbound(
         return await connection.receive()
 
 
-@pytest.fixture()
+@pytest.fixture
 async def http_server(nursery):
     return await HttpServer.start_new(nursery)
 
@@ -143,7 +143,7 @@ def mk_config(
     return {**config, **config_update}
 
 
-@pytest.fixture()
+@pytest.fixture
 async def tca_worker(worker_factory, http_server):
     config = mk_config(http_server)
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
@@ -151,7 +151,7 @@ async def tca_worker(worker_factory, http_server):
         yield worker
 
 
-@pytest.fixture()
+@pytest.fixture
 async def tca_ro(connector_factory):
     return await connector_factory.setup_ro("tca-test")
 
@@ -297,7 +297,7 @@ async def test_inbound_message_none_content(worker_factory, http_server):
     assert req.body_json["message"]["from"] == "456"
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_inbound_bad_response(worker_factory, http_server, caplog):
     """
     If an inbound message results in an HTTP error, the error and
@@ -316,7 +316,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
     async with worker_factory.with_cleanup(TurnChannelsApi, config) as worker:
         await worker.setup()
 
-        with pytest.RaisesGroup(HttpErrorResponse):  # noqa: PT012
+        with pytest.RaisesGroup(HttpErrorResponse):
             async with handle_inbound(worker, msg):
                 req = await http_server.receive_req()
                 assert req.body_json["message"]["text"]["body"] == "hello"
@@ -338,7 +338,7 @@ async def test_inbound_bad_response(worker_factory, http_server, caplog):
         )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_inbound_too_slow(worker_factory, http_server, caplog):
     """
     If an inbound message times out, the error and message are logged.
@@ -1042,7 +1042,7 @@ async def test_handle_messages_after_timeout(
                 await ctx.pop()
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_retry_on_http_error(worker_factory, http_server, caplog):
     """
     When an HTTP error occurs, we retry according to the retry configuration.
@@ -1085,7 +1085,7 @@ async def test_retry_on_http_error(worker_factory, http_server, caplog):
         )
 
 
-@pytest.mark.asyncio()
+@pytest.mark.asyncio
 async def test_retry_on_network_error(worker_factory, http_server, caplog, monkeypatch):
     """
     When a network error occurs, we retry according to the retry configuration.

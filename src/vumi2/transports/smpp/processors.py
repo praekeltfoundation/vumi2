@@ -51,10 +51,14 @@ def conv_enum_list(enum: type[ET]) -> Callable[[list[int | str | ET]], list[ET]]
     return _conv_enum_list
 
 
+# This will trigger RUF009 violations, which we ignore because this is intended to be
+# executed at definition time.
 def enum_field(enum: type[ET], **kw):
     return field(converter=convert_enum(enum), **kw)
 
 
+# This will trigger RUF009 violations, which we ignore because this is intended to be
+# executed at definition time.
 def enum_list_field(enum: type[ET], **kw):
     return field(converter=conv_enum_list(enum), **kw)
 
@@ -89,11 +93,11 @@ class MultipartHandling(Enum):
 
 @define
 class RegisteredDeliveryConfig:
-    delivery_receipt: RegisteredDeliveryReceipt = enum_field(
+    delivery_receipt: RegisteredDeliveryReceipt = enum_field(  # noqa: RUF009
         RegisteredDeliveryReceipt,
         default=RegisteredDeliveryReceipt.NO_SMSC_DELIVERY_RECEIPT_REQUESTED,
     )
-    sme_originated_acks: list[RegisteredDeliverySmeOriginatedAcks] = enum_list_field(
+    sme_originated_acks: list[RegisteredDeliverySmeOriginatedAcks] = enum_list_field(  # noqa: RUF009
         RegisteredDeliverySmeOriginatedAcks,
         factory=list,
     )
@@ -102,16 +106,16 @@ class RegisteredDeliveryConfig:
 
 @define
 class SubmitShortMessageProcessorConfig:
-    data_coding: DataCodingDefault = enum_field(
+    data_coding: DataCodingDefault = enum_field(  # noqa: RUF009
         DataCodingDefault,
         default=DataCodingDefault.SMSC_DEFAULT_ALPHABET,
     )
     multipart_handling: MultipartHandling = MultipartHandling.short_message
     service_type: str | None = None
-    source_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
-    source_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.UNKNOWN)
-    dest_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)
-    dest_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.ISDN)
+    source_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)  # noqa: RUF009
+    source_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.UNKNOWN)  # noqa: RUF009
+    dest_addr_ton: AddrTon = enum_field(AddrTon, default=AddrTon.UNKNOWN)  # noqa: RUF009
+    dest_addr_npi: AddrNpi = enum_field(AddrNpi, default=AddrNpi.ISDN)  # noqa: RUF009
     registered_delivery: RegisteredDeliveryConfig = Factory(RegisteredDeliveryConfig)
     multipart_sar_reference_rollover: int = 0x10000
 

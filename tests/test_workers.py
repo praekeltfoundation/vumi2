@@ -108,7 +108,7 @@ class SlowSetupWorker(BaseWorker):
         print("HANDLE OUT!")
 
 
-@pytest.fixture()
+@pytest.fixture
 async def worker(worker_factory):
     config = {"http_bind": "localhost"}
     async with worker_factory.with_cleanup(BaseWorker, config) as worker:

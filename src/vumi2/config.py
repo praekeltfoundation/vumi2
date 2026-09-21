@@ -52,7 +52,7 @@ class AmqpConfig:
     hostname: str = "127.0.0.1"
     port: int = 5672
     username: str = "guest"
-    password: str = "guest"
+    password: str = "guest"  # noqa: S105 (Hardcoded default password is okay.)
     vhost: str = "/"
 
 
