@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11,<4.0"
 dependencies = [
     "trio>=0.24.0,<0.25.0",
-    "anyio>=4.0.0,<4.9.0",
+    "anyio>=4.0.0,<4.15.0",
     "async-amqp>=0.5.5,<0.6.0",
     "attrs>=23.2.0,<24.0.0",
     "cattrs>=23.2.3,<24.0.0",
