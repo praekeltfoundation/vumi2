@@ -130,7 +130,7 @@ class Message:
         }
         fields.update(kwargs)
 
-        return Message(**fields)
+        return Message(**fields)  # type: ignore (these should match the Message fields)
 
 
 @define
@@ -148,7 +148,7 @@ class Event:
     nack_reason: str | None = None
     delivery_status: DeliveryStatus | None = None
 
-    @event_type.validator
+    @event_type.validator  # type: ignore (confusion between attrs and dataclasses)
     def _check_event_type(self, _, value: EventType) -> None:
         if value == EventType.ACK:
             if self.sent_message_id is None:

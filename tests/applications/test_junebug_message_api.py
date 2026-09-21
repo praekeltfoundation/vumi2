@@ -125,7 +125,7 @@ async def post_outbound(
 ) -> bytes:
     client = worker.http.app.test_client()
     headers = {"Content-Type": "application/json"}
-    async with client.request(path=path, method="POST", headers=headers) as connection:
+    async with client.request(path=path, method="POST", headers=headers) as connection:  # type: ignore (type confusion)
         await connection.send(json.dumps(msg_dict).encode())
         await connection.send_complete()
         return await connection.receive()

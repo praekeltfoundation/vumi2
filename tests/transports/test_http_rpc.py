@@ -13,7 +13,7 @@ def msg_ch_pair(bufsize: int):
 
 
 class OkTransport(HttpRpcTransport):
-    async def handle_raw_inbound_message(self, message_id, request):
+    async def handle_raw_inbound_message(self, message_id, r):
         await self.connector.publish_inbound(
             Message(
                 to_addr="",
@@ -41,7 +41,7 @@ async def ri_http_rpc(connector_factory):
 
 async def test_inbound(transport: OkTransport, ri_http_rpc):
     client = transport.http.app.test_client()
-    async with client.request(path="/http_rpc") as connection:
+    async with client.request(path="/http_rpc") as connection:  # type: ignore (type confusion)
         await connection.send_complete()
         inbound = await ri_http_rpc.consume_inbound()
         reply = inbound.reply("test")
@@ -91,7 +91,7 @@ async def test_missing_request_nack(transport: OkTransport, ri_http_rpc):
 
 async def test_timeout(transport: OkTransport, mock_clock, ri_http_rpc):
     client = transport.http.app.test_client()
-    async with client.request(path="/http_rpc") as connection:
+    async with client.request(path="/http_rpc") as connection:  # type: ignore (type confusion)
         await connection.send_complete()
         await ri_http_rpc.consume_inbound()
         mock_clock.jump(transport.config.request_timeout)
@@ -106,7 +106,7 @@ async def test_client_disconnect(transport: OkTransport, ri_http_rpc):
     Transport should clean up so that we don't have memory leaks
     """
     client = transport.http.app.test_client()
-    async with client.request(path="/http_rpc") as connection:
+    async with client.request(path="/http_rpc") as connection:  # type: ignore (type confusion)
         # cast to get access to _client_send private method
         connection = cast(QuartTestHTTPConnection, connection)
         await connection.send_complete()
