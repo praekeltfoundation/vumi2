@@ -1,4 +1,5 @@
 import re
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from enum import Enum
 from logging import getLogger
@@ -120,10 +121,12 @@ class SubmitShortMessageProcessorConfig:
     multipart_sar_reference_rollover: int = 0x10000
 
 
-class SubmitShortMessageProcesserBase:  # pragma: no cover
+class SubmitShortMessageProcesserBase(ABC):
+    @abstractmethod
     def __init__(self, config: dict, sequencer: Sequencer) -> None: ...
 
-    async def handle_outbound_message(  # type: ignore
+    @abstractmethod
+    async def handle_outbound_message(
         self,
         message: Message,
     ) -> list[PDU]: ...
@@ -281,10 +284,12 @@ class SubmitShortMessageProcessor(SubmitShortMessageProcesserBase):
         )
 
 
-class DeliveryReportProcesserBase:  # pragma: no cover
+class DeliveryReportProcesserBase(ABC):
+    @abstractmethod
     def __init__(self, config: dict) -> None: ...
 
-    async def handle_deliver_sm(  # type: ignore
+    @abstractmethod
+    async def handle_deliver_sm(
         self,
         pdu: DeliverSM,
     ) -> tuple[bool, Event | None]: ...
