@@ -35,8 +35,7 @@ class Consumer(AsyncResource):
         callback: MessageCallbackType,
         message_class: type[Message],
         concurrency: int,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     def __init__(
@@ -47,8 +46,7 @@ class Consumer(AsyncResource):
         callback: EventCallbackType,
         message_class: type[Event],
         concurrency: int,
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def __init__(
         self, nursery, connection, queue_name, callback, message_class, concurrency
@@ -175,14 +173,12 @@ class BaseConnector:
         message_type: str,
         handler: MessageCallbackType,
         message_class: type[Message],
-    ) -> None:
-        ...
+    ) -> None: ...
 
     @overload
     async def _setup_consumer(
         self, message_type: str, handler: EventCallbackType, message_class: type[Event]
-    ) -> None:
-        ...
+    ) -> None: ...
 
     async def _setup_consumer(self, message_type, handler, message_class) -> None:
         routing_key = self.routing_key(message_type)

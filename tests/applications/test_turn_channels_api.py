@@ -752,9 +752,9 @@ async def test_send_outbound_invalid_json(worker_factory, http_server, caplog):
 
         err = [log for log in caplog.records if log.levelno >= logging.ERROR]
         error_messages = [log.getMessage() for log in err]
-        assert any(
-            "json decode error" in msg for msg in error_messages
-        ), f"Expected 'json decode error' in error messages, but got: {error_messages}"
+        assert any("json decode error" in msg for msg in error_messages), (
+            f"Expected 'json decode error' in error messages, but got: {error_messages}"
+        )
 
 
 async def test_send_outbound_times_out(
@@ -1131,9 +1131,9 @@ async def test_retry_on_network_error(worker_factory, http_server, caplog, monke
         ]
 
         expected_log = "Attempt 1 failed with error: Connection failed"
-        assert any(
-            expected_log in log for log in warning_logs
-        ), f"Expected warning containing '{expected_log}', got: {warning_logs}"
+        assert any(expected_log in log for log in warning_logs), (
+            f"Expected warning containing '{expected_log}', got: {warning_logs}"
+        )
 
 
 async def test_send_outbound_group(worker_factory, http_server, tca_ro):
